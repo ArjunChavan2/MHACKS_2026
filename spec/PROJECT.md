@@ -9,19 +9,37 @@ decides something.
 
 ## Product
 
-The patient uploads a medical bill or an insurance denial letter. The app finds what's wrong,
-then fights it for them: it drafts the dispute or appeal, can make the phone call, and keeps the
-patient updated by text.
+One agent that handles the whole case of a medical bill, from the first bill to the final appeal.
+It gets the itemized bill, audits it, disputes and negotiates it with the billing office, and if
+the insurer denies the claim, it appeals the denial with evidence from the patient's records. The
+patient approves each step by text or on a live call screen.
 
-Two modes, one engine:
+### The pipeline
 
-1. **Bill audit (base product).** Upload an itemized bill. Fixed rules flag questionable charges:
-   duplicates, coding mismatches, out-of-network surprises, charges inconsistent with the
-   insurer's explanation of benefits, and charges with no matching medical record.
-2. **Denial appeals (differentiator).** Upload a denial letter. The app pulls the evidence from the
-   patient's medical records across every provider and drafts an appeal that cites it.
+```
+Case starts (bill shared, or new claim detected)
+  -> request the itemized bill          (phone call to billing office, or letter)
+  -> audit the itemized bill            (deterministic rules + records)
+  -> dispute and negotiate the bill     (phone call, then written dispute for the record)
+  -> insurer denies a claim
+  -> investigate the denial             (phone call to insurer: exact reason, policy criteria)
+  -> written appeal with evidence       (records from every provider, each cited)
+  -> track deadlines, escalate if needed (external review)
+```
 
-Pitch: "Appealing is free. Winning takes evidence. We bring the evidence."
+The case stays connected: evidence, claim details, and call outcomes gathered for the bill carry
+into the denial appeal, so the patient never starts over or re-explains anything.
+
+### Positioning
+
+Most tools handle one step: bill tools (MyMedBill, AiMyClaims, CareRoute) work on the bill;
+appeal tools (Counterforce Health, Claimable, FightHealthInsurance) work on denials and make the
+patient gather and upload their own records. We handle the whole case, pull the records from every
+provider automatically through FinchNode, and keep the patient in control of every call. Do not
+claim to be the only tool doing this; the space moves fast.
+
+Pitch: "Most tools fix one step. We handle the whole case, from the first bill to the final
+appeal, with your records pulled automatically."
 
 ### Why FinchNode is essential
 
@@ -57,9 +75,17 @@ enforce.
 ### Shared
 
 1. **Connect records** — FinchNode hosted Connect flow.
-2. **Upload documents** — itemized bill, EOB (explanation of benefits), or denial letter, as PDF or
-   photo. An LLM extracts structured fields; the patient confirms or corrects every field before
-   it is used.
+2. **Case start** — two entry points:
+   - **Share a document:** itemized bill, EOB (explanation of benefits), or denial letter, as PDF or
+     photo, uploaded or shared from the portal in one tap (PWA share target; the iMessage thread as
+     a fallback). An LLM extracts structured fields; the patient confirms or corrects every field
+     before it is used.
+   - **Claim detected:** when FinchNode claims or coverage data shows a new claim (via scheduled
+     sync or signed webhook), the agent opens a case and offers to request the itemized bill.
+     *Open:* whether FinchNode exposes claims beyond Medicare and whether the sandbox includes
+     claims; if not, the demo simulates this trigger from a fixture.
+   - Patients cannot be logged into their portals by the app (no stored portal passwords or
+     scraping).
 3. **Case tracking** — each bill or denial is a case with status, deadlines, and history.
 4. **Text updates and decisions (Photon)** — status texts plus "reply A or B" choices for next
    actions (e.g. "A: send the dispute email, B: call the billing office").
@@ -96,7 +122,19 @@ enforce.
 
 ### Phone advocacy (ElevenLabs)
 
-10. **Call script** — generated from the same verbatim findings.
+Phone calls and written documents have different jobs:
+
+| Step | Channel | Role of the voice agent |
+|---|---|---|
+| Request the itemized bill | Phone (or portal message / letter) | Makes the short, routine request |
+| Dispute errors on the bill | Phone first, then **written dispute** for the record | Flags errors and asks for corrections; the app sends the written dispute after |
+| Negotiate the bill (discounts, payment plans, charity care) | **Phone** | Main channel; the patient steers live |
+| Investigate a denial | Phone to the insurer | Gets the exact denial reason, claim details, and the policy criteria that apply; feeds the written appeal; later checks appeal status |
+| Appeal the denial | **Written** (letter, fax, or insurer portal) | None on the appeal itself; formal appeals are generally written (some urgent appeals can be started by phone; rules vary by plan) |
+| External review | Written | None |
+
+10. **Call script** — generated from the same verbatim findings, per call type (itemized bill
+    request, bill negotiation, denial investigation).
 11. **Voice call** — an ElevenLabs voice agent calls the billing office or insurer using the
     script. Billing offices usually verify identity and need the patient's authorization; *Open:*
     whether the patient joins the call or consents at the start. For the demo, a teammate plays the
@@ -134,7 +172,7 @@ enforce.
 | Rules engine | Pure TypeScript functions in `lib/audit/` and `lib/evidence/`, tested with Vitest |
 | Letter PDF | `@react-pdf/renderer` |
 | Texts | Photon `spectrum-ts` in a long-running Node worker (not serverless): sends updates, receives A/B replies |
-| Voice | ElevenLabs Conversational AI + Twilio for outbound calls; an `ask_patient` server tool that waits for the patient's choice |
+| Voice | ElevenLabs Conversational AI + Twilio for outbound calls: itemized bill requests and negotiation with billing offices, denial investigation with insurers; an `ask_patient` server tool that waits for the patient's choice |
 | Live call screen | Transcript + decision buttons pushed to the browser (SSE/websockets via the Node worker or a hosted realtime service) |
 | Stretch | Fetch.ai uAgent (Python) on Agentverse, reachable from ASI:One, calling the app's API |
 | Auth | Neon Auth if time allows, otherwise one hardcoded demo user |
@@ -164,8 +202,12 @@ agents/fetch/        Python uAgent (stretch)
   most plans; Medicare appeals are free through the administrative levels.
 - Do not quote reel statistics (e.g. "80% of bills contain errors") without a solid source; use
   sourced figures such as KFF's analysis of denials and appeals.
-- Competitors: FightHealthInsurance.com (appeals; the user supplies their own history), Dollar For
-  (charity care). Ours pulls the evidence from records automatically.
+- Competitors (checked 2026-10-03): Counterforce Health (denial appeals with voice AI; patient
+  uploads records), Claimable (appeal letters, about $40), FightHealthInsurance.com (free appeals;
+  patient types their history), Dollar For (charity care), MyMedBill, AiMyClaims, Medical Bill
+  Negotiator: IQ, CareRoute Bill Defense (bill disputes and negotiation). Provider-side voice agents
+  (Cedar Kora, Collectly Billie, Infinitus, Prosper AI) work for hospitals and insurers, not
+  patients. See "Positioning" above.
 
 ## FinchNode (verified from finchnode.com, 2026-10-02)
 
@@ -208,42 +250,47 @@ Tiger Data, Presage. See the track tabs in the MHacks 2026 Google Doc for each d
 - One teammate plays the hospital billing office on a real phone.
 - Backups: a screen recording of a good run, and a pre-recorded call in case the live call fails.
 
-### Flow (about 3 minutes)
+### Flow (about 3.5 minutes)
 
-1. **Hook (15 s).** One sentence on the problem: a surprise bill and a denied prescription, and
-   most people never push back.
+1. **Hook (15 s).** "Most tools fix one step of a medical bill. A bill is a whole case: getting the
+   itemized bill, fighting the charges, then fighting the insurer."
 2. **Connect records.** FinchNode Connect on the sandbox; records arrive from both Northstar and
    Quillhaven.
-3. **Upload the bill.** Photograph or upload the itemized bill; the patient confirms the extracted
-   fields.
-4. **Audit findings.** Flags appear, each citing its source: a duplicate charge (two bill lines),
+3. **Case starts.** A new claim appears (live from FinchNode if available, otherwise a simulated
+   claim event). The agent texts: "Your Northstar ER visit was billed $X. Want me to request the
+   itemized bill?" Reply YES.
+4. **Itemized bill request (short call).** The agent calls the billing office and requests the
+   itemized bill. Show a short clip or transcript to save time. The bill "arrives" and the patient
+   shares it into the app in one tap, then confirms the fields the app read.
+5. **Audit findings.** Flags appear, each citing its source: a duplicate charge (two bill lines)
    and a lab charge with no matching result in any record, phrased as a documentation request. A
    running total shows the dollars in dispute.
-5. **Two-way iMessage (Photon).** The advocate texts: "Found 2 issues worth $X. A: email the
-   billing office, B: call them." The patient first asks in plain language, "why is the lab charge
-   flagged?", and gets an answer citing the bill line and the records searched. Then replies B.
-6. **Live call (ElevenLabs).** The voice agent calls the teammate playing the billing office. The
-   live call screen shows the transcript.
-7. **Patient steers the call.** The "rep" offers 20% off for paying today. The agent says "one
-   moment while I check with the patient"; options pop up; the patient taps "Ask for 40%"; the
-   agent counters. The rep agrees to remove the duplicate and review the lab charge; the agent asks
-   for it in writing.
-8. **Savings.** The case screen updates the total saved (for the FinTech track).
-9. **Denial appeal (the differentiator).** Upload the step therapy denial letter. Evidence appears
-   from both providers, each with provider and date (e.g. one required drug prescribed and stopped
-   at Northstar, another at Quillhaven). The appeal letter is generated with every record cited,
-   downloadable as a PDF, and an iMessage says "Your appeal is ready."
-10. **Close (15 s).** "Appealing is free. Winning takes evidence. We bring the evidence." Note that
-    the AI never invents a fact: every claim traces to a bill line or a record.
+6. **Two-way iMessage (Photon).** The patient asks "why is the lab charge flagged?" and gets an
+   answer citing the bill line and the records searched, then replies B to "A: email the billing
+   office, B: call them."
+7. **Live negotiation call (the highlight).** The voice agent calls the teammate playing the
+   billing office. The rep offers 20% off for paying today; options pop up; the patient taps "Ask
+   for 40%"; the agent counters. The rep agrees to remove the duplicate and review the lab charge;
+   the agent asks for it in writing, and the app sends the written dispute for the record.
+8. **Savings.** The case screen updates the total saved (FinTech angle).
+9. **Denial, same case.** The insurer denies a related prescription (step therapy). The agent calls
+   the insurer (short clip) and gets the exact denial reason and policy criteria. Evidence appears
+   from both providers with provider and date, the written appeal cites every record, and an
+   iMessage says "Your appeal is ready." Point out that nothing had to be re-entered.
+10. **Close (15 s).** "One agent, one case, from the first bill to the final appeal." The AI never
+    invents a fact; every claim traces to a bill line or a record.
+
+Only the negotiation call (step 7) is live; the itemized bill request and the insurer call are
+short pre-recorded clips or transcripts, to keep the demo on time and reduce risk.
 
 ### What each moment shows judges
 
 | Step | Shows |
 |---|---|
-| 2, 9 | FinchNode: working integration, records from multiple providers used as evidence |
-| 4 | Deterministic, cited findings (trustworthy AI) |
-| 5 | Photon: two-way iMessage agent that remembers the case |
-| 6–7 | ElevenLabs: voice agent with the patient in control mid-call |
+| 2, 3, 9 | FinchNode: working integration; claims start the case; records from multiple providers used as evidence |
+| 5 | Deterministic, cited findings (trustworthy AI) |
+| 3, 6, 9 | Photon: two-way iMessage agent that remembers the case across bill and denial |
+| 4, 7, 9 | ElevenLabs: voice agent for every call in the pipeline, with the patient in control mid-call |
 | 8 | FinTech: money saved |
 | All | Neon backs cases, findings, and call decisions |
 
