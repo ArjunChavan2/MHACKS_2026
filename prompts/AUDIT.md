@@ -19,12 +19,12 @@ and to identify problems before verification.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-emergency medical passport (QR on the lock screen → clinician view). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+insurance denial appeal app (denial letter + medical records → evidence-backed appeal). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI never writes or hides a health fact.** Health facts are copied verbatim
-  from FinchNode records with their source attached; an LLM never writes, summarizes, or
-  interprets them. The passport is built by deterministic rules, conflicts are shown rather than
-  resolved, and the emergency-specific view may only reorder existing items. A
+- **Core invariant — AI never writes or interprets a health fact.** Health facts are copied
+  verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
+  infers them. Evidence selection is deterministic, every health claim in an appeal is backed by a
+  specific record, and the AI only does paperwork (extraction the patient confirms, letter prose). A
   violation of this invariant is always at least a **major** finding.
 
 ## Before you begin
@@ -58,15 +58,16 @@ Look for:
 - implementation decisions that diverge from the plan without justification
 - **any path where a health fact reaches a user-facing output after passing through an LLM**,
   or loses its source attribution
-- passport selection, deduplication, or conflict detection that depends on LLM judgment instead of
-  deterministic rules
-- conflicts that get resolved (one side dropped or picked as "correct") instead of both versions
-  being shown with sources
-- emergency-specific ranking whose LLM output is trusted without validation: unknown item IDs not
-  discarded, omitted items not appended, or any model-generated text rendered as a health fact
+- evidence selection or denial classification that depends on LLM judgment instead of the
+  deterministic rules and lookup tables in the spec
+- an appeal letter containing a health claim with no record behind it, or LLM-generated text where
+  verbatim evidence should be inserted by code
+- denial-letter extraction used before the patient has confirmed every field
+- an appeal drafted when the denial type is unsupported or no evidence was found, instead of
+  telling the patient plainly
+- anything sent or submitted without the patient's explicit approval
 - diagnosis, treatment suggestions, or other medical advice anywhere in the product
-- the clinician view exposing more than the passport, being reachable after revocation, or serving
-  a view without logging it and alerting the patient
+- uploaded denial letters or records exposed beyond the owning patient
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks
 
 Also inspect whether the implementation is reasonably maintainable and understandable, but do not

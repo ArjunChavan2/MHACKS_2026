@@ -1,3 +1,3 @@
 # MHACKS_2026
 
-MHacks 2026 project: FinchNode-powered emergency medical passport.
+MHacks 2026 project: FinchNode-powered insurance denial appeals.

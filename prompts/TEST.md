@@ -20,12 +20,12 @@ or clients when needed.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-emergency medical passport (QR on the lock screen → clinician view). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+insurance denial appeal app (denial letter + medical records → evidence-backed appeal). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI never writes or hides a health fact.** Health facts are copied verbatim
-  from FinchNode records with their source attached; an LLM never writes, summarizes, or
-  interprets them. The passport is built by deterministic rules, conflicts are shown rather than
-  resolved, and the emergency-specific view may only reorder existing items.
+- **Core invariant — AI never writes or interprets a health fact.** Health facts are copied
+  verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
+  infers them. Evidence selection is deterministic, every health claim in an appeal is backed by a
+  specific record, and the AI only does paperwork (extraction the patient confirms, letter prose).
 - Test against the FinchNode synthetic sandbox (Northstar Health System, Quillhaven Medical Group)
   or the local mock. Never use real patient data.
 
@@ -57,19 +57,20 @@ Cover, where relevant:
 - interactions between components and with other tasks' interfaces
 - regression-prone behavior
 - risks identified by the audit agent
-- **verbatim health facts**: every health fact on the passport, clinician view, or in a text
+- **verbatim health facts**: every health fact in an appeal letter, on screen, or in a text
   exactly matches the source record value and carries its provider and date
-- deterministic passport building: the same records always yield the same passport; the "recent"
-  cutoff boundary; the same item from two providers is deduplicated with both sources kept;
-  cross-provider conflicts are detected and both versions shown
-- emergency-specific ranking: the ranked view contains exactly the same items as the unranked
-  passport (none added, none lost, none altered) — including when the LLM returns unknown IDs,
-  duplicate IDs, omits items, returns malformed output, or times out; "show everything" works
-- clinician view and link: shows only the passport, returns nothing after revocation, the new link
-  works, every view is logged, and each view triggers the patient alert
-- QR: the generated wallpaper's QR code decodes to the current link
+- **every health claim is backed**: each statement about the patient's history in a generated
+  letter maps to a specific evidence record; no extra health claims appear, including when the
+  LLM is prompted adversarially or returns malformed output
+- deterministic evidence: the same records and denial always yield the same evidence; step therapy
+  finds required drugs that were prescribed and discontinued at any provider, and ignores active or
+  never-prescribed ones; medical necessity finds only the conditions/labs in the lookup table
+- denial-letter extraction: fields require patient confirmation; corrected fields are the ones
+  used; unreadable or unsupported letters produce a clear message, not an appeal
+- no evidence / unsupported denial type: the app says so and does not draft an appeal
+- nothing is sent without approval; deadline reminders fire for the confirmed deadline
 - FinchNode failures: API errors, empty records, and missing fields fail visibly rather than
-  producing an incomplete passport that looks complete
+  producing an appeal that looks complete
 
 Prefer **black-box testing against documented interfaces** whenever practical. Use white-box
 knowledge only when it helps target a risk that cannot be exercised effectively from the public
