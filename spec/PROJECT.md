@@ -187,15 +187,56 @@ agents/fetch/        Python uAgent (stretch)
 
 ## Demo
 
-- Runs fully on the FinchNode synthetic sandbox; no real patient data. Keep a local mock so the
-  demo survives API or network issues.
-- Create fixtures that match one sandbox patient: an itemized bill with a planted duplicate and a
-  lab charge with no matching result, an EOB, and a step therapy denial letter.
-- Flow: connect records → upload bill → flags with citations → dispute email drafted → text "A:
-  email, B: call" → reply B → voice agent calls a teammate playing the billing office → the
-  "rep" offers a discount → options pop up on the live call screen → patient taps "Ask for 40%" →
-  the agent counters on the call → then
-  upload the denial letter → evidence from records → appeal letter with each record cited.
+### Setup
+
+- Runs fully on the FinchNode synthetic sandbox; no real patient data. Keep a local mock
+  (`USE_MOCK=true`) so the demo survives API or network issues, but show live sandbox records when
+  the network allows (FinchNode judges want a working integration).
+- Fixtures matched to one sandbox patient with records at both providers (Northstar Health System
+  and Quillhaven Medical Group): an itemized bill with a planted duplicate charge and a lab charge
+  with no matching result, an EOB, and a step therapy denial letter whose required drugs appear as
+  discontinued in that patient's records.
+- One teammate plays the hospital billing office on a real phone.
+- Backups: a screen recording of a good run, and a pre-recorded call in case the live call fails.
+
+### Flow (about 3 minutes)
+
+1. **Hook (15 s).** One sentence on the problem: a surprise bill and a denied prescription, and
+   most people never push back.
+2. **Connect records.** FinchNode Connect on the sandbox; records arrive from both Northstar and
+   Quillhaven.
+3. **Upload the bill.** Photograph or upload the itemized bill; the patient confirms the extracted
+   fields.
+4. **Audit findings.** Flags appear, each citing its source: a duplicate charge (two bill lines),
+   and a lab charge with no matching result in any record, phrased as a documentation request. A
+   running total shows the dollars in dispute.
+5. **Two-way iMessage (Photon).** The advocate texts: "Found 2 issues worth $X. A: email the
+   billing office, B: call them." The patient first asks in plain language, "why is the lab charge
+   flagged?", and gets an answer citing the bill line and the records searched. Then replies B.
+6. **Live call (ElevenLabs).** The voice agent calls the teammate playing the billing office. The
+   live call screen shows the transcript.
+7. **Patient steers the call.** The "rep" offers 20% off for paying today. The agent says "one
+   moment while I check with the patient"; options pop up; the patient taps "Ask for 40%"; the
+   agent counters. The rep agrees to remove the duplicate and review the lab charge; the agent asks
+   for it in writing.
+8. **Savings.** The case screen updates the total saved (for the FinTech track).
+9. **Denial appeal (the differentiator).** Upload the step therapy denial letter. Evidence appears
+   from both providers, each with provider and date (e.g. one required drug prescribed and stopped
+   at Northstar, another at Quillhaven). The appeal letter is generated with every record cited,
+   downloadable as a PDF, and an iMessage says "Your appeal is ready."
+10. **Close (15 s).** "Appealing is free. Winning takes evidence. We bring the evidence." Note that
+    the AI never invents a fact: every claim traces to a bill line or a record.
+
+### What each moment shows judges
+
+| Step | Shows |
+|---|---|
+| 2, 9 | FinchNode: working integration, records from multiple providers used as evidence |
+| 4 | Deterministic, cited findings (trustworthy AI) |
+| 5 | Photon: two-way iMessage agent that remembers the case |
+| 6–7 | ElevenLabs: voice agent with the patient in control mid-call |
+| 8 | FinTech: money saved |
+| All | Neon backs cases, findings, and call decisions |
 
 ## Open
 
