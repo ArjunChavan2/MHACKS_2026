@@ -20,12 +20,15 @@ or clients when needed.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-insurance denial appeal app (denial letter + medical records → evidence-backed appeal). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI never writes or interprets a health fact.** Health facts are copied
+- **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
-  infers them. Evidence selection is deterministic, every health claim in an appeal is backed by a
-  specific record, and the AI only does paperwork (extraction the patient confirms, letter prose).
+  infers them. Bill-audit flags and appeal evidence come from deterministic rules and cite their
+  bill line, EOB line, or record. The AI only does paperwork and conversation (extraction the
+  patient confirms, letter/script prose, voice calls), and nothing is sent or agreed to without the
+  patient's approval.
 - Test against the FinchNode synthetic sandbox (Northstar Health System, Quillhaven Medical Group)
   or the local mock. Never use real patient data.
 
@@ -57,18 +60,26 @@ Cover, where relevant:
 - interactions between components and with other tasks' interfaces
 - regression-prone behavior
 - risks identified by the audit agent
-- **verbatim health facts**: every health fact in an appeal letter, on screen, or in a text
+- **verbatim health facts**: every health fact in a letter, email, script, on screen, or in a text
   exactly matches the source record value and carries its provider and date
-- **every health claim is backed**: each statement about the patient's history in a generated
-  letter maps to a specific evidence record; no extra health claims appear, including when the
-  LLM is prompted adversarially or returns malformed output
+- **every finding and health claim is backed**: each one in generated output maps to a specific
+  bill line, EOB line, or record; no extra ones appear, including when the LLM is prompted
+  adversarially or returns malformed output
+- deterministic bill audit: the same bill, EOB, and records always yield the same flags; duplicates
+  (and near-duplicates that are not duplicates), bill vs. EOB patient-responsibility mismatches,
+  out-of-network cases, and lab/medication charges with no matching record are each detected
 - deterministic evidence: the same records and denial always yield the same evidence; step therapy
   finds required drugs that were prescribed and discontinued at any provider, and ignores active or
   never-prescribed ones; medical necessity finds only the conditions/labs in the lookup table
-- denial-letter extraction: fields require patient confirmation; corrected fields are the ones
-  used; unreadable or unsupported letters produce a clear message, not an appeal
+- extraction: fields require patient confirmation; corrected fields are the ones used; unreadable
+  or unsupported documents produce a clear message, not a draft
 - no evidence / unsupported denial type: the app says so and does not draft an appeal
-- nothing is sent without approval; deadline reminders fire for the confirmed deadline
+- approvals: nothing is sent or agreed to without approval; A/B replies map to the right case and
+  action; unrecognized, late, or duplicate replies are handled; deadline reminders fire for the
+  confirmed deadline
+- live call decisions: the patient's choice reaches the agent and changes what it says; custom
+  instructions work; on timeout the agent does not agree and asks for writing or a callback; the
+  Photon fallback fires when the call screen isn't open; choices never cross between calls
 - FinchNode failures: API errors, empty records, and missing fields fail visibly rather than
   producing an appeal that looks complete
 

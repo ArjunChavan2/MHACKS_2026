@@ -16,12 +16,15 @@ Work from the repository and persistent artifacts rather than relying on prior c
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-insurance denial appeal app (denial letter + medical records → evidence-backed appeal). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI never writes or interprets a health fact.** Health facts are copied
+- **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
-  infers them. Evidence selection is deterministic, every health claim in an appeal is backed by a
-  specific record, and the AI only does paperwork (extraction the patient confirms, letter prose). If an
+  infers them. Bill-audit flags and appeal evidence come from deterministic rules and cite their
+  bill line, EOB line, or record. The AI only does paperwork and conversation (extraction the
+  patient confirms, letter/script prose, voice calls), and nothing is sent or agreed to without the
+  patient's approval. If an
   LLM output must contain a health fact, insert the verbatim record value into it in code rather
   than asking the model to produce it.
 - Other developers are committing to the same repository at the same time. Keep changes inside

@@ -19,12 +19,15 @@ and to identify problems before verification.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-insurance denial appeal app (denial letter + medical records → evidence-backed appeal). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI never writes or interprets a health fact.** Health facts are copied
+- **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
-  infers them. Evidence selection is deterministic, every health claim in an appeal is backed by a
-  specific record, and the AI only does paperwork (extraction the patient confirms, letter prose). A
+  infers them. Bill-audit flags and appeal evidence come from deterministic rules and cite their
+  bill line, EOB line, or record. The AI only does paperwork and conversation (extraction the
+  patient confirms, letter/script prose, voice calls), and nothing is sent or agreed to without the
+  patient's approval. A
   violation of this invariant is always at least a **major** finding.
 
 ## Before you begin
@@ -58,14 +61,19 @@ Look for:
 - implementation decisions that diverge from the plan without justification
 - **any path where a health fact reaches a user-facing output after passing through an LLM**,
   or loses its source attribution
-- evidence selection or denial classification that depends on LLM judgment instead of the
-  deterministic rules and lookup tables in the spec
-- an appeal letter containing a health claim with no record behind it, or LLM-generated text where
-  verbatim evidence should be inserted by code
-- denial-letter extraction used before the patient has confirmed every field
+- bill-audit flags, evidence selection, or denial classification that depend on LLM judgment
+  instead of the deterministic rules and lookup tables in the spec
+- a letter, email, or call script containing a finding or health claim with no bill line, EOB
+  line, or record behind it, or LLM-generated text where verbatim values should be inserted by code
+- a charge with no matching record phrased as an overcharge instead of a documentation request
+- extracted bill, EOB, or denial fields used before the patient has confirmed them
 - an appeal drafted when the denial type is unsupported or no evidence was found, instead of
   telling the patient plainly
-- anything sent or submitted without the patient's explicit approval
+- anything sent, submitted, or agreed to on a call without the patient's explicit approval, or an
+  A/B reply applied to the wrong case or action
+- a voice agent able to say things outside its script's findings, or commit to anything
+  (payment, settlement, sharing information) the patient didn't choose during the call
+- mid-call decisions that default to agreeing on timeout, or a choice routed to the wrong call
 - diagnosis, treatment suggestions, or other medical advice anywhere in the product
 - uploaded denial letters or records exposed beyond the owning patient
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks

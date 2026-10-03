@@ -17,9 +17,10 @@ Notes are per task because four developers run phases in parallel.
 
 ## Repository rules
 
-- **AI never writes or interprets a health fact.** Health facts reach users verbatim from
-  FinchNode, with source attached; evidence selection is deterministic; every health claim in an
-  appeal is backed by a record; the AI only does paperwork. See `spec/PROJECT.md`.
+- **AI never writes a health fact or invents a finding.** Health facts reach users verbatim from
+  FinchNode, with source attached; bill-audit flags and appeal evidence come from deterministic
+  rules and cite their source; the AI only does paperwork and conversation; nothing is sent or
+  agreed to without the patient's approval. See `spec/PROJECT.md`.
 - Never commit secrets; keys go in `.env` (gitignored).
 - Never use real patient data; use the FinchNode synthetic sandbox or the local mock.
 - Never add Claude as an author or co-author on commits.
