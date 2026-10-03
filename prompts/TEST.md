@@ -80,6 +80,11 @@ Cover, where relevant:
 - live call decisions: the patient's choice reaches the agent and changes what it says; custom
   instructions work; on timeout the agent does not agree and asks for writing or a callback; the
   Photon fallback fires when the call screen isn't open; choices never cross between calls
+- handoff: every stage blocks without approval; Take over works mid-call and from drafts; each
+  escalation condition triggers a handoff; every handoff is logged
+- paperwork tracker: every document event creates or updates the right entry and timeline event;
+  statuses move correctly; deadline and overdue reminders fire; the case packet export includes
+  every document
 - FinchNode failures: API errors, empty records, and missing fields fail visibly rather than
   producing an appeal that looks complete
 

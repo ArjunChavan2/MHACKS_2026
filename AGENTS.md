@@ -31,6 +31,7 @@ lib/extract/         document parsing (LLM) + confirmation flow
 lib/audit/           bill-audit rules + lookup tables (pure functions)
 lib/evidence/        denial-appeal evidence rules + lookup tables (pure functions)
 lib/draft/           letter/email/script drafting, verbatim insertion, PDF
+lib/cases/           pipeline stages, handoff rules, paperwork tracker, deadlines
 lib/llm/             the only place that talks to an LLM provider
 lib/types/           shared types (the contract between workstreams)
 db/                  Drizzle schema + queries
@@ -43,8 +44,8 @@ tests/               Vitest tests mirroring lib/ paths
 
 - **Pure logic lives in `lib/`.** API routes, workers, and UI components call it; they do not
   contain business rules.
-- **Only `lib/llm/` imports an LLM SDK.** Everything else calls its functions. This keeps the
-  Grok-vs-Gemini decision a one-folder change.
+- **Only `lib/llm/` imports an LLM SDK** (the Google Gemini SDK). Everything else calls its
+  functions, so the provider could change without touching anything else.
 - **Only `lib/finchnode/` talks to FinchNode.** It returns our own types from `lib/types/`, never
   raw API responses.
 - **Shared types change by agreement.** Editing `lib/types/` affects all four workstreams: say so
@@ -196,6 +197,11 @@ treats it as one.
   line, or `recordId`). A finding without one does not compile.
 - **Extraction is confirmed.** Fields extracted from uploaded documents are `Unconfirmed<T>` until
   the patient confirms them; rules and drafting only accept the confirmed type.
+- **Every stage has a handoff.** Pipeline actions go through an approval gate in `lib/cases/`;
+  no code path calls, sends, or submits without a recorded approval. Escalation conditions are
+  explicit, tested functions, not LLM judgment.
+- **Every document is tracked.** Anything requested, received, drafted, or sent creates or updates
+  a `documents` row and a `case_events` entry in the same transaction.
 - **Voice and text agents only say approved things.** Call scripts and mid-call options are built
   from findings; any commitment (payment, settlement, sharing information) requires a recorded
   patient choice, and a timeout means "no".

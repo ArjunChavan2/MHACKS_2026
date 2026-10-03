@@ -74,6 +74,10 @@ Look for:
 - a voice agent able to say things outside its script's findings, or commit to anything
   (payment, settlement, sharing information) the patient didn't choose during the call
 - mid-call decisions that default to agreeing on timeout, or a choice routed to the wrong call
+- a pipeline stage with no approval gate or no way for the patient to take over; escalation
+  decided by LLM judgment instead of explicit rules; handoffs not logged
+- documents requested, received, drafted, or sent without a matching paperwork-tracker entry;
+  deadlines that don't trigger reminders
 - diagnosis, treatment suggestions, or other medical advice anywhere in the product
 - uploaded denial letters or records exposed beyond the owning patient
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks

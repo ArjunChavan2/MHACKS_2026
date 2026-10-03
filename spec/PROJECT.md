@@ -11,8 +11,9 @@ decides something.
 
 One agent that handles the whole case of a medical bill, from the first bill to the final appeal.
 It gets the itemized bill, audits it, disputes and negotiates it with the billing office, and if
-the insurer denies the claim, it appeals the denial with evidence from the patient's records. The
-patient approves each step by text or on a live call screen.
+the insurer denies the claim, it appeals the denial with evidence from the patient's records. A
+human can step in at every stage: the patient approves or takes over each step by text or on a live
+call screen. Every document in the case is tracked from request to response.
 
 ### The pipeline
 
@@ -69,6 +70,9 @@ enforce.
   cannot add findings or health claims.
 - **The patient decides.** Nothing is sent, submitted, or agreed to on a call without the patient's
   explicit approval (A/B replies count). No medical advice, diagnosis, or treatment suggestions.
+- **A human can take over at every step.** Every stage of the pipeline has a handoff point (see
+  "Human handoff"). When the agent is unsure, out of script, or asked for something only the
+  patient can give, it stops and hands off instead of guessing.
 
 ## Features
 
@@ -120,6 +124,57 @@ enforce.
    evidence item and its source. Includes the appeal deadline and where to send it. Patient reviews,
    approves, and downloads a PDF.
 
+### Human handoff (every step)
+
+Every pipeline stage has the same three handoff mechanisms:
+
+- **Approval gate:** the agent prepares the next action and waits for the patient's approval
+  (button in the app or reply in iMessage) before it calls, sends, or submits anything.
+- **Take over:** the patient can take any step themselves at any time. Drafts are editable and
+  downloadable; tasks can be marked "I'll do this myself"; on a live call, a **Take over** button
+  patches the patient into the call (warm transfer via a Twilio conference) and the agent drops
+  off or stays silent as a note-taker.
+- **Automatic escalation:** the agent hands off on its own when it should not continue: the
+  billing office or insurer requires identity verification or the patient's own authorization; the
+  rep asks something outside the script's findings; the denial type is unsupported or no evidence
+  is found; extraction is low-confidence or contradicts records; a deadline is too close to wait;
+  or the patient doesn't answer a mid-call decision in time.
+
+| Stage | Approval gate | Typical escalation |
+|---|---|---|
+| Case start | Confirm the case and the request for the itemized bill | Claim data unclear or missing |
+| Itemized bill request | Approve the call or letter | Office requires the patient's verification |
+| Audit | Confirm extracted fields; review findings | Low-confidence extraction |
+| Dispute and negotiation | Approve the call or email; choose options mid-call | Off-script question, offer outside the options, timeout |
+| Denial investigation | Approve the call to the insurer | Insurer requires the member to call |
+| Written appeal | Review, edit, and approve before sending | Unsupported denial type, no evidence |
+| Escalation (external review) | Approve filing | Always patient-led; app prepares the paperwork |
+
+Every handoff is logged in the case timeline (who acted, when, and what was decided).
+
+### Paperwork tracker
+
+Each case keeps a register of every document, in and out, so the patient always knows what has
+been requested, received, sent, and what is still owed:
+
+- **Documents tracked:** claim or EOB, itemized bill, written dispute, billing office written
+  confirmations or revised bills, denial letter, appeal letter, insurer acknowledgement and
+  decision, external review filing, call transcripts and call summaries.
+- **For each document:** type, direction (incoming or outgoing), status (requested, received,
+  drafted, approved, sent, acknowledged, awaiting response, resolved), dates, method (call, email,
+  mail, fax, portal), counterparty, reference or claim number, the file itself, and the findings or
+  records it cites.
+- **Deadlines and follow-ups:** each document can carry a deadline (e.g. the appeal filing deadline
+  from the denial letter, the insurer's response window) and a follow-up date. Photon texts the
+  patient before deadlines and when a response is overdue; the agent proposes the follow-up call or
+  letter and waits for approval.
+- **Case timeline:** one chronological view of documents, calls, decisions, and handoffs across the
+  whole pipeline, from claim to final appeal.
+- **Export:** the patient can download the full case packet (all documents plus the timeline) at
+  any time, e.g. to give to a human advocate or attach to an external review.
+- *Open:* exact deadline rules per plan type; for the demo, take deadlines from the confirmed denial
+  letter fields rather than computing them.
+
 ### Phone advocacy (ElevenLabs)
 
 Phone calls and written documents have different jobs:
@@ -168,12 +223,13 @@ Phone calls and written documents have different jobs:
 | Hosting | Vercel |
 | Database | Neon Postgres + Drizzle ORM |
 | Records | FinchNode REST API, server-side only, with a `USE_MOCK` switch to saved sandbox data |
-| LLM | Grok (xAI is a sponsor): Files API for parsing bills, EOBs, and denial letters; drafting letters and scripts. *Open:* confirm the Files API handles scanned PDFs and photos |
+| LLM | Google Gemini API (via `lib/llm/` only): reads bills, EOBs, and denial letters (PDF and photo input) into zod-validated structured output; drafts letters and scripts with placeholders. Qualifies for the MLH Gemini prize. *Open:* test early on our scanned sample bills and photos |
 | Rules engine | Pure TypeScript functions in `lib/audit/` and `lib/evidence/`, tested with Vitest |
 | Letter PDF | `@react-pdf/renderer` |
 | Texts | Photon `spectrum-ts` in a long-running Node worker (not serverless): sends updates, receives A/B replies |
 | Voice | ElevenLabs Conversational AI + Twilio for outbound calls: itemized bill requests and negotiation with billing offices, denial investigation with insurers; an `ask_patient` server tool that waits for the patient's choice |
-| Live call screen | Transcript + decision buttons pushed to the browser (SSE/websockets via the Node worker or a hosted realtime service) |
+| Live call screen | Transcript + decision buttons + Take over button pushed to the browser (SSE/websockets via the Node worker or a hosted realtime service); Take over uses a Twilio conference to patch the patient in |
+| Paperwork tracker | `documents`, `deadlines`, and `case_events` tables in Neon; files in object storage (*Open:* Vercel Blob or similar); timeline built from `case_events` |
 | Stretch | Fetch.ai uAgent (Python) on Agentverse, reachable from ASI:One, calling the app's API |
 | Auth | Neon Auth if time allows, otherwise one hardcoded demo user |
 
@@ -185,10 +241,11 @@ browser; no app store, signing, or device setup during the hackathon.
 ```
 app/                 pages + API routes
 lib/finchnode/       API client + mock switch
-lib/extract/         document parsing (Grok) + confirmation flow
+lib/extract/         document parsing (Gemini) + confirmation flow
 lib/audit/           bill-audit rules + lookup tables (+ tests)
 lib/evidence/        denial-appeal evidence rules + lookup tables (+ tests)
 lib/draft/           letter/email/script drafting, verbatim insertion, PDF
+lib/cases/           pipeline stages, handoff rules, paperwork tracker, deadlines
 db/                  Drizzle schema
 fixtures/            mock sandbox data, sample bill, EOB, denial letter
 workers/photon/      text worker
@@ -228,12 +285,12 @@ agents/fetch/        Python uAgent (stretch)
 |---|---|
 | Photon | Text updates and A/B decisions |
 | ElevenLabs | Voice agent that calls the billing office or insurer |
-| xAI (Grok) | Document parsing and drafting |
+| Google Gemini (MLH) | Document reading and drafting |
 | Neon | Database |
 | Fetch.ai | Stretch: agent reachable from ASI:One |
 | Capital One | *Open:* savings angle (money recovered), only if natural |
 
-Not used: Relay (we use Photon for messaging instead), SpaceXAI, Spacetime, FREE-WiLi, Solana,
+Not used: Relay (we use Photon for messaging instead), SpaceXAI and Grok (we use Gemini), Spacetime, FREE-WiLi, Solana,
 Tiger Data, Presage. See the track tabs in the MHacks 2026 Google Doc for each decision.
 
 ## Demo
@@ -271,12 +328,16 @@ Tiger Data, Presage. See the track tabs in the MHacks 2026 Google Doc for each d
 7. **Live negotiation call (the highlight).** The voice agent calls the teammate playing the
    billing office. The rep offers 20% off for paying today; options pop up; the patient taps "Ask
    for 40%"; the agent counters. The rep agrees to remove the duplicate and review the lab charge;
-   the agent asks for it in writing, and the app sends the written dispute for the record.
-8. **Savings.** The case screen updates the total saved (FinTech angle).
+   the agent asks for it in writing, and the app sends the written dispute for the record. Point
+   out the Take over button, available throughout the call.
+8. **Savings and paperwork.** The case screen updates the total saved (FinTech angle), and the
+   paperwork tracker shows every document so far (claim, itemized bill, written dispute, the
+   billing office's written confirmation) with status and dates.
 9. **Denial, same case.** The insurer denies a related prescription (step therapy). The agent calls
    the insurer (short clip) and gets the exact denial reason and policy criteria. Evidence appears
    from both providers with provider and date, the written appeal cites every record, and an
-   iMessage says "Your appeal is ready." Point out that nothing had to be re-entered.
+   iMessage says "Your appeal is ready." The patient reviews and approves it; the appeal and its
+   filing deadline appear in the paperwork tracker. Point out that nothing had to be re-entered.
 10. **Close (15 s).** "One agent, one case, from the first bill to the final appeal." The AI never
     invents a fact; every claim traces to a bill line or a record.
 
@@ -299,5 +360,5 @@ short pre-recorded clips or transcripts, to keep the demo on time and reduce ris
 - Product name.
 - Team split across the 4 developers.
 - Coding-mismatch rules and lookup tables for the demo fixtures.
-- Call consent model.
+- Call consent model, and whether Take over is a warm transfer or a hand-back with call notes.
 - Whether official MHacks prize rules (announced at opening ceremony) change any of the above.
