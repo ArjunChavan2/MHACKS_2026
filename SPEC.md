@@ -586,8 +586,8 @@ Devpost deadline and keep the last 2–3 hours for freeze, video, and submission
 - **Demo:** open the URL, see a seeded case with the bill lines, EOB, and records with provenance.
 - **Exit criteria:** deploy works from `main`; all four devs import the shared types; Gemini and
   Neon keys verified.
-- **Early spikes (do now, they gate later MVPs):** O1 ElevenLabs wait test, O3 Photon iMessage
-  setup, O5 FinchNode sandbox fit (§7).
+- **Early spikes (do now, they gate later MVPs):** O5 FinchNode data fit (§7.2), O3 Photon
+  iMessage credentials, O1/O2 call orchestrator spike (§7.1).
 - **Owners:** Dev 1 fixtures + FinchNode mock; Dev 2 app shell + deploy; Dev 3 types + Gemini
   smoke; Dev 4 schema + Photon/ElevenLabs account setup.
 
@@ -692,11 +692,11 @@ mode; advocate export polish; Nessie; Capacitor.
 
 | # | Obstacle | Severity | Hits | Why it's hard | Mitigation | Test by |
 |---|---|---|---|---|---|---|
-| O1 | **ElevenLabs human-in-the-loop wait** | Critical | MVP 4 | `ask_patient` must block 20–60 s while the rep waits; tool calls may time out sooner | Spike in MVP 0; if limited, agent uses short "still checking" turns or asks for a callback; keep option sets small | H2 |
-| O2 | **Take over / warm transfer** | Critical | MVP 4 | Patching the patient into an ElevenLabs-on-Twilio call (conference bridging, agent leaving cleanly) is custom telephony | Decide by H12: warm transfer if the spike works, else hand-back with call notes and a one-tap "call them now" | H12 |
-| O3 | **Photon iMessage setup and routing** | High | MVP 3 | Spectrum credentials, iMessage line, always-on worker host, mapping replies to the right case | Set up at the Photon booth Saturday; run the worker on Railway/Render; correlation IDs in every prompt | H4 |
+| O1 | **Patient-decision wait during a call** | Critical | MVP 4 | `ask_patient` must pause 20–60 s while the rep waits; ElevenLabs tool calls may time out sooner | Call orchestrator (§7.1): the tool returns "waiting" immediately and the orchestrator holds the rep's leg until the patient answers or the timeout (= no agreement); fallback: short "still checking" turns or a callback request | H3 |
+| O2 | **Take over / warm transfer** | Critical | MVP 4 | Patching the patient into an AI call | Call orchestrator (§7.1): every call is a Twilio conference from the start, so Take over is adding the patient's leg and muting/removing the AI leg; verify ElevenLabs can join as a SIP participant (else a Twilio leg streaming to ElevenLabs); fallback: hand-back with call notes | H6 spike, decide by H12 |
+| O3 | **Photon iMessage setup with no Photon engineer on site** | High | MVP 3 | Self-serve only: Spectrum credentials, iMessage access, always-on worker, reply routing | Start now from docs (`spectrum-ts`); ask Photon's marketing officer for the fastest path to iMessage credentials and an engineer contact; build against Spectrum's terminal mode meanwhile; correlation IDs per prompt; if no iMessage access by H8, treat the Photon prize as at risk and keep web approvals primary | H4 credentials, H8 go/no-go |
 | O4 | **Voice agent paraphrasing health facts** | High | MVP 4 | The voice LLM can reword or invent, which breaks rule 1 | Agent fetches values via tools and reads them as given; script restricts topics to bill lines and documents; post-call transcript check flags any unsourced fact | H16 |
-| O5 | **FinchNode data fit** | High | MVP 2, 5 | Schema unknown; trial dates/outcomes and claims may be absent; need one patient with records at both providers | Ask at the workshop; save snapshots early; design fixtures around what exists; mock switch | H3 |
+| O5 | **FinchNode data fit** | High | MVP 1, 2, 5, 6 | Our plan assumes data FinchNode may not return (two-provider patient, coded labs with dates, medication dates, trial outcomes, encounters, claims, provenance) | Data-fit spike and fallbacks in §7.2; build fixtures around the real sandbox patient, not the reverse | H3 |
 | O6 | **Agent loop reliability** | High | MVP 2 | Gemini must choose sensible actions, not loop, and respect constraints across branches | Deterministic state machine exposes only allowed actions; LLM picks among them; step limit; tests per branch | H10 |
 | O7 | **Realtime live call screen** | High | MVP 4 | Vercel functions can't hold sockets; transcript events must stream | Push from the worker via SSE, or poll Neon every second as a fallback | H15 |
 | O8 | **Extraction accuracy** | Medium-High | MVP 1 | Scanned bills and photos misread codes and amounts | Clean fixture PDFs for the demo; confirm screen; "[to confirm]"; low-confidence flags | H4 |
@@ -705,6 +705,51 @@ mode; advocate export polish; Nessie; Capacitor.
 | O11 | **Demo honesty and consent questions** | Medium | MVP 2–5 | Judges may ask about call consent, identity verification, simulated arrivals, real savings | Label simulations; prepared answers; no savings or success claims | Before judging |
 | O12 | **Team coordination** | Medium | all | Shared types and schema churn with four people on `main` | Contract in MVP 0; PRs for shared code; migrations owned by Dev 4 | Ongoing |
 | O13 | **Scope creep across 26 prizes** | Medium | all | Extra integrations steal time from the core demo | §9 targets only; MVP 6 after the core works | Ongoing |
+
+### 7.1 Call orchestrator (design for O1, O2, O7)
+
+A small service we own (in the Photon worker process or its own process; not on Vercel) owns every
+call instead of ElevenLabs owning it.
+
+```
+            Twilio Conference "case-<id>"   (created and controlled by the orchestrator)
+             ├── Leg A: billing office or insurer (outbound PSTN call)
+             ├── Leg B: ElevenLabs voice agent (SIP participant, or a Twilio leg streaming to ElevenLabs)
+             └── Leg C: patient (added only on Take over)
+```
+
+- **Start:** after approval, create the conference, dial the counterparty, add the agent leg.
+- **Patient decision (O1):** `ask_patient` records the question and returns "waiting" at once; the
+  orchestrator places Leg A on hold with a short "one moment please" message, pushes the options to
+  the live screen and Photon, and on answer (or timeout = no agreement) takes Leg A off hold and
+  passes the result into the conversation.
+- **Take over (O2):** dial the patient, add Leg C, then mute or remove Leg B (or keep it muted as a
+  note-taker); the counterparty hears no transfer.
+- **Events (O7):** Twilio status callbacks and agent transcript events become case events and are
+  pushed to the live call screen (SSE), so one component owns call state.
+- **Verify early (H6 spike):** (1) an ElevenLabs agent joining a Twilio conference via SIP, else the
+  media-stream leg; (2) the API for injecting the patient's choice into a live ElevenLabs
+  conversation (mid-conversation context or user message). If either fails, Take over falls back to
+  hand-back with call notes.
+
+### 7.2 FinchNode data-fit spike and fallbacks (O5)
+
+| Need | Used by | Risk | If missing |
+|---|---|---|---|
+| One sandbox patient with records at both Northstar and Quillhaven | MVP 2, 5 | Scenarios may be single-provider | Best two-provider scenario; else combine two scenarios in saved data, labeled |
+| Labs with codes and dates to match bill lines | MVP 1–2 | Clinical codes (LOINC) vs billing codes (CPT); dates may not line up | Demo-only lookup table; **write the bill around the patient's real lab dates** |
+| Medications with status, start and end dates | MVP 5 | Status or dates absent | Mark "unconfirmed"; doctor request covers the gap |
+| Trial outcome or reason stopped | MVP 5 | Likely absent (no clinical notes listed) | Expect "missing"; demo the doctor documentation request as the honest path |
+| Encounters and procedures | MVP 1–2 | Not in FinchNode's listed categories | Limit record checks to labs, medications, immunizations; never claim procedure checks |
+| Claims or EOB data | MVP 6 | Source-specific (likely Medicare), may be absent in the sandbox | Labeled simulated claim event |
+| Provenance on every record (provider, date, record ID) | All citations | Field names unknown | Map in `lib/finchnode/`; fail visibly if absent |
+| Sync timing after Connect | MVP 2 | Asynchronous arrival | "Syncing" state; saved data if slow |
+| Response schema | All | Unknown until called | zod validation; save real responses as test fixtures |
+
+**Spike (Dev 1, by H3):** pull all 12 sandbox scenarios and save raw responses; inventory fields;
+pick the patient; write the mapping into `lib/types/`; only then write the bill, EOB, branch
+documents, revised statement, and denial to match that patient's real records. Bring the open
+questions to the FinchNode workshop.
 
 ---
 
