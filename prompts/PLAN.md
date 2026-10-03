@@ -16,11 +16,12 @@ Your job is to understand the task and produce a concrete implementation plan.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-medical record monitoring app. Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+emergency medical passport (QR on the lock screen → clinician view). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI handles logistics, never medicine.** Health facts flow verbatim from
-  FinchNode with their source attached; an LLM never writes, summarizes, or interprets them.
-  Change/conflict detection is deterministic. The user is the only judge of what is true. See
+- **Core invariant — AI never writes or hides a health fact.** Health facts are copied verbatim
+  from FinchNode records with their source attached; an LLM never writes, summarizes, or
+  interprets them. The passport is built by deterministic rules, conflicts are shown rather than
+  resolved, and the emergency-specific view may only reorder existing items. See
   `spec/PROJECT.md` for the full rule. Any plan that routes a health fact through an LLM is wrong.
 - Other developers are working on other tasks at the same time. Check other
   `agent-notes/*/PLAN.md` files and the repository for interfaces you depend on or would touch, and

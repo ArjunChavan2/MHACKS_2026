@@ -19,11 +19,12 @@ and to identify problems before verification.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-medical record monitoring app. Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+emergency medical passport (QR on the lock screen → clinician view). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI handles logistics, never medicine.** Health facts flow verbatim from
-  FinchNode with their source attached; an LLM never writes, summarizes, or interprets them.
-  Change/conflict detection is deterministic. The user is the only judge of what is true. A
+- **Core invariant — AI never writes or hides a health fact.** Health facts are copied verbatim
+  from FinchNode records with their source attached; an LLM never writes, summarizes, or
+  interprets them. The passport is built by deterministic rules, conflicts are shown rather than
+  resolved, and the emergency-specific view may only reorder existing items. A
   violation of this invariant is always at least a **major** finding.
 
 ## Before you begin
@@ -57,10 +58,15 @@ Look for:
 - implementation decisions that diverge from the plan without justification
 - **any path where a health fact reaches a user-facing output after passing through an LLM**,
   or loses its source attribution
-- conflict or change detection that depends on LLM judgment instead of deterministic comparison
-- wording that asserts a record is wrong or gives medical advice, instead of asking the user
-- the emergency page exposing more than the emergency basics, being reachable after revocation,
-  or serving a view without logging it
+- passport selection, deduplication, or conflict detection that depends on LLM judgment instead of
+  deterministic rules
+- conflicts that get resolved (one side dropped or picked as "correct") instead of both versions
+  being shown with sources
+- emergency-specific ranking whose LLM output is trusted without validation: unknown item IDs not
+  discarded, omitted items not appended, or any model-generated text rendered as a health fact
+- diagnosis, treatment suggestions, or other medical advice anywhere in the product
+- the clinician view exposing more than the passport, being reachable after revocation, or serving
+  a view without logging it and alerting the patient
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks
 
 Also inspect whether the implementation is reasonably maintainable and understandable, but do not

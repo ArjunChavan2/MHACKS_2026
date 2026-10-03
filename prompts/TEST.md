@@ -20,11 +20,12 @@ or clients when needed.
 ## Project context
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
-medical record monitoring app. Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+emergency medical passport (QR on the lock screen → clinician view). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
 
-- **Core invariant — AI handles logistics, never medicine.** Health facts flow verbatim from
-  FinchNode with their source attached; an LLM never writes, summarizes, or interprets them.
-  Change/conflict detection is deterministic. The user is the only judge of what is true.
+- **Core invariant — AI never writes or hides a health fact.** Health facts are copied verbatim
+  from FinchNode records with their source attached; an LLM never writes, summarizes, or
+  interprets them. The passport is built by deterministic rules, conflicts are shown rather than
+  resolved, and the emergency-specific view may only reorder existing items.
 - Test against the FinchNode synthetic sandbox (Northstar Health System, Quillhaven Medical Group)
   or the local mock. Never use real patient data.
 
@@ -56,16 +57,19 @@ Cover, where relevant:
 - interactions between components and with other tasks' interfaces
 - regression-prone behavior
 - risks identified by the audit agent
-- **verbatim health facts**: every health fact in a text, page, letter, or voice script exactly
-  matches the source record value and carries its provider and date
-- deterministic detection: the same pair of snapshots always yields the same changes and
-  conflicts; added, removed, modified, and cross-provider-disagreement cases are each detected;
-  identical re-syncs produce no alerts (no duplicate texts)
-- YES/NO replies: unrecognized replies, late replies, and replies to an already-resolved alert
-- emergency page: shows only the emergency basics, returns nothing after revocation, logs every
-  view, and triggers the view notification
-- FinchNode failures: API errors, empty records, missing fields, and invalid webhook signatures
-  fail visibly rather than producing false alerts
+- **verbatim health facts**: every health fact on the passport, clinician view, or in a text
+  exactly matches the source record value and carries its provider and date
+- deterministic passport building: the same records always yield the same passport; the "recent"
+  cutoff boundary; the same item from two providers is deduplicated with both sources kept;
+  cross-provider conflicts are detected and both versions shown
+- emergency-specific ranking: the ranked view contains exactly the same items as the unranked
+  passport (none added, none lost, none altered) — including when the LLM returns unknown IDs,
+  duplicate IDs, omits items, returns malformed output, or times out; "show everything" works
+- clinician view and link: shows only the passport, returns nothing after revocation, the new link
+  works, every view is logged, and each view triggers the patient alert
+- QR: the generated wallpaper's QR code decodes to the current link
+- FinchNode failures: API errors, empty records, and missing fields fail visibly rather than
+  producing an incomplete passport that looks complete
 
 Prefer **black-box testing against documented interfaces** whenever practical. Use white-box
 knowledge only when it helps target a risk that cannot be exercised effectively from the public
