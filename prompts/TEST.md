@@ -68,9 +68,13 @@ Cover, where relevant:
 - deterministic bill audit: the same bill, EOB, and records always yield the same flags; duplicates
   (and near-duplicates that are not duplicates), bill vs. EOB patient-responsibility mismatches,
   out-of-network cases, and lab/medication charges with no matching record are each detected
-- deterministic evidence: the same records and denial always yield the same evidence; step therapy
-  finds required drugs that were prescribed and discontinued at any provider, and ignores active or
-  never-prescribed ones; medical necessity finds only the conditions/labs in the lookup table
+- deterministic evidence: the same records and denial always yield the same criteria results;
+  step therapy marks a required drug "met" only when the trial is documented (dates or duration and
+  outcome), marks "prescribed then discontinued" with no documented trial as "missing", and ignores
+  never-prescribed drugs; medical necessity matches only the criteria in the lookup table
+- next-action routing: all-met cases get an appeal draft; any-missing cases get a documentation
+  request (never a weak appeal); unsupported cases get a plain message and handoff; the "What
+  happens next?" card shows an unconfirmed deadline when none was confirmed
 - extraction: fields require patient confirmation; corrected fields are the ones used; unreadable
   or unsupported documents produce a clear message, not a draft
 - no evidence / unsupported denial type: the app says so and does not draft an appeal

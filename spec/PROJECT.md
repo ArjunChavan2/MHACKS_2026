@@ -112,17 +112,34 @@ enforce.
 
 7. **Classify the denial** — map the confirmed denial reason to a supported type; if unsupported,
    say so plainly.
-8. **Gather evidence** (deterministic), hackathon scope:
+8. **Match criteria to evidence** (deterministic), hackathon scope. The insurer's criteria come
+   from the confirmed denial letter and the insurer call (patient confirms them). Each criterion is
+   checked against the records and marked **met** (with the records that support it), **missing**
+   (with exactly what is needed), or **unconfirmed**:
 
-   | Denial reason | Evidence rule | FinchNode data |
+   | Denial reason | Criterion is met only when the records show | FinchNode data |
    |---|---|---|
-   | Step therapy ("try cheaper drugs first") | Required drugs that were prescribed and are now discontinued, at any provider | Medications |
-   | Not medically necessary | Documented conditions and labs relevant to the denied service, via a lookup table | Conditions, labs |
+   | Step therapy ("try cheaper drugs first") | For each required drug: it was prescribed, **and** the trial is documented (start and end dates or duration, and the outcome or reason it stopped, such as ineffective or side effects) | Medications, plus notes/conditions where available |
+   | Not medically necessary | Each policy criterion for the denied service is supported by a documented condition, lab result, or prior treatment, via a lookup table | Conditions, labs, medications |
 
-   If no evidence is found, say so; do not draft an appeal without evidence.
-9. **Appeal draft** — the LLM writes the letter with placeholders; code inserts each verbatim
-   evidence item and its source. Includes the appeal deadline and where to send it. Patient reviews,
-   approves, and downloads a PDF.
+   **A prescription or a stopped medication alone does not prove the required trial was completed.**
+   "Prescribed, then discontinued" with no documented duration or outcome is marked **missing**,
+   not met.
+9. **Next action** (deterministic routing from the confirmed denial, plan documents, and the
+   criteria results):
+   - **All criteria met:** prepare the cited appeal for patient review.
+   - **Some criteria missing:** prepare a specific documentation request to the treating provider
+     (e.g. "treatment dates and outcome for medication A"), which the patient reviews and approves,
+     and add it to the paperwork tracker. Do not draft a weak appeal.
+   - **Unsupported denial type or nothing usable:** say so plainly and offer handoff.
+   - The app shows a **"What happens next?" card**: next action, why (citing the records and the
+     gap), what is needed, responsible party, deadline (from the confirmed denial notice; shown as
+     unconfirmed if unavailable), and a button to review the request or appeal.
+10. **Appeal draft** — when criteria are met, the LLM writes the letter with placeholders; code
+    inserts each verbatim evidence item and its source, criterion by criterion ("Insurer requires X;
+    records show Y"). Includes the appeal deadline and where to send it. Patient reviews, approves,
+    and downloads a PDF. Status moves through draft ready, patient approved, submitted, receipt
+    confirmed, and decision received; **a downloaded PDF is not proof of submission**.
 
 ### Human handoff (every step)
 
@@ -188,13 +205,13 @@ Phone calls and written documents have different jobs:
 | Appeal the denial | **Written** (letter, fax, or insurer portal) | None on the appeal itself; formal appeals are generally written (some urgent appeals can be started by phone; rules vary by plan) |
 | External review | Written | None |
 
-10. **Call script** — generated from the same verbatim findings, per call type (itemized bill
+11. **Call script** — generated from the same verbatim findings, per call type (itemized bill
     request, bill negotiation, denial investigation).
-11. **Voice call** — an ElevenLabs voice agent calls the billing office or insurer using the
+12. **Voice call** — an ElevenLabs voice agent calls the billing office or insurer using the
     script. Billing offices usually verify identity and need the patient's authorization; *Open:*
     whether the patient joins the call or consents at the start. For the demo, a teammate plays the
     billing office.
-12. **Live decisions during the call** — the patient steers the call while it happens:
+13. **Live decisions during the call** — the patient steers the call while it happens:
     - The app shows a **live call screen**: status, a running transcript, and decision prompts.
     - When the rep says something that needs a decision (e.g. "we can offer 20% off if you pay
       today, or set up a payment plan"), the agent calls a tool (e.g. `ask_patient(question,
@@ -334,10 +351,12 @@ Tiger Data, Presage. See the track tabs in the MHacks 2026 Google Doc for each d
    paperwork tracker shows every document so far (claim, itemized bill, written dispute, the
    billing office's written confirmation) with status and dates.
 9. **Denial, same case.** The insurer denies a related prescription (step therapy). The agent calls
-   the insurer (short clip) and gets the exact denial reason and policy criteria. Evidence appears
-   from both providers with provider and date, the written appeal cites every record, and an
-   iMessage says "Your appeal is ready." The patient reviews and approves it; the appeal and its
-   filing deadline appear in the paperwork tracker. Point out that nothing had to be re-entered.
+   the insurer (short clip) and gets the exact denial reason and policy criteria, which the patient
+   confirms. The app shows "Insurer requires X → records support Y → Z is missing" with cited
+   records from both providers. If the evidence is sufficient, it prepares the cited appeal for
+   review; if not, it shows the "What happens next?" card with a documentation request to the
+   doctor. Either item and its deadline appear in the paperwork tracker. Point out that nothing had
+   to be re-entered.
 10. **Close (15 s).** "One agent, one case, from the first bill to the final appeal." The AI never
     invents a fact; every claim traces to a bill line or a record.
 
