@@ -4,6 +4,8 @@ MHacks 2026 project. **`SPEC.md` is the single source of truth**: product, rules
 (§3), capabilities (§4), engineering rules and docstrings (§5), MVP ladder (§6), obstacles (§7).
 If anything here or in the Google Doc disagrees with SPEC.md, SPEC.md wins.
 
+Picking up mid-project? Read `HANDOFF.md` for current state and next steps.
+
 ## Workflow
 
 Each task goes through four phases, each run in a fresh session with its prompt from `prompts/`:

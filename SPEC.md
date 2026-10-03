@@ -8,7 +8,12 @@ content in the MHacks 2026 Google Doc ("Demo Flow", "Stack", "Competitors & Diff
 "Muse Reel Research Review", and the track tabs). Merged on 2026-10-03.
 
 **Precedence:** this file wins. If the Google Doc, a prompt, or a note disagrees with it, update
-this file (by PR or by telling the spec owner) instead of working from the other copy. Items
+this file (by PR or by telling the spec owner) instead of working from the other copy.
+
+**Doc-sync rule:** the Google Doc is for discussion and research. Any decision made there is not
+real until it lands in this file. Whoever makes a decision in the doc (or in chat) adds it here, or
+asks the spec owner to, before building on it. The repo is private: every teammate needs
+collaborator access to read this file (§12). Items
 marked *Open* are not decided; do not treat them as requirements. §12 lists open decisions and
 the one unresolved conflict between the team's source tabs.
 
@@ -312,8 +317,23 @@ advice; rules vary by state and plan.
   the follow-up and waits for approval.
 - **Timeline and export:** one chronological view of documents, calls, decisions, and handoffs;
   exportable case packet for a human advocate.
-- Data: `cases`, `documents`, `findings`, `case_events`, `approvals`, `deadlines` tables in Neon;
-  files in object storage (*Open:* Vercel Blob or similar).
+- Data: `cases`, `documents`, `findings`, `case_events`, `approvals`, `deadlines`, `calls` tables
+  in Neon; files in object storage (*Open:* Vercel Blob or similar). Relationships:
+
+  ```
+  cases 1─* documents     (each file or request; status, method, counterparty, reference no.)
+  cases 1─* findings      (rule, status: potential|confirmed|withdrawn|pending; source refs ->
+                           bill/EOB line in a document, or a FinchNode record ID)
+  cases 1─* calls         (counterparty, Twilio conference ID, transcript ref, outcome)
+  cases 1─* approvals     (what was approved, by whom, when; required before any action)
+  cases 1─* deadlines     (linked to a document; due date, follow-up date, reminder state)
+  cases 1─* case_events   (append-only timeline: tool calls, results, handoffs, decisions;
+                           may reference a document, finding, call, or approval)
+  ```
+
+- **Uploaded files:** private storage only; access through short-lived signed URLs; never public
+  links; document contents leave our system only through `lib/llm/` (Gemini); never log document
+  contents; synthetic data only (rule 12).
 
 ### 4.7 Human handoff (every stage)
 
@@ -415,7 +435,7 @@ external review filing, Fetch.ai agent, Capital One Nessie payment view, native 
 | Database | Neon Postgres + Drizzle ORM | Typed schema, serverless | Neon |
 | Login | Neon Auth if time allows, else one demo user | Strengthens Neon entry | Neon |
 | Records | FinchNode API, server-side, `USE_MOCK` switch | Evidence | FinchNode |
-| AI | Google Gemini API, only in `lib/llm/` | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini |
+| AI | Google Gemini API, only in `lib/llm/` (*Open:* pin one current model that supports PDF/image input, structured output, and function calling; set it in one config constant) | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini |
 | Rules | Pure TypeScript in `lib/audit/`, `lib/evidence/`, Vitest | Deterministic, cited findings | — |
 | PDF | `@react-pdf/renderer` | Letters | — |
 | Voice | ElevenLabs Conversational AI + Twilio; `ask_patient` server tool | Calls with patient control | ElevenLabs, MLH ElevenLabs |
@@ -588,8 +608,10 @@ Devpost deadline and keep the last 2–3 hours for freeze, video, and submission
   Neon keys verified.
 - **Early spikes (do now, they gate later MVPs):** O5 FinchNode data fit (§7.2), O3 Photon
   iMessage credentials, O1/O2 call orchestrator spike (§7.1).
-- **Owners:** Dev 1 fixtures + FinchNode mock; Dev 2 app shell + deploy; Dev 3 types + Gemini
-  smoke; Dev 4 schema + Photon/ElevenLabs account setup.
+- **Owners:** Dev 1 fixtures + FinchNode mock; Dev 2 app shell + deploy, and **Notability owner**
+  (sketch screens and flows in Notability Pro during planning, save 2+ screenshots for Devpost;
+  required for the Notability prize); Dev 3 types + Gemini smoke; Dev 4 schema +
+  Photon/ElevenLabs/Twilio account setup.
 
 ### MVP 1 — Cited bill audit (H2–H6)
 
@@ -893,6 +915,16 @@ Verified from finchnode.com on 2026-10-02 plus workshop notes.
 8. **Coding-mismatch rule:** include only if simple and defensible.
 9. **File storage** for documents.
 10. **Product name.**
+11. **Team language skills (unconfirmed):** the stack assumes everyone can work in TypeScript.
+    If not, decide by H1 whether to move the backend to Python (FastAPI) and keep a light React
+    frontend.
+12. **Real timeline (unconfirmed):** MVP targets assume hacking started Sat 12:00 PM. Record the
+    actual start time and the Devpost submission deadline here and shift §6 targets accordingly.
+13. **Owners (unconfirmed):** assign real names to Dev 1–4 in §6.
+14. **Repo access:** add every teammate as a collaborator on the private GitHub repo.
+15. **Gemini model:** which model to pin (see §5.1).
+16. **Archived Google Doc tabs:** keep "Demo Flow (archived)" and "Stack (archived)" for reference
+    or delete them to prevent edits to the old copy.
 
 ---
 

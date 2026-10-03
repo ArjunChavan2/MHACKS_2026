@@ -89,6 +89,20 @@ Cover, where relevant:
 - paperwork tracker: every document event creates or updates the right entry and timeline event;
   statuses move correctly; deadline and overdue reminders fire; the case packet export includes
   every document
+- the three outcome branches (SPEC.md §3.5) on the same case: "confirms an error" pursues the
+  correction and waits for written confirmation; "disproves the concern" withdraws the finding,
+  cites the new evidence, and claims no savings; "incomplete" requests the specific missing
+  document and stays pending; the agent never sees which branch was chosen except through the
+  actual response
+- a representative's assertion alone never resolves or withdraws an issue
+- waiting and resuming: a "we'll send it later" response saves the case and pending task; the
+  arriving document attaches to the same case, reruns the relevant checks, and resumes from the
+  saved blocker; new actions still require approval
+- verification and savings: a verbal promise creates a follow-up; "resolved" requires a revised
+  statement or written resolution; questioned, offered, and confirmed amounts stay separate
+- constraints and the allowed-action list hold across the whole case, including mid-call; the
+  agent stops and hands off instead of looping
+- every simulated or fixture-driven event is labeled in the UI
 - FinchNode failures: API errors, empty records, and missing fields fail visibly rather than
   producing an appeal that looks complete
 

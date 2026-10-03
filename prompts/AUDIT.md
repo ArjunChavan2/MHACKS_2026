@@ -80,6 +80,18 @@ Look for:
   deadlines that don't trigger reminders
 - diagnosis, treatment suggestions, or other medical advice anywhere in the product
 - uploaded denial letters or records exposed beyond the owning patient
+- agent-core violations (SPEC.md §3): the plan not changing when a branch's evidence confirms,
+  disproves, or leaves an issue incomplete; a finding not withdrawn when evidence disproves it;
+  savings claimed for a valid charge; an issue marked resolved without a revised statement or
+  written resolution; a representative's assertion treated as proof
+- patient constraints (e.g. "don't agree to pay anything") not enforced for the whole case, or an
+  action taken outside the allowed-action list in `lib/cases/`
+- waiting and resuming that loses case state, restarts the case, or skips re-approval for a new
+  action or disclosure; agent loops without a stop condition
+- simulated arrivals, fixtures, time-compressed waits, or saved responses not labeled as such;
+  a downloaded PDF treated as proof of submission
+- uploaded files stored or linked publicly, or document contents sent anywhere except through
+  `lib/llm/`
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks
 - violations of `SPEC.md` §5: missing, vague, or inaccurate docstrings (any function, type,
   constant, module, component, or test without one is a finding); external input not validated
