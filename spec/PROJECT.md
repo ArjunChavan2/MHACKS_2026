@@ -185,6 +185,9 @@ agents/fetch/        Python uAgent (stretch)
 | Fetch.ai | Stretch: agent reachable from ASI:One |
 | Capital One | *Open:* savings angle (money recovered), only if natural |
 
+Not used: Relay (we use Photon for messaging instead), SpaceXAI, Spacetime, FREE-WiLi, Solana,
+Tiger Data, Presage. See the track tabs in the MHacks 2026 Google Doc for each decision.
+
 ## Demo
 
 ### Setup
