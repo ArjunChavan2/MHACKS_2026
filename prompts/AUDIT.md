@@ -20,7 +20,7 @@ and to identify problems before verification.
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
 medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
-with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Code conventions: `AGENTS.md`. Known pitfalls: `CLAUDE.md`.
 
 - **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
@@ -32,7 +32,7 @@ with drafted letters, phone calls, and text updates). Specification: `spec/PROJE
 
 ## Before you begin
 
-1. Read `spec/PROJECT.md`, `CLAUDE.md`, and relevant documentation.
+1. Read `spec/PROJECT.md`, `AGENTS.md`, `CLAUDE.md`, and relevant documentation.
 2. Read `agent-notes/<task>/PLAN.md`.
 3. Read `agent-notes/<task>/IMPLEMENTATION.md` if it exists.
 4. Inspect the current repository state, implementation, and relevant git diff.
@@ -77,6 +77,10 @@ Look for:
 - diagnosis, treatment suggestions, or other medical advice anywhere in the product
 - uploaded denial letters or records exposed beyond the owning patient
 - secrets committed to the repository, or webhook handlers that skip FinchNode signature checks
+- violations of `AGENTS.md`: missing, vague, or inaccurate docstrings (any function, type,
+  constant, module, component, or test without one is a finding); external input not validated
+  with zod; LLM SDKs imported outside `lib/llm/`; FinchNode called outside `lib/finchnode/`;
+  money as floats
 
 Also inspect whether the implementation is reasonably maintainable and understandable, but do not
 prioritize style preferences over functional correctness.

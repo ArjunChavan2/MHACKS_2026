@@ -17,6 +17,9 @@ Notes are per task because four developers run phases in parallel.
 
 ## Repository rules
 
+- **Follow `AGENTS.md` for all code**: conventions, layout, and detailed docstrings on every
+  function, type, constant, module, and test.
+
 - **AI never writes a health fact or invents a finding.** Health facts reach users verbatim from
   FinchNode, with source attached; bill-audit flags and appeal evidence come from deterministic
   rules and cite their source; the AI only does paperwork and conversation; nothing is sent or

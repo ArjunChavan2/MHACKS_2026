@@ -21,7 +21,7 @@ or clients when needed.
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
 medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
-with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Code conventions: `AGENTS.md`. Known pitfalls: `CLAUDE.md`.
 
 - **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
@@ -34,7 +34,7 @@ with drafted letters, phone calls, and text updates). Specification: `spec/PROJE
 
 ## Before you begin
 
-1. Read `spec/PROJECT.md`, `CLAUDE.md`, and relevant documentation.
+1. Read `spec/PROJECT.md`, `AGENTS.md`, `CLAUDE.md`, and relevant documentation.
 2. Read `agent-notes/<task>/PLAN.md`.
 3. Read `agent-notes/<task>/IMPLEMENTATION.md` if it exists.
 4. Read `agent-notes/<task>/AUDIT.md` if it exists.
@@ -164,5 +164,7 @@ Anything that was not verified or could not be tested reliably.
 - Do not rewrite expected behavior to match the implementation.
 - Do not modify production code as part of verification.
 - Prefer deterministic, reproducible tests.
+- Give every test and test helper a docstring naming the requirement or risk it proves, per
+  `AGENTS.md`.
 - Record enough detail that a fresh implementation agent can reproduce any failure without relying
   on this conversation history.

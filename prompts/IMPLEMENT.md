@@ -17,7 +17,7 @@ Work from the repository and persistent artifacts rather than relying on prior c
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
 medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
-with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Code conventions: `AGENTS.md`. Known pitfalls: `CLAUDE.md`.
 
 - **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
@@ -35,7 +35,7 @@ with drafted letters, phone calls, and text updates). Specification: `spec/PROJE
 
 ## Before you begin
 
-1. Read `spec/PROJECT.md`, `CLAUDE.md`, and relevant documentation.
+1. Read `spec/PROJECT.md`, `AGENTS.md`, `CLAUDE.md`, and relevant documentation.
 2. Read `agent-notes/<task>/PLAN.md`.
 3. Inspect the current repository state and relevant source files.
 4. Confirm that the plan still matches the repository as it exists now — other tasks may have
@@ -115,3 +115,5 @@ Include, when relevant:
 - Do not treat successful compilation as proof of correctness.
 - Leave independent review to the audit agent and comprehensive verification to the test agent.
 - Do not pass health facts through an LLM to be rewritten — see "Project context" above.
+- Follow `AGENTS.md`, including a detailed docstring on every function, class, type, constant,
+  module, component, and test you write or change. Code without docstrings is not done.

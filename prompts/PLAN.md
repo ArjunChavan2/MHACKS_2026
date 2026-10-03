@@ -17,7 +17,7 @@ Your job is to understand the task and produce a concrete implementation plan.
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
 medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
-with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Known pitfalls: `CLAUDE.md`.
+with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Code conventions: `AGENTS.md`. Known pitfalls: `CLAUDE.md`.
 
 - **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
@@ -34,7 +34,7 @@ with drafted letters, phone calls, and text updates). Specification: `spec/PROJE
 
 ## Before you begin
 
-1. Read `spec/PROJECT.md`, `CLAUDE.md`, and any other relevant documentation.
+1. Read `spec/PROJECT.md`, `AGENTS.md`, `CLAUDE.md`, and any other relevant documentation.
 2. Inspect the repository structure and relevant source files.
 3. Read other tasks' `agent-notes/*/PLAN.md` for shared interfaces.
 4. Understand the existing implementation before proposing changes.
