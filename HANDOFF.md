@@ -34,7 +34,7 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 ## State right now
 
 - **No application code exists yet.** The repo has only the spec, pointers, prompts, and this file.
-- SPEC.md is complete through: product, rules, agent model, capabilities, engineering rules and
+- SPEC.md (including the full extraction spec in §4.2) is complete through: product, rules, agent model, capabilities, engineering rules and
   docstrings, MVP ladder (MVP 0–6), obstacle register (O1–O13) with the call orchestrator design
   (§7.1) and FinchNode data-fit plan (§7.2), demo plan, prize targets, research, open decisions.
 - Audit and test prompts were just updated with the agent-core checks (three outcome branches,
@@ -65,10 +65,10 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
   Python instead of reading them into context.
 - **Do not overwrite the team's doc edits.** When the doc and SPEC.md disagree, ask which wins and
   record the decision in SPEC.md (doc-sync rule, SPEC.md top).
-- **Discussed but intentionally not added to SPEC.md** (the user chose not to): Twilio trial
-  details ($15 credit, verified numbers only, trial announcement and possible keypress, upgrade
-  about $20 before judging); call fallbacks beyond hand-back (browser call, or Relay, which might
-  also earn the Relay prize); Gemini Live considered and rejected for voice (lose ElevenLabs
-  prizes, custom audio bridge); ideas from the `medical-bill-decoder` skill (verdict block,
-  line-by-line table, three scripts; license unchecked); a CNBC 2026-10-01 article about an insurer
-  blaming AI for ~$1B in questionable hospital charges (unread, possible hook). Ask before adding.
+- **Recently added to SPEC.md (2026-10-03):** the full bill-extraction spec (§4.2: classify
+  first, provenance on every field, text-layer cross-check, deterministic checks, confidence from
+  checks, confirm screen, failure handling, traceability), the extraction test set and eval budget
+  (§5.7), why Twilio and the Twilio trial plan (§5.1, §5.9), free-plan guidance (one stable account
+  per service; don't create multiple trials with one provider to evade limits), call fallbacks
+  (browser call, Relay) in §7, Gemini Live rejected (§5.1), medical-bill-decoder ideas (§4.4,
+  §4.9, §5.7), the CNBC hook (§10), and product agents vs Claude skills (§5.11).

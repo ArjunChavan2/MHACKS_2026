@@ -264,9 +264,49 @@ See §11.
   itemized bill, EOB, revised statement, or denial letter. **"I only have a balance statement"**
   is a supported entry: the agent prepares a patient-approved itemized bill request and explains how
   to get the EOB. Never invent billing codes or reconstruct charges from a total.
-- **Extraction:** Gemini (via `lib/llm/`) reads PDF/photo into zod-validated fields. Fields are
-  `Unconfirmed<T>` until the patient confirms or corrects each one; low-confidence fields are
-  flagged. Unreadable codes are shown as "[to confirm]", never guessed.
+- **Principle:** the model proposes, code verifies, the patient confirms. Nothing reaches the audit
+  until all three have happened.
+- **1. Classify first.** Before extracting, classify the document: itemized bill, balance
+  statement (total only), EOB, revised statement, denial letter, or unknown. Each type has its own
+  schema. A balance statement routes to the itemized-bill request path. A document covering several
+  billing entities (e.g. facility and clinician) is split into one bill per entity.
+- **2. Strict schema with provenance.**
+  - Header: billing entity, provider type (facility, clinician, other), account number, patient
+    name, service date range, encounter, statement date, total charges, adjustments, payments,
+    amount due.
+  - Per line: line number, service date, code, code type (CPT, HCPCS, revenue code, NDC, unknown),
+    description, quantity, unit price, charge, adjustment, patient responsibility.
+  - Every field stores: raw text exactly as printed, normalized value (integer cents, ISO date),
+    page number, source snippet, and status (`read`, `unreadable` shown as "[to confirm]", or
+    `absent`). Missing values are `null`, never guessed.
+- **3. Extraction method.** Gemini (only via `lib/llm/`) with a required output schema
+  (structured output), temperature 0, one call per page for long bills, then merged. **Document
+  text is data, never instructions:** text inside a document (e.g. "ignore previous instructions")
+  cannot change behavior.
+- **4. Text-layer cross-check.** If a PDF has a real text layer, every extracted amount, code, and
+  date must appear in the PDF's own text near its cited snippet. Photos and scans have no text
+  layer and get stricter confirmation instead.
+- **5. Deterministic validation checks** (each failure flags the specific field):
+  - line charges sum to total charges; total minus adjustments and payments equals amount due;
+  - quantity × unit price = charge when both are shown;
+  - code formats (CPT 5 characters, HCPCS a letter plus 4 digits, revenue codes 4 digits); format
+    only, since the CPT code set is licensed by the AMA, so never validate against it;
+  - every service date falls within the stated service range;
+  - no repeated line numbers; amounts parse as currency with sensible signs (adjustments negative);
+  - with an EOB present, each line maps to an EOB line and patient responsibility is compared per
+    line.
+- **6. Confidence comes from checks, not the model.** A field is `verified` only if it passes its
+  checks (and, for PDFs, matches the text layer); otherwise it is `needs attention`. The model's
+  self-rated confidence is ignored.
+- **7. Confirm screen.** Show the page image with each field's snippet highlighted. Fields that
+  need attention come first and are confirmed or corrected one by one; verified fields can be
+  confirmed in one tap. Corrections are recorded as case events. Fields are `Unconfirmed<T>` until
+  confirmed; only the confirmed version is used downstream, and it is locked once confirmed.
+- **8. Failure handling.** Blurry or unreadable: ask for a retake or the PDF. Not itemized:
+  balance-statement path. Totals don't reconcile: the audit is blocked until the flagged fields are
+  resolved. Never audit unconfirmed data.
+- **9. Traceability.** Store the original file, the raw model output, and the model, prompt, and
+  schema versions for every extraction, so any number can be traced back and re-extracted.
 - **Bill vs EOB:** explain that an EOB is not a bill; show charge, adjustment, and patient
   responsibility separately before any dispute.
 - **Provider separation:** keep facility, clinician, and other provider bills separate; match by
@@ -289,6 +329,12 @@ out of scope.
 
 Every finding and every letter sentence links to its evidence: bill line, EOB line or record,
 provider, date, triggering rule, uncertainty, and status. Clicking a sentence opens its source.
+
+Layout ideas adapted from the `medical-bill-decoder` Claude skill (paraphrase only; check its
+license before reusing any text): a **verdict block** at the top (total billed, amount questioned,
+reduction offered, reduction confirmed) and a **line-by-line table** (line, code, plain-language
+description, amount, finding status). Unlike that skill, the AI never assigns severity or red
+flags; every flag comes from a §4.3 rule.
 
 ### 4.5 Drafting (`lib/draft/`)
 
@@ -378,6 +424,9 @@ Spectrum on iMessage to qualify for the Photon prize.
 - Scripts come from findings; the agent may only say approved things and must not paraphrase
   health facts (it reads values supplied by tools; see obstacle O4 in §7).
 - **Live call screen:** status, running transcript, decision prompts, Take over button.
+- **Script starting points:** the `medical-bill-decoder` skill's three scripts (request an
+  itemized bill, ask about financial assistance, negotiate) can be adapted for the ElevenLabs
+  agent's per-call instructions; paraphrase, keep §2 rules, check the license.
 - **Mid-call decisions:** on a decision point the agent calls `ask_patient(question, options)`,
   says "one moment while I check with the patient"; the patient picks one of 2–4 options or types a
   short instruction; Photon fallback if the screen is closed.
@@ -445,7 +494,12 @@ external review filing, Fetch.ai agent, Capital One Nessie payment view, native 
 | Stretch agent | Fetch.ai uAgent (Python) on Agentverse | "Appeal my denial" from ASI:One | Fetch.ai |
 | Native (optional) | Capacitor wrapper of the same web app, only at the end | No rewrite | — |
 
-Not used: Grok/SpaceXAI, Relay (Photon instead), Spacetime, FREE-WiLi, Solana, Tiger Data, Presage.
+**Why Twilio:** ElevenLabs provides the voice agent but cannot dial a phone number by itself.
+Twilio is its built-in phone carrier, and Twilio's conference API is what makes holding the rep and
+Take over possible (§7.1). Twilio is not a sponsor and earns no prize.
+
+Not used: Gemini Live for voice (would lose both ElevenLabs prizes and require a custom real-time
+audio bridge between Twilio and Gemini), Grok/SpaceXAI, Relay for messaging (Photon instead), Spacetime, FREE-WiLi, Solana, Tiger Data, Presage.
 
 ### 5.2 How the pieces connect
 
@@ -557,6 +611,20 @@ separate smoke script checks the sandbox). Mock `lib/llm/`, including malformed 
 placeholders, and extra health claims, and assert they are rejected. Test the three outcome
 branches, waiting and resuming, approvals, and handoffs. `npm test` passes before pushing.
 
+**Extraction test set** (checked field by field against known answers):
+- the same bill as a clean PDF, a scanned PDF, and a tilted phone photo;
+- a multi-page bill;
+- a balance statement and an EOB;
+- a bill with deliberately broken totals (must block the audit);
+- a bill containing a prompt-injection line (must not change behavior).
+
+**Eval budget for the hackathon:** about 10–15 cases beyond unit tests: the extraction fixtures
+above, the three outcome branches plus waiting and resuming, 2–3 bad-AI-output cases (malformed
+output, an invented fact, an unknown placeholder), and 2–3 rehearsal calls with a transcript check
+for unsourced facts or unapproved commitments. No benchmark datasets, accuracy percentages, or
+fine-tuning. The `medical-bill-decoder` skill's issue list (duplicates, unbundling, balance billing,
+care never rendered, bill/EOB mismatch) is a source of extra scenarios.
+
 ### 5.8 Git
 
 Pull first; small focused commits; push often. Branch and PR for changes to shared code
@@ -569,6 +637,18 @@ FinchNode (free plan + sandbox), Neon, Google AI Studio (Gemini), ElevenLabs (ag
 (number), Photon (Spectrum + iMessage), Vercel, worker host (Railway/Render or laptop); optional
 Agentverse, .tech domain.
 
+**Free plans and trials:** the team uses free tiers and trials across services. Stay within each
+provider's terms: creating multiple trial accounts with one provider to get around its limits
+usually violates them (Twilio, for example, can suspend accounts). **Pin one stable account per
+service for the demo:** a Twilio trial number, its verified-number list, and the ElevenLabs agent
+are tied together, so switching keys or numbers near the demo is a likely way to break the call.
+Keep keys in `.env` only.
+
+**Twilio trial:** about $15 credit for 30 days; calls only to verified numbers (verify the phone
+of the teammate playing billing, plus a backup); one number per trial account; trial calls start
+with a Twilio announcement and may require a keypress before connecting. Test this in the first
+call spike; if it gets in the way, upgrade (about $20) before judging.
+
 ### 5.10 Definition of done
 
 Does what the plan says and nothing unrelated; accurate docstrings on everything new or changed;
@@ -576,6 +656,26 @@ external input validated; tests pass and new rules have tests; lint and types pa
 updated.
 
 ---
+
+### 5.11 Product agents vs Claude skills
+
+Two different things share the word "agent" in this project; keep them separate.
+
+- **Product agents** are what judges see: the case agent (Gemini choosing among allowed actions
+  in `lib/cases/`), the extraction and drafting steps (Gemini via `lib/llm/`), the voice agent
+  (ElevenLabs over Twilio), and the iMessage agent (Photon). They are **configured by prompts,
+  schemas, tools, and code**, and they are **never trained or fine-tuned** in this project. A
+  Claude skill file cannot be loaded by them, because they do not run on Claude.
+- **What improves product agents:** better prompts and output schemas, the deterministic guards
+  and checks in this spec, few-shot examples written into their prompts, and the tests in §5.7
+  (fixtures plus scenario checks). Ideas from outside material (such as the `medical-bill-decoder`
+  skill) enter the product only by being rewritten into those prompts, rules, and tests.
+- **Claude skills** are instructions for Claude Code while the team develops: for example the
+  plan/implement/audit/test prompts in `prompts/`, or built-in skills like `/run`, `/code-review`,
+  and `/security-review`. They help build the product but are not part of it, and they need no
+  evals for the hackathon.
+- **Consequence:** do not plan work as "train an agent" or "install a skill into the product."
+  Plan it as prompt, schema, rule, tool, or test changes in the relevant `lib/` folder.
 
 ## 6. MVP ladder (build plan)
 
@@ -715,7 +815,7 @@ mode; advocate export polish; Nessie; Capacitor.
 | # | Obstacle | Severity | Hits | Why it's hard | Mitigation | Test by |
 |---|---|---|---|---|---|---|
 | O1 | **Patient-decision wait during a call** | Critical | MVP 4 | `ask_patient` must pause 20–60 s while the rep waits; ElevenLabs tool calls may time out sooner | Call orchestrator (§7.1): the tool returns "waiting" immediately and the orchestrator holds the rep's leg until the patient answers or the timeout (= no agreement); fallback: short "still checking" turns or a callback request | H3 |
-| O2 | **Take over / warm transfer** | Critical | MVP 4 | Patching the patient into an AI call | Call orchestrator (§7.1): every call is a Twilio conference from the start, so Take over is adding the patient's leg and muting/removing the AI leg; verify ElevenLabs can join as a SIP participant (else a Twilio leg streaming to ElevenLabs); fallback: hand-back with call notes | H6 spike, decide by H12 |
+| O2 | **Take over / warm transfer** | Critical | MVP 4 | Patching the patient into an AI call | Call orchestrator (§7.1): every call is a Twilio conference from the start, so Take over is adding the patient's leg and muting/removing the AI leg; verify ElevenLabs can join as a SIP participant (else a Twilio leg streaming to ElevenLabs); fallbacks, in order: hand-back with call notes; a browser-based call (agent and teammate in a web voice session, Take over = patient joins); Relay as an alternative to the browser call (may also earn the Relay prize; verify agent-initiated and multi-party calls first) | H6 spike, decide by H12 |
 | O3 | **Photon iMessage setup with no Photon engineer on site** | High | MVP 3 | Self-serve only: Spectrum credentials, iMessage access, always-on worker, reply routing | Start now from docs (`spectrum-ts`); ask Photon's marketing officer for the fastest path to iMessage credentials and an engineer contact; build against Spectrum's terminal mode meanwhile; correlation IDs per prompt; if no iMessage access by H8, treat the Photon prize as at risk and keep web approvals primary | H4 credentials, H8 go/no-go |
 | O4 | **Voice agent paraphrasing health facts** | High | MVP 4 | The voice LLM can reword or invent, which breaks rule 1 | Agent fetches values via tools and reads them as given; script restricts topics to bill lines and documents; post-call transcript check flags any unsourced fact | H16 |
 | O5 | **FinchNode data fit** | High | MVP 1, 2, 5, 6 | Our plan assumes data FinchNode may not return (two-provider patient, coded labs with dates, medication dates, trial outcomes, encounters, claims, provenance) | Data-fit spike and fallbacks in §7.2; build fixtures around the real sandbox patient, not the reverse | H3 |
@@ -752,7 +852,9 @@ call instead of ElevenLabs owning it.
 - **Verify early (H6 spike):** (1) an ElevenLabs agent joining a Twilio conference via SIP, else the
   media-stream leg; (2) the API for injecting the patient's choice into a live ElevenLabs
   conversation (mid-conversation context or user message). If either fails, Take over falls back to
-  hand-back with call notes.
+  hand-back with call notes. If telephony fails entirely, run the call in the browser (a web voice
+  session, where Take over means the patient joins the room), or in Relay if its agent-initiated
+  calls work; both are less realistic than a real phone call.
 
 ### 7.2 FinchNode data-fit spike and fallbacks (O5)
 
@@ -875,6 +977,9 @@ Data, Presage, Useless AI, Dumbest Idea.
   denial reasons as evidence checklists, separate provider bills, show charge/adjustment/patient
   responsibility first, financial-assistance referral, "why was this flagged?" over iMessage,
   written outcomes and follow-ups.
+- **Possible hook (read before quoting):** a CNBC article dated 2026-10-01 reports a health
+  insurer blaming AI for nearly $1 billion in questionable hospital charges ("AI is already on both
+  sides of your bill; now patients get one too").
 - **Keep out of the pitch until sourced:** "up to 80% of bills contain errors", the ER violence and
   Canadian waitlist figures, individual dollar anecdotes, "never pay the first number" (reframe as
   review, compare, contact), guaranteed discounts or payment plans, clinical advice.
