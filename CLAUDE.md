@@ -1,32 +1,25 @@
 # CLAUDE.md
 
-MHacks 2026 project. Spec: `spec/PROJECT.md`.
+MHacks 2026 project. **`SPEC.md` is the single source of truth**: product, rules (§2), agent model
+(§3), capabilities (§4), engineering rules and docstrings (§5), MVP ladder (§6), obstacles (§7).
+If anything here or in the Google Doc disagrees with SPEC.md, SPEC.md wins.
 
 ## Workflow
 
-Each task (e.g. `finchnode-sync`, `emergency-page`) goes through four phases, each run in a fresh
-session with its prompt from `prompts/`:
+Each task goes through four phases, each run in a fresh session with its prompt from `prompts/`:
 
 1. **Plan** (`prompts/PLAN.md`) → `agent-notes/<task>/PLAN.md`
 2. **Implement** (`prompts/IMPLEMENT.md`) → `agent-notes/<task>/IMPLEMENTATION.md`
 3. **Audit** (`prompts/AUDIT.md`) → `agent-notes/<task>/AUDIT.md`
 4. **Test** (`prompts/TEST.md`) → `agent-notes/<task>/TEST_RESULTS.md`
 
-Start a phase with e.g. "Follow prompts/PLAN.md for task `finchnode-sync`: <what the task is>."
+Name tasks after MVP rungs, e.g. "Follow prompts/PLAN.md for task `mvp1-audit-rules`: <what>."
 Notes are per task because four developers run phases in parallel.
 
 ## Repository rules
 
-- **Follow `AGENTS.md` for all code**: conventions, layout, and detailed docstrings on every
-  function, type, constant, module, and test.
-
-- **AI never writes a health fact or invents a finding.** Health facts reach users verbatim from
-  FinchNode, with source attached; bill-audit flags and appeal evidence come from deterministic
-  rules and cite their source; the AI only does paperwork and conversation; nothing is sent or
-  agreed to without the patient's approval. See `spec/PROJECT.md`.
-- Never commit secrets; keys go in `.env` (gitignored).
-- Never use real patient data; use the FinchNode synthetic sandbox or the local mock.
-- Never add Claude as an author or co-author on commits.
+Follow SPEC.md §2 and §5. Never commit secrets, never use real patient data, never add Claude as an
+author or co-author on commits.
 
 ## Known critical errors and fixes
 

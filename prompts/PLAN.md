@@ -17,7 +17,7 @@ Your job is to understand the task and produce a concrete implementation plan.
 
 This repository is an MHacks 2026 hackathon project (24 hours, 4 developers): a FinchNode-powered
 medical bill auditor and patient advocate (bill audit + evidence-backed denial appeals,
-with drafted letters, phone calls, and text updates). Specification: `spec/PROJECT.md`. Code conventions: `AGENTS.md`. Known pitfalls: `CLAUDE.md`.
+with drafted letters, phone calls, and text updates). Single source of truth: `SPEC.md` (rules §2, engineering rules §5, MVP ladder §6). Known pitfalls: `CLAUDE.md`.
 
 - **Core invariant — AI never writes a health fact or invents a finding.** Health facts are copied
   verbatim from FinchNode records with their source attached; an LLM never writes, summarizes, or
@@ -25,16 +25,18 @@ with drafted letters, phone calls, and text updates). Specification: `spec/PROJE
   bill line, EOB line, or record. The AI only does paperwork and conversation (extraction the
   patient confirms, letter/script prose, voice calls), and nothing is sent or agreed to without the
   patient's approval. See
-  `spec/PROJECT.md` for the full rule. Any plan that routes a health fact through an LLM is wrong.
+  `SPEC.md` §2 for the full rule. Any plan that routes a health fact through an LLM is wrong.
 - Other developers are working on other tasks at the same time. Check other
   `agent-notes/*/PLAN.md` files and the repository for interfaces you depend on or would touch, and
   keep your task's footprint inside its own files where practical.
+- Plan only within the current MVP rung in `SPEC.md` §6; the result must keep the previous rung's
+  demo working.
 - This is a 24-hour hackathon. Prefer the simplest thing that demos reliably on the FinchNode
   synthetic sandbox over production completeness.
 
 ## Before you begin
 
-1. Read `spec/PROJECT.md`, `AGENTS.md`, `CLAUDE.md`, and any other relevant documentation.
+1. Read `SPEC.md`, `CLAUDE.md`, and any other relevant documentation.
 2. Inspect the repository structure and relevant source files.
 3. Read other tasks' `agent-notes/*/PLAN.md` for shared interfaces.
 4. Understand the existing implementation before proposing changes.
