@@ -154,10 +154,11 @@ State what the component shows, what each prop means, and what user actions it t
 
 ```ts
 /**
- * Proves the step therapy rule ignores required drugs that are still active: only discontinued
- * prescriptions count as "tried and stopped" (spec/PROJECT.md, Denial appeals, step therapy).
+ * Proves the step therapy rule does not treat "prescribed, then discontinued" as a completed trial:
+ * without documented dates or duration and an outcome, the criterion is "missing", not "met"
+ * (spec/PROJECT.md, Denial appeals, "Match criteria to evidence").
  */
-it("ignores active prescriptions", () => { ... });
+it("marks an undocumented trial as missing", () => { ... });
 ```
 
 ### Python (Fetch.ai agent)
