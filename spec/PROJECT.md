@@ -124,7 +124,8 @@ enforce.
 
 | Layer | Choice |
 |---|---|
-| App | Next.js (TypeScript, App Router), mobile-first web |
+| App | Next.js (TypeScript, App Router), mobile-first web app, installable as a PWA (manifest + icon) so it opens full-screen from the home screen |
+| Native app | Optional, only if time allows at the end: wrap the same web app with Capacitor for iOS/Android. No separate native codebase |
 | UI | Tailwind + shadcn/ui |
 | Hosting | Vercel |
 | Database | Neon Postgres + Drizzle ORM |
@@ -136,7 +137,12 @@ enforce.
 | Voice | ElevenLabs Conversational AI + Twilio for outbound calls; an `ask_patient` server tool that waits for the patient's choice |
 | Live call screen | Transcript + decision buttons pushed to the browser (SSE/websockets via the Node worker or a hosted realtime service) |
 | Stretch | Fetch.ai uAgent (Python) on Agentverse, reachable from ASI:One, calling the app's API |
-| Auth | None for the demo; one hardcoded demo user |
+| Auth | Neon Auth if time allows, otherwise one hardcoded demo user |
+
+Why web first: judges open a URL instantly; one codebase and one deploy (the backend must be
+server-side anyway); Photon's iMessage agent already gives the patient an app-like channel for
+updates and decisions; camera upload, the live call screen, and PDF download all work in a mobile
+browser; no app store, signing, or device setup during the hackathon.
 
 ```
 app/                 pages + API routes
