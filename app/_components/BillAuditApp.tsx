@@ -396,10 +396,12 @@ export default function BillAuditApp() {
         />
       )}
       {usedSample && (
-        <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-          Sample document (synthetic data), read without AI from a saved answer.
-          Same checks as a live upload.
-        </p>
+        <div className="paper-flow">
+          <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+            Sample document (synthetic data), read without AI from a saved answer.
+            Same checks as a live upload.
+          </p>
+        </div>
       )}
       {error && (
         <p
