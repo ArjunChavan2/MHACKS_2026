@@ -9,7 +9,7 @@
  */
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { caseForLiveCall } from "@/lib/cases/consent";
+import { caseForActiveCall } from "@/lib/cases/consent";
 import { askPatient, blockedTopic, waitForAnswer } from "@/lib/cases/patientQuestions";
 import { getStore } from "@/lib/cases/store";
 import { activeHandles } from "@/lib/messaging/service";
@@ -54,7 +54,7 @@ export async function POST(req: Request): Promise<Response> {
   if (blocked) {
     return Response.json({ answered: false, message: `Never collected by text: ${blocked}. Tell them the patient will provide it directly, and continue with anything else.` });
   }
-  const caseId = await caseForLiveCall();
+  const caseId = await caseForActiveCall();
   const c = caseId ? await getStore().getCase(caseId) : null;
   if (!caseId || !c) return Response.json({ answered: false, message: "No active case. Tell them the patient will provide it directly." });
   if (!activeHandles(c).length) {
