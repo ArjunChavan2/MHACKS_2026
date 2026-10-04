@@ -352,7 +352,9 @@ export async function handleInbound(
       intent: "consent",
       result: "recorded",
     });
-    return "Thanks. Billy will tell the billing office you consent to him representing you.";
+    const asked = (await store.getCase(caseId))?.events.filter((e) => e.type === "consent_requested").at(-1);
+    const who = (asked?.data as { counterparty?: string } | undefined)?.counterparty || "the office";
+    return `Thanks. Billy will tell ${who} you consent to him representing you.`;
   }
   const { c, view } = await loadBoth(caseId);
   const url = caseLink(baseUrl, caseId);

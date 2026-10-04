@@ -42,8 +42,9 @@ verified numbers, and may block the transfer leg; if so, upgrade or show the sim
 When the office needs to verify the patient, Billy says "One moment, I'll ask Priya to confirm by
 text" and calls the ElevenLabs webhook tool `request_patient_consent` → `POST /api/calls/consent`
 (header `x-billy-secret` = MESSAGING_SECRET). Our app opens a consent request on the live case
-(`DEMO_CASE_ID`, else the case whose screen/iMessage panel was opened most recently), texts the
-patient via iMessage when linked, and shows a consent box on the case screen. The patient must type
+(`DEMO_CASE_ID`, else the case with the most recent activity) and texts the patient by iMessage.
+Consent is iMessage-only (the website has no consent box or route); the case screen just says to
+reply in iMessage, or to link a phone first. The patient must reply
 exactly "I consent to Billy representing me"; the tool waits ~40 s. Billy reports consent ONLY when
 the result says `"consented": true` (a simulation once showed it claiming consent from a generic
 tool result; the prompt now forbids that and `consent_denied` tests it). Phone transfer stays as the
@@ -51,8 +52,8 @@ fallback if the office insists on the patient herself. Demo only: typed consent 
 identity verification.
 
 **Live demo:** open the case screen on the patient's phone/laptop first (makes it the live case) →
-billing teammate calls +1 734-977-0915 → "I need to verify the patient" → consent box appears →
-type the phrase → Billy tells the office within a couple of seconds.
+billing teammate calls +1 734-977-0915 → "I need to verify the patient" → Billy texts the
+patient's linked iPhone → reply with the phrase in iMessage → Billy tells the office within a couple of seconds.
 
 ## Insurer call (denial appeal), 2026-10-04
 
