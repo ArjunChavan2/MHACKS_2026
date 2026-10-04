@@ -28,4 +28,11 @@ author or co-author on commits.
 A running log of real bugs hit in this repo and how they were actually fixed, so future sessions
 don't rediscover them. Add an entry whenever a bug costs more than a few minutes.
 
-_None yet._
+- **Gemini call hangs forever / `fetch failed` ECONNRESET / 503 "high demand".** The SDK had no
+  timeout. Fix: `REQUEST_TIMEOUT_MS` per attempt plus `withRetry` (retries 429/5xx, network errors,
+  aborts; then `LlmBusyError` → API 503 `ai_busy`) in `lib/llm/index.ts`.
+- **EOB rejected as "several billing entities".** The classifier counted the insurer. Fix: the
+  classify prompt says an insurer is never a billing entity (`lib/extract/pipeline.ts`).
+- **`gemini-flash-latest` alias kept failing with 503/429** during the live eval while
+  `gemini-3.5-flash` passed 334/334 fields. Set `GEMINI_MODEL=gemini-3.5-flash` if the alias is busy.
+  `gemini-2.5-flash` returns 404 for new keys.

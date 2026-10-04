@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractDocument } from "../lib/extract/pipeline";
 import { billFields, eobFields } from "../lib/extract/checks";
+import { parseCodeType, parseProviderType } from "../lib/extract/normalize";
 
 /** Fixture documents and the expected reply each should produce. */
 const CASES: Array<{ file: string; mime: string; expected: string }> = [
@@ -49,6 +50,24 @@ function flatten(node: unknown, prefix = "", out: Record<string, string | null> 
 const norm = (s: string | null) => (s === null ? null : s.replace(/\s+/g, " ").trim());
 
 /**
+ * Whether a path is a model-assigned label rather than printed text.
+ *
+ * @param path - Field path.
+ * @returns True for code type and provider type.
+ */
+const isLabel = (path: string) => path.endsWith("codeType") || path.endsWith("providerType");
+
+/**
+ * Normalizes an expected label the same way the pipeline does.
+ *
+ * @param path - Field path.
+ * @param raw - Expected raw label.
+ * @returns The normalized label, or `null`.
+ */
+const labelValue = (path: string, raw: string | null) =>
+  raw === null ? null : path.endsWith("codeType") ? parseCodeType(raw) : parseProviderType(raw);
+
+/**
  * Runs the eval.
  *
  * @returns Resolves when done; sets a non-zero exit code on any mismatch.
@@ -65,12 +84,15 @@ async function main(): Promise<void> {
       continue;
     }
     const fields = r.kind === "bill" ? billFields(r.bill) : eobFields(r.eob);
-    const got = Object.fromEntries(fields.map(([p, f]) => [p.replace(/^header\./, "header."), f.raw]));
+    const got = Object.fromEntries(fields.map(([p, f]) => [p, f]));
     const keys = Object.keys(expected);
-    const wrong = keys.filter((k) => norm(expected[k]) !== norm(got[k] ?? null));
+    // Labels (code type, provider type) aren't printed text, so compare normalized values for them.
+    const value = (k: string) => (isLabel(k) ? (got[k]?.value as string | null) ?? null : norm(got[k]?.raw ?? null));
+    const want = (k: string) => (isLabel(k) ? labelValue(k, expected[k]) : norm(expected[k]));
+    const wrong = keys.filter((k) => want(k) !== value(k));
     failures += wrong.length;
     console.log(`${wrong.length ? "✗" : "✓"} ${c.file}: ${keys.length - wrong.length}/${keys.length} fields match`);
-    for (const k of wrong) console.log(`    ${k}: expected ${JSON.stringify(expected[k])}, got ${JSON.stringify(got[k])}`);
+    for (const k of wrong) console.log(`    ${k}: expected ${JSON.stringify(want(k))}, got ${JSON.stringify(value(k))}`);
   }
   if (failures) process.exitCode = 1;
 }

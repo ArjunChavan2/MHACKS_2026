@@ -99,7 +99,26 @@ export function parseCodeType(raw: string): CodeType | null {
  */
 export function parseProviderType(raw: string): ProviderType | null {
   const s = raw.trim().toLowerCase();
-  if (s === "facility" || s === "clinician" || s === "other") return s;
+  if (s === "other") return s;
+  // Models sometimes copy a printed heading ("Facility charges", "Professional fees") as the label.
+  if (/^(facility|hospital)\b/.test(s)) return "facility";
+  if (/^(clinician|physician|professional)\b/.test(s)) return "clinician";
+  return null;
+}
+
+/**
+ * Infers a code type from a code's format when the document doesn't label it. Format only: CPT is
+ * 5 digits (or 4 digits plus F/T/U); HCPCS Level II is a letter A–V plus 4 digits.
+ *
+ * Pure: no side effects.
+ *
+ * @param code - Normalized (upper-case) billing code.
+ * @returns "CPT" or "HCPCS", or `null` when the format is ambiguous (revenue codes and NDCs are never guessed).
+ * @example inferCodeType("80053") // "CPT"
+ */
+export function inferCodeType(code: string): CodeType | null {
+  if (/^\d{4}[0-9FTU]$/.test(code)) return "CPT";
+  if (/^[A-V]\d{4}$/.test(code)) return "HCPCS";
   return null;
 }
 

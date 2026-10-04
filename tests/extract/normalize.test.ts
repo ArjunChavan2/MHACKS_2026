@@ -56,3 +56,16 @@ describe("other parsers and toField", () => {
     expect(bad.verification).toBe("needs_attention");
   });
 });
+
+describe("labels", () => {
+  /** Proves printed headings map to provider types and code types are inferred from format only. */
+  it("normalizes provider-type headings and infers code types", async () => {
+    const { parseProviderType, inferCodeType } = await import("@/lib/extract/normalize");
+    expect(parseProviderType("Facility charges")).toBe("facility");
+    expect(parseProviderType("Professional fees")).toBe("clinician");
+    expect(parseProviderType("Pharmacy")).toBeNull();
+    expect(inferCodeType("80053")).toBe("CPT");
+    expect(inferCodeType("J1885")).toBe("HCPCS");
+    expect(inferCodeType("0450")).toBeNull();
+  });
+});

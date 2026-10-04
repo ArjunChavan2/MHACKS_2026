@@ -3,7 +3,7 @@
  */
 import { z } from "zod";
 import { BadRequestError } from "@/lib/cases/service";
-import { LlmInvalidOutputError, LlmUnavailableError } from "@/lib/llm";
+import { LlmBusyError, LlmInvalidOutputError, LlmUnavailableError } from "@/lib/llm";
 
 /**
  * Parses a JSON request body with a zod schema.
@@ -37,6 +37,12 @@ export function errorResponse(err: unknown): Response {
   if (err instanceof LlmUnavailableError) {
     return Response.json(
       { error: "no_ai", message: "AI reading isn't configured (GEMINI_API_KEY). Use a sample document instead." },
+      { status: 503 },
+    );
+  }
+  if (err instanceof LlmBusyError) {
+    return Response.json(
+      { error: "ai_busy", message: "The AI service is busy right now. Try again in a minute, or use a sample document." },
       { status: 503 },
     );
   }

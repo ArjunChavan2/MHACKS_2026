@@ -63,3 +63,43 @@ describe("extractDocument", () => {
     expect(r.bill.header.amountDue.verification).toBe("needs_attention");
   });
 });
+
+describe("withRetry", () => {
+  /** Proves temporary Gemini errors are retried and a later success is returned. */
+  it("retries 503 then succeeds", async () => {
+    const { withRetry } = await import("@/lib/llm");
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls++;
+      if (calls < 3) throw Object.assign(new Error("busy"), { status: 503 });
+      return "ok";
+    }, [0, 0, 0]);
+    expect(result).toBe("ok");
+    expect(calls).toBe(3);
+  });
+  /** Proves persistent overload ends in a clear busy error, and other errors are not retried. */
+  it("gives up with LlmBusyError and passes other errors through", async () => {
+    const { withRetry, LlmBusyError } = await import("@/lib/llm");
+    await expect(withRetry(async () => { throw Object.assign(new Error("x"), { status: 429 }); }, [0])).rejects.toBeInstanceOf(LlmBusyError);
+    let calls = 0;
+    await expect(withRetry(async () => { calls++; throw Object.assign(new Error("bad key"), { status: 400 }); }, [0, 0])).rejects.toThrow("bad key");
+    expect(calls).toBe(1);
+  });
+  /** Proves dropped connections and timeouts are retried, ending in LlmBusyError(0) if they persist. */
+  it("retries network errors and timeouts", async () => {
+    const { withRetry, LlmBusyError } = await import("@/lib/llm");
+    const reset = Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+    const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls++;
+      if (calls === 1) throw reset;
+      if (calls === 2) throw abort;
+      return "ok";
+    }, [0, 0]);
+    expect(result).toBe("ok");
+    const err = await withRetry(async () => { throw reset; }, [0]).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LlmBusyError);
+    expect((err as InstanceType<typeof LlmBusyError>).status).toBe(0);
+  });
+});

@@ -69,7 +69,7 @@ export async function classify(file: FilePart, client?: LlmClient): Promise<{ va
     {
       system: DOCUMENT_SYSTEM_INSTRUCTION,
       prompt:
-        "Classify this document. itemized_bill = lists individual charges with codes; balance_statement = shows a balance due without line items; eob = explanation of benefits from an insurer (says it is not a bill); revised_statement = a corrected bill; denial_letter = an insurer letter denying coverage. List every distinct billing entity named as issuing charges.",
+        "Classify this document. itemized_bill = lists individual charges with codes; balance_statement = shows a balance due without line items; eob = explanation of benefits from an insurer (says it is not a bill); revised_statement = a corrected bill; denial_letter = an insurer letter denying coverage. List every distinct billing entity: a provider (hospital, clinic, physician group) that charges the patient. An insurer or health plan is never a billing entity; for an eob, list the provider(s) whose claims it describes.",
       files: [file],
       jsonSchema: CLASSIFICATION_JSON_SCHEMA,
       validator: ClassificationSchema,
