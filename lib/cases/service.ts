@@ -17,6 +17,7 @@ import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
+import { billEobMismatches, revisedMismatches } from "./consistency";
 import { mergeFindings } from "./responses";
 import type { AuditResult, ConfirmedBill, ConfirmedDenial, ConfirmedEob, Draft, ExtractedBill, ExtractedDenial, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
@@ -169,6 +170,13 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
         ? confirmDenial(doc.extraction as ExtractedDenial, full)
         : confirmBill(doc.extraction as ExtractedBill, full);
   if (!r.ok) return r;
+  // A revised statement can only verify savings for the same account as the original bill.
+  if (doc.docType === "revised_statement") {
+    const c = await store.getCase(doc.caseId);
+    const original = c?.documents.find((d) => d.direction === "incoming" && d.docType === "itemized_bill" && d.confirmed);
+    const mismatch = original ? revisedMismatches(original.confirmed as ConfirmedBill, r.value as ConfirmedBill) : [];
+    if (mismatch.length) return { ok: false, blocking: [...mismatch, "This doesn't look like a revised statement for the same bill, so it can't be used to verify savings."] };
+  }
   await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
   await store.addEvent(doc.caseId, "fields_confirmed", {
     documentId,
@@ -212,6 +220,11 @@ export async function auditCase(
 ): Promise<AuditResponse> {
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+  // Comparing a bill with an EOB from a different visit would produce false findings.
+  if (eob) {
+    const mismatch = billEobMismatches(bill, eob);
+    if (mismatch.length) throw new BadRequestError(`This EOB doesn't look like it's for the same visit as the bill. ${mismatch.join(" ")} Upload the matching EOB, or check the bill without one.`);
+  }
   const { records, providers, origin, warnings } = await loadRecords(caseId);
   const fresh = runAudit(bill, eob, records, providers);
   const store = getStore();
