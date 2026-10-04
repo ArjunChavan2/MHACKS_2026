@@ -24,13 +24,16 @@ says tables are missing.
 1. **Node 22+.** Check with `node -v`. If it's missing, **You**: install it (for example
    `nvm install 22`) in a normal terminal.
 2. **Dependencies.** From the repo root, on an up-to-date `main`: `git pull && npm ci`.
-3. **Neon access.** **You**: ask the project owner (Mateo) to invite your email to the Neon
-   organization that owns `snowy-star-63367096`, and accept the invite. Skip this if you're taking
+3. **Neon access.** The project is shared with each teammate's email (Mateo did this for
+   `spereddy@`, `akchavan@`, and `esthem@umich.edu` on 2026-10-03). **You**: sign in to
+   [console.neon.tech](https://console.neon.tech) with that exact email (sign up with it if you
+   have no Neon account); the project "Bil-less" appears under **Shared with me**. Someone else?
+   Ask Mateo to add your email in the project's Settings → Sharing. Skip this step if you're taking
    the connection string instead (step 5, option B).
 4. **Neon CLI + sign-in.** **You** run these in a terminal (they open a browser):
    ```bash
    npm i -g neon@latest
-   neon auth            # sign in with the account that was invited
+   neon auth            # sign in with the email the project is shared with
    ```
 5. **Get `DATABASE_URL` into `.env.local`.** Pick one:
    - **A (preferred):** `neon link --project-id snowy-star-63367096 --branch production -y`.
@@ -65,13 +68,14 @@ Other commands: `npm run db:studio` (browse data), `npm run db:check` (health ch
 
 ## Problems we hit and fixes
 
-| Symptom                                                                                  | Fix                                                                                                                              |
-| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `node: command not found`                                                                | Node isn't installed in WSL. Step 1.                                                                                             |
-| Claude Code auto mode refuses `npm i -g neon` or `neon …` ("Untrusted Code Integration") | Expected. Run the command yourself, in a normal terminal or with the `!` prefix in Claude Code (it must be the first character). |
-| `!` command "does nothing"                                                               | The `!` wasn't the first character, or a long line got broken when pasted. Use a normal terminal.                                |
-| `No coding agents detected in this project`                                              | Add `--agent claude-code` (or your agent's name), or drop `-y` to pick from a list.                                              |
-| `Authentication required. Run neon auth`                                                 | Run `neon auth` and sign in with the invited account.                                                                            |
-| `neon config init` asks which services to declare                                        | Press Enter: Postgres only. Other services are team decisions (SPEC.md §12).                                                     |
-| `DATABASE_URL is not set` from `db:check`                                                | `.env.local` is missing the line. Step 5.                                                                                        |
-| App works but data disappears on restart                                                 | `DATABASE_URL` isn't set, so the app fell back to the in-memory store. Step 5, then restart `npm run dev`.                       |
+| Symptom                                                                                  | Fix                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `node: command not found`                                                                | Node isn't installed in WSL. Step 1.                                                                                                                   |
+| Claude Code auto mode refuses `npm i -g neon` or `neon …` ("Untrusted Code Integration") | Expected. Run the command yourself, in a normal terminal or with the `!` prefix in Claude Code (it must be the first character).                       |
+| `!` command "does nothing"                                                               | The `!` wasn't the first character, or a long line got broken when pasted. Use a normal terminal.                                                      |
+| `No coding agents detected in this project`                                              | Add `--agent claude-code` (or your agent's name), or drop `-y` to pick from a list.                                                                    |
+| `Authentication required. Run neon auth`                                                 | Run `neon auth` and sign in with the email the project is shared with.                                                                                 |
+| `neon link` can't find `snowy-star-63367096`                                             | You're signed in with a different email than the one it's shared with. `neon auth` again with the right one, or ask Mateo to share it with this email. |
+| `neon config init` asks which services to declare                                        | Press Enter: Postgres only. Other services are team decisions (SPEC.md §12).                                                                           |
+| `DATABASE_URL is not set` from `db:check`                                                | `.env.local` is missing the line. Step 5.                                                                                                              |
+| App works but data disappears on restart                                                 | `DATABASE_URL` isn't set, so the app fell back to the in-memory store. Step 5, then restart `npm run dev`.                                             |
