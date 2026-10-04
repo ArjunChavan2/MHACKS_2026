@@ -13,6 +13,9 @@ cp .env.example .env.local   # add GEMINI_API_KEY to read your own uploads; opti
 npm run dev                  # http://localhost:3000
 ```
 
+To use the team's Neon database (data survives restarts), follow
+**[docs/NEON_SETUP.md](docs/NEON_SETUP.md)**; you can hand it to your coding agent.
+
 Without a Gemini key, use **"Sample bill + EOB"** on the start screen: synthetic documents read from
 saved answers, labeled in the UI, with the same checks as a live upload.
 
@@ -28,4 +31,6 @@ language covers upload, confirmation, and draft review. See
 | `npm run lint`            | ESLint                                                                    |
 | `npm run fixtures`        | Regenerate the synthetic PDFs, expected model replies, and records        |
 | `npm run eval:extraction` | Live Gemini extraction eval against the fixtures (needs `GEMINI_API_KEY`) |
-| `npx drizzle-kit push`    | Create the tables in Neon (needs `DATABASE_URL`)                          |
+| `npm run db:check`        | Verify the Neon connection and tables (needs `DATABASE_URL`)              |
+| `npm run db:generate`     | Write a SQL migration after changing `db/schema.ts`                       |
+| `npm run db:migrate`      | Apply migrations to Neon (shared database: tell the team first)           |

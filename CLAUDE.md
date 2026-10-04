@@ -6,6 +6,8 @@ If anything here or in the Google Doc disagrees with SPEC.md, SPEC.md wins.
 
 Picking up mid-project? Read `HANDOFF.md` for current state and next steps.
 
+Connecting to the database: follow `docs/NEON_SETUP.md`.
+
 ## Workflow
 
 Each task goes through four phases, each run in a fresh session with its prompt from `prompts/`:
