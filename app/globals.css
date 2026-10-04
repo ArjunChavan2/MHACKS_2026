@@ -1342,7 +1342,18 @@ h4 {
   line-height: 28px;
   font-weight: 800;
   color: var(--paper-primary);
-  transform: rotate(-3deg);
+  transform: rotate(-3deg) translateY(8px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.billless-home-art:hover .billless-home-speech,
+.billless-home-art:focus-visible .billless-home-speech {
+  opacity: 1;
+  transform: rotate(-3deg) translateY(0) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .billless-home-speech { transition: none; }
 }
 .billless-home-speech span {
   display: block;

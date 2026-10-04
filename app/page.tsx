@@ -77,7 +77,9 @@ export default async function Home({
           </div>
           <div
             className="billless-home-art"
+            role="group"
             aria-label="Billy the goat beside a synthetic bill example"
+            tabIndex={0}
           >
             <div className="billless-home-sky" aria-hidden="true" />
             <div className="billless-home-receipt">
@@ -139,7 +141,7 @@ export default async function Home({
                 priority
               />
             </div>
-            <div className="billless-home-speech">We’ve goat this.</div>
+            <div className="billless-home-speech">We’re the baah-st!</div>
           </div>
         </section>
         <section
