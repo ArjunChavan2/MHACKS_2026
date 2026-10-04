@@ -15,8 +15,9 @@ export const RENDER_SCALE = 2;
 let pdfjsReady: Promise<void> | null = null;
 
 /**
- * PDF.js's bundled font outlines. Bills often use non-embedded standard fonts (e.g. Courier); without
- * these files PDF.js falls back to system fonts, and serverless Linux has none, so text renders blank.
+ * PDF.js's bundled font outlines. Bills often use non-embedded standard fonts (e.g. Courier). PDF.js
+ * defaults to drawing those with system fonts, and serverless Linux has none, so text rendered blank on
+ * Vercel; `useSystemFonts: false` makes it draw from these files everywhere.
  * Traced into the deploy by `outputFileTracingIncludes` in `next.config.ts`.
  */
 const STANDARD_FONTS = join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts") + "/";
@@ -44,7 +45,7 @@ export interface PageImage {
 export async function renderPdfPages(bytes: Uint8Array, scale = RENDER_SCALE): Promise<PageImage[]> {
   pdfjsReady ??= definePDFJSModule(() => import("pdfjs-dist/legacy/build/pdf.mjs"));
   await pdfjsReady;
-  const pdf = await getDocumentProxy(bytes.slice(), { standardFontDataUrl: STANDARD_FONTS, disableFontFace: true });
+  const pdf = await getDocumentProxy(bytes.slice(), { standardFontDataUrl: STANDARD_FONTS, disableFontFace: true, useSystemFonts: false });
   const pages: PageImage[] = [];
   for (let n = 1; n <= pdf.numPages; n++) {
     const png = await renderPageAsImage(pdf, n, { canvasImport: () => import("@napi-rs/canvas"), scale });
