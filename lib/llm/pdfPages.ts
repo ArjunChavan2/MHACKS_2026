@@ -4,6 +4,7 @@
  * PDFs are rendered with PDF.js (`pdfjs-dist`) through `unpdf` on `@napi-rs/canvas`. Images other
  * than PNG or JPEG (e.g. WebP) are re-encoded as PNG. Server-only: uses a native canvas module.
  */
+import { join } from "node:path";
 import { definePDFJSModule, getDocumentProxy, renderPageAsImage } from "unpdf";
 import type { FilePart } from "./index";
 
@@ -12,6 +13,13 @@ export const RENDER_SCALE = 2;
 
 /** One-time switch of `unpdf` to the full PDF.js build, which supports rendering. */
 let pdfjsReady: Promise<void> | null = null;
+
+/**
+ * PDF.js's bundled font outlines. Bills often use non-embedded standard fonts (e.g. Courier); without
+ * these files PDF.js falls back to system fonts, and serverless Linux has none, so text renders blank.
+ * Traced into the deploy by `outputFileTracingIncludes` in `next.config.ts`.
+ */
+const STANDARD_FONTS = join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts") + "/";
 
 /** Image types Grok accepts directly. */
 const DIRECT_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg"]);
@@ -36,7 +44,7 @@ export interface PageImage {
 export async function renderPdfPages(bytes: Uint8Array, scale = RENDER_SCALE): Promise<PageImage[]> {
   pdfjsReady ??= definePDFJSModule(() => import("pdfjs-dist/legacy/build/pdf.mjs"));
   await pdfjsReady;
-  const pdf = await getDocumentProxy(bytes.slice());
+  const pdf = await getDocumentProxy(bytes.slice(), { standardFontDataUrl: STANDARD_FONTS, disableFontFace: true });
   const pages: PageImage[] = [];
   for (let n = 1; n <= pdf.numPages; n++) {
     const png = await renderPageAsImage(pdf, n, { canvasImport: () => import("@napi-rs/canvas"), scale });
