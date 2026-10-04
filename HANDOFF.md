@@ -36,7 +36,7 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
-  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 46 tests pass; build, lint, and types are clean.
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 56 tests pass; build, lint, and types are clean.
 - **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
   `gemini-3.5-flash` (including the prompt-injection bill). The `gemini-flash-latest` default
