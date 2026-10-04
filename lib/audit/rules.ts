@@ -166,9 +166,11 @@ function recordMatches(r: VerbatimFact, code: string, date: string): boolean {
  * @param bill - Confirmed bill.
  * @param records - The patient's records from every connected provider.
  * @param providers - Providers whose records were searched (for the citation).
- * @returns One finding per unmatched checkable line; empty when everything matches.
+ * @returns One finding per unmatched checkable line; empty when everything matches or no records were searched.
  */
 export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact[], providers: string[]): Finding[] {
+  // No provider's records were searched (none connected, or they belong to someone else): nothing to compare.
+  if (!providers.length) return [];
   const findings: Finding[] = [];
   for (const line of bill.lines) {
     if (!line.code || !line.serviceDate) continue;

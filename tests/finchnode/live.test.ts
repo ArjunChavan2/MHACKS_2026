@@ -5,7 +5,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { findDocumentationGaps } from "@/lib/audit/rules";
+import { loadRecords } from "@/lib/finchnode";
 import { loadLiveRecords, mapRecord, mapSnapshot } from "@/lib/finchnode/live";
+import { confirmedSampleBill } from "../helpers";
 
 /** Saved response of FinchNode's demo API for the two-provider scenario. */
 const snapshot = JSON.parse(readFileSync(join("fixtures", "finchnode", "multi-source-overlap.json"), "utf8"));
@@ -97,5 +100,28 @@ describe("FINCHNODE_CONNECT=off", () => {
     } finally {
       delete process.env.FINCHNODE_CONNECT;
     }
+  });
+});
+
+describe("records for the right patient", () => {
+  /** Proves the patient's name is read from FinchNode's demographics. */
+  it("reads the patient name", () => {
+    expect(mapSnapshot(snapshot).patientName).toBe("Priya Ramaswamy");
+  });
+  /** Proves another patient's case gets no records (and a plain warning), while the matching patient keeps them. */
+  it("drops records for a different patient", async () => {
+    process.env.USE_MOCK = "true";
+    const same = await loadRecords("case_a", "Priya Ramaswamy");
+    expect(same.records.length).toBeGreaterThan(0);
+    const other = await loadRecords("case_b", "Marcus Bell");
+    expect(other).toMatchObject({ records: [], providers: [] });
+    expect(other.warnings.join(" ")).toMatch(/different patient/);
+    expect(other.warnings.join(" ")).not.toMatch(/Priya/);
+    expect((await loadRecords("case_c", null)).records.length).toBeGreaterThan(0);
+  });
+  /** Proves no documentation-gap findings are made when no records were searched. */
+  it("makes no documentation gaps without records", async () => {
+    const bill = await confirmedSampleBill();
+    expect(findDocumentationGaps(bill, [], [])).toEqual([]);
   });
 });
