@@ -17,7 +17,8 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:studio": "drizzle-kit studio",
-    "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts"
+    "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts",
+    "call:test": "tsx --env-file-if-exists=.env.local scripts/call-test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
