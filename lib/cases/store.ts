@@ -2,14 +2,15 @@
  * @file Case storage: Neon when `DATABASE_URL` is set, otherwise an in-memory store for local runs
  * (SPEC.md §4.6, §5.1).
  *
- * MVP 1 keeps cases, documents (with extraction and confirmation), findings, and an append-only
- * event log. Original files are kept privately in memory (by storage key) for the session; durable
- * private object storage is an open decision (SPEC.md §12). Never expose stored files publicly.
+ * MVP 1 keeps cases, documents (with extraction and confirmation), findings, an append-only event
+ * log, and the original files. Files are private: with Neon they live in the `files` table, in
+ * memory otherwise. Never expose stored files publicly.
  */
 import { neon } from "@neondatabase/serverless";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { caseEvents, cases, documents, findings } from "@/db/schema";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { caseEvents, cases, documents, files, findings } from "@/db/schema";
 import type { Finding } from "@/lib/types";
 
 /** A stored document row. */
@@ -38,6 +39,16 @@ export interface CaseStore {
   saveFindings(caseId: string, list: Finding[]): Promise<void>;
   /** Appends an event to the case timeline. */
   addEvent(caseId: string, type: string, data: unknown): Promise<void>;
+  /** Stores a file privately and returns its storage key. */
+  putFile(bytes: Uint8Array, mimeType: string): Promise<string>;
+  /** Reads a privately stored file, or `null` if the key is unknown. */
+  getFile(key: string): Promise<StoredFile | null>;
+}
+
+/** A privately stored file. */
+export interface StoredFile {
+  bytes: Uint8Array;
+  mimeType: string;
 }
 
 /**
@@ -50,39 +61,8 @@ export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
-/** Process-wide singletons kept on `globalThis` so Next.js hot reloads don't drop them in dev. */
-const g = globalThis as typeof globalThis & {
-  __mhFiles?: Map<string, { bytes: Uint8Array; mimeType: string }>;
-  __mhStore?: CaseStore;
-};
-
-/** Private, process-local file storage (by storage key). Never served publicly. */
-const files = (g.__mhFiles ??= new Map());
-
-/**
- * Stores an uploaded file privately and returns its storage key.
- *
- * Side effects: keeps the bytes in process memory.
- *
- * @param bytes - File bytes.
- * @param mimeType - MIME type.
- * @returns Storage key.
- */
-export function putFile(bytes: Uint8Array, mimeType: string): string {
-  const key = newId("file");
-  files.set(key, { bytes, mimeType });
-  return key;
-}
-
-/**
- * Reads a privately stored file.
- *
- * @param key - Storage key.
- * @returns The file, or `undefined` if unknown.
- */
-export function getFile(key: string): { bytes: Uint8Array; mimeType: string } | undefined {
-  return files.get(key);
-}
+/** Process-wide store kept on `globalThis` so Next.js hot reloads don't drop it in dev. */
+const g = globalThis as typeof globalThis & { __mhStore?: CaseStore };
 
 /**
  * In-memory store for local development and demos without a database.
@@ -93,6 +73,7 @@ export function memoryStore(): CaseStore {
   const docs = new Map<string, StoredDocument>();
   const found = new Map<string, Finding[]>();
   const events: Array<{ caseId: string; type: string; data: unknown; at: string }> = [];
+  const stored = new Map<string, StoredFile>();
   return {
     async createCase() {
       return newId("case");
@@ -109,17 +90,32 @@ export function memoryStore(): CaseStore {
     async addEvent(caseId, type, data) {
       events.push({ caseId, type, data, at: new Date().toISOString() });
     },
+    async putFile(bytes, mimeType) {
+      const key = newId("file");
+      stored.set(key, { bytes: bytes.slice(), mimeType });
+      return key;
+    },
+    async getFile(key) {
+      return stored.get(key) ?? null;
+    },
   };
 }
 
+/** Any Drizzle Postgres database: Neon HTTP in the app, PGlite in tests. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PgDb = PgDatabase<PgQueryResultHKT, any>;
+
 /**
- * Neon-backed store.
+ * Postgres-backed store over any Drizzle Postgres database.
  *
- * @param url - Neon connection string.
- * @returns A `CaseStore` writing to Postgres. Run `npx drizzle-kit push` once to create tables.
+ * Side effects: reads and writes the `cases`, `documents`, `findings`, `case_events`, and `files`
+ * tables. Replacing findings is a delete then an insert, not atomic (the Neon HTTP driver has no
+ * transactions); re-running the audit repairs a partial write.
+ *
+ * @param db - Drizzle database with the schema migrated (`npm run db:migrate`).
+ * @returns A `CaseStore` writing to Postgres.
  */
-export function neonStore(url: string): CaseStore {
-  const db = drizzle(neon(url));
+export function pgStore(db: PgDb): CaseStore {
   return {
     async createCase(goal) {
       const id = newId("case");
@@ -134,7 +130,20 @@ export function neonStore(url: string): CaseStore {
     },
     async getDocument(id) {
       const rows = await db.select().from(documents).where(eq(documents.id, id));
-      return (rows[0] as StoredDocument | undefined) ?? null;
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        caseId: row.caseId,
+        docType: row.docType,
+        direction: row.direction as StoredDocument["direction"],
+        status: row.status,
+        fileName: row.fileName,
+        storageKey: row.storageKey,
+        extraction: row.extraction,
+        extractionMeta: row.extractionMeta,
+        confirmed: row.confirmed,
+      };
     },
     async saveFindings(caseId, list) {
       await db.delete(findings).where(eq(findings.caseId, caseId));
@@ -147,7 +156,27 @@ export function neonStore(url: string): CaseStore {
     async addEvent(caseId, type, data) {
       await db.insert(caseEvents).values({ id: newId("evt"), caseId, type, data });
     },
+    async putFile(bytes, mimeType) {
+      const key = newId("file");
+      await db.insert(files).values({ key, mimeType, dataBase64: Buffer.from(bytes).toString("base64") });
+      return key;
+    },
+    async getFile(key) {
+      const rows = await db.select().from(files).where(eq(files.key, key));
+      const row = rows[0];
+      return row ? { bytes: new Uint8Array(Buffer.from(row.dataBase64, "base64")), mimeType: row.mimeType } : null;
+    },
   };
+}
+
+/**
+ * Neon-backed store over the serverless HTTP driver (works in Vercel functions).
+ *
+ * @param url - Neon connection string (the pooled one is fine).
+ * @returns A `CaseStore` writing to Neon. Run `npm run db:migrate` once to create the tables.
+ */
+export function neonStore(url: string): CaseStore {
+  return pgStore(drizzle(neon(url)));
 }
 
 /**

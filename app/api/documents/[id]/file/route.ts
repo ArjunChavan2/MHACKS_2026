@@ -4,7 +4,7 @@
  * Files are stored privately; this is the only way to read one, by document ID, with no-store
  * caching. *Open:* add authentication when real login exists (SPEC.md §12).
  */
-import { getStore, getFile } from "@/lib/cases/store";
+import { getStore } from "@/lib/cases/store";
 import { errorResponse } from "@/lib/http";
 
 /**
@@ -17,8 +17,9 @@ import { errorResponse } from "@/lib/http";
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
     const { id } = await ctx.params;
-    const doc = await getStore().getDocument(id);
-    const file = doc?.storageKey ? getFile(doc.storageKey) : undefined;
+    const store = getStore();
+    const doc = await store.getDocument(id);
+    const file = doc?.storageKey ? await store.getFile(doc.storageKey) : null;
     if (!file) return Response.json({ error: "not_found" }, { status: 404 });
     return new Response(Buffer.from(file.bytes), {
       headers: { "Content-Type": file.mimeType, "Cache-Control": "private, no-store", "Content-Disposition": "inline" },

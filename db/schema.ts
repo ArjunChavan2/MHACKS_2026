@@ -1,11 +1,14 @@
 /**
- * @file Neon Postgres schema (Drizzle) for MVP 1 (SPEC.md §4.6 data relationships).
+ * @file Neon Postgres schema (Drizzle) (SPEC.md §4.6 data relationships, §6 MVP 0).
  *
- * MVP 1 uses `cases`, `documents`, `findings`, and `case_events`. `approvals`, `deadlines`, and
- * `calls` arrive with MVP 2 and MVP 4. JSON columns hold typed objects from `lib/types`; the
- * application validates them before writing.
+ * MVP 1 writes `cases`, `documents`, `findings`, `case_events`, and `files`. `approvals` and
+ * `deadlines` exist for MVP 2 (created now per the MVP 0 schema list); `calls` arrives with MVP 4.
+ * JSON columns hold typed objects from `lib/types`; the application validates them before writing.
+ *
+ * After changing this file run `npm run db:generate` and commit the new SQL in `db/migrations/`;
+ * `npm run db:migrate` applies it to the database in `DATABASE_URL`.
  */
-import { integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { date, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /** One persistent case per bill (SPEC.md §3.1). */
 export const cases = pgTable("cases", {
@@ -59,5 +62,43 @@ export const caseEvents = pgTable("case_events", {
   type: text("type").notNull(),
   /** Event details. */
   data: jsonb("data"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Patient approvals; required before any call, send, submission, disclosure, or commitment (SPEC.md §4.7). */
+export const approvals = pgTable("approvals", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull().references(() => cases.id),
+  /** What was approved, e.g. "send_dispute_letter". */
+  action: text("action").notNull(),
+  /** Who approved it (patient or demo user). */
+  approvedBy: text("approved_by").notNull(),
+  /** What exactly was shown and approved (draft ID, constraints). */
+  details: jsonb("details"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Deadlines linked to a document (SPEC.md §4.6). */
+export const deadlines = pgTable("deadlines", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull().references(() => cases.id),
+  documentId: text("document_id").references(() => documents.id),
+  /** What is due, e.g. "appeal_filing". */
+  kind: text("kind").notNull(),
+  dueDate: date("due_date").notNull(),
+  followUpDate: date("follow_up_date"),
+  /** Reminder state, e.g. "pending", "sent", "done". */
+  reminderState: text("reminder_state").notNull(),
+});
+
+/**
+ * Original uploaded and generated files, private (SPEC.md §4.6 "Uploaded files"). Bytes are base64
+ * text so every driver handles them the same way. Uploads are capped at 15 MB.
+ * *Open:* move to object storage (Vercel Blob or similar, SPEC.md §12) if size becomes a problem.
+ */
+export const files = pgTable("files", {
+  key: text("key").primaryKey(),
+  mimeType: text("mime_type").notNull(),
+  dataBase64: text("data_base64").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

@@ -13,7 +13,7 @@ import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confir
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
 import { getRecords, providersOf } from "@/lib/finchnode";
 import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedEob } from "@/lib/types";
-import { getStore, newId, putFile } from "./store";
+import { getStore, newId } from "./store";
 
 /** Names of the saved sample documents available for the labeled no-AI path. */
 export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection"] as const;
@@ -94,7 +94,7 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
 export async function ingestUpload(caseId: string | null, fileName: string, mimeType: string, bytes: Uint8Array): Promise<IngestResponse> {
   const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
   if (!allowed.includes(mimeType)) throw new BadRequestError(`Unsupported file type ${mimeType}. Upload a PDF or a photo.`);
-  const key = putFile(bytes, mimeType);
+  const key = await getStore().putFile(bytes, mimeType);
   return save(caseId, fileName, key, await extractDocument({ mimeType, bytes }));
 }
 
@@ -111,7 +111,7 @@ export async function ingestSample(caseId: string | null, name: string): Promise
   const dir = join(process.cwd(), "fixtures");
   const pdf = new Uint8Array(readFileSync(join(dir, "documents", `${name}.pdf`)));
   const raw = JSON.parse(readFileSync(join(dir, "llm-output", `${name}.json`), "utf8"));
-  const key = putFile(pdf, "application/pdf");
+  const key = await getStore().putFile(pdf, "application/pdf");
   return save(caseId, `${name}.pdf (sample)`, key, await extractFromSavedReply(raw, pdf));
 }
 

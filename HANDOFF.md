@@ -39,6 +39,9 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 - SPEC.md (including the full extraction spec in §4.2) is complete through: product, rules, agent model, capabilities, engineering rules and
   docstrings, MVP ladder (MVP 0–6), obstacle register (O1–O13) with the call orchestrator design
   (§7.1) and FinchNode data-fit plan (§7.2), demo plan, prize targets, research, open decisions.
+- **Neon wiring is on branch `Neon`** (`agent-notes/neon-setup/IMPLEMENTATION.md`): migrations in
+  `db/migrations/`, files persisted in Neon, `npm run db:migrate` / `db:check`, PGlite tests.
+  Needs a `DATABASE_URL` from the user, then merge to `main`.
 - Audit and test prompts were just updated with the agent-core checks (three outcome branches,
   waiting and resuming, verification, assertion-is-not-proof, binding constraints, labeling).
 
