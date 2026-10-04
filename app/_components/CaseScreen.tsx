@@ -18,8 +18,6 @@ import CallWorkspace from "./CallWorkspace";
 import DenialFlow from "./DenialFlow";
 import type { DocState } from "./DocumentConfirmation";
 import CaseDocumentFlow from "./CaseDocumentFlow";
-import CasePreferencesPanel from "./CasePreferencesPanel";
-import type { CasePreferencesInput } from "@/lib/cases/preferences";
 import { describeSource } from "./sources";
 
 /** How often to refresh the case while the screen is open. */
@@ -132,10 +130,6 @@ async function readCase(caseId: string): Promise<CaseView> {
  * @returns The case screen.
  */
 export default function CaseScreen({ caseId }: { caseId: string }) {
-  /** Explicit editor choices remain stable while polling refreshes the case. */
-  const [preferences, setPreferences] = useState<CasePreferencesInput | null>(
-    null,
-  );
   const [view, setView] = useState<CaseView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -276,34 +270,6 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     }
   }
 
-  /**
-   * Saves the edited goal/restrictions before any subsequent contact action.
-   * Side effects: persists choices and reloads server authorization; keeps editor on failure.
-   */
-  async function savePreferences() {
-    if (!preferences) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/cases/${caseId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preferences),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.message ?? "Your choices could not be saved.");
-      await refresh();
-      setPreferences(null);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Your choices could not be saved.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
   /** Retries a failed lookup without discarding an already loaded case. */
   async function retry() {
     setBusy(true);
@@ -333,11 +299,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             "Loading your next step, documents and recorded updates."}
         </p>
         {loadError && (
-          <button
-            className="paper-primary"
-            disabled={busy || Boolean(preferences)}
-            onClick={retry}
-          >
+          <button className="paper-primary" disabled={busy} onClick={retry}>
             {busy ? "Trying again…" : "Try again"}
           </button>
         )}
@@ -384,7 +346,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           <p>{loadError} The last loaded update is shown below.</p>
           <button
             className="paper-source-button"
-            disabled={busy || Boolean(preferences)}
+            disabled={busy}
             onClick={retry}
           >
             Retry
@@ -401,63 +363,6 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </p>
       )}
 
-      <section
-        className="billless-document-card space-y-3"
-        aria-label="Your saved goal and choices"
-      >
-        <h3 className="text-lg font-semibold">Your goal and choices</h3>
-        <p className="paper-copy">
-          {s.preferences.goal ?? "No goal saved yet."}
-        </p>
-        <p className="paper-copy">
-          {s.preferences.noPayments
-            ? "Don’t agree to any payments. "
-            : "Payment agreements aren’t available in this demo. "}
-          {s.preferences.pauseContact
-            ? "Contact is on hold."
-            : "Every contact needs your approval."}
-        </p>
-        {preferences ? (
-          <>
-            <CasePreferencesPanel
-              value={preferences}
-              disabled={busy}
-              onChange={setPreferences}
-            />
-            <p className="paper-copy">
-              Save your changes before continuing with contact actions.
-            </p>
-            <button
-              className="paper-primary"
-              disabled={busy || !preferences.goal.trim()}
-              onClick={savePreferences}
-            >
-              {busy ? "Saving…" : "Save my choices"}
-            </button>
-            <button
-              className="paper-secondary"
-              disabled={busy}
-              onClick={() => setPreferences(null)}
-            >
-              Cancel changes
-            </button>
-          </>
-        ) : (
-          <button
-            className="paper-secondary"
-            disabled={busy}
-            onClick={() =>
-              setPreferences({
-                goal: s.preferences.goal ?? "Review my medical bill",
-                noPayments: s.preferences.noPayments,
-                pauseContact: s.preferences.pauseContact,
-              })
-            }
-          >
-            Edit my choices
-          </button>
-        )}
-      </section>
       {s.consent?.pendingRequest && (
         <section
           className="rounded-xl bg-amber-50 p-4 ring-2 ring-amber-300"
@@ -531,7 +436,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         {RUNNABLE.has(next.actionId) && (
           <button
             className="paper-primary"
-            disabled={busy || Boolean(preferences)}
+            disabled={busy}
             onClick={() => act(next.actionId, next.target, next.needsApproval)}
           >
             {busy
@@ -572,7 +477,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             </a>
             <button
               className="paper-primary"
-              disabled={busy || Boolean(preferences)}
+              disabled={busy}
               onClick={() =>
                 document
                   .getElementById("case-document-flow")
@@ -590,7 +495,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
               <button
                 key={`${a.id}-${a.target ?? ""}`}
                 className="paper-secondary mt-2"
-                disabled={busy || Boolean(preferences)}
+                disabled={busy}
                 onClick={() => act(a.id, a.target, a.needsApproval)}
               >
                 {a.needsApproval ? `Approve: ${a.label}` : a.label}
@@ -738,7 +643,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
                 {t.status === "open" && (
                   <button
                     className="paper-source-button"
-                    disabled={busy || Boolean(preferences)}
+                    disabled={busy}
                     onClick={() => act("patient_takes_over", t.id, false)}
                   >
                     I&apos;ll do this myself
@@ -750,16 +655,14 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </div>
       )}
 
-      {!preferences && (
-        <div id="case-document-flow">
-          <CaseDocumentFlow
-            view={view}
-            onUpdated={refresh}
-            onBusyChange={setBusy}
-            onDenial={setDenialReview}
-          />
-        </div>
-      )}
+      <div id="case-document-flow">
+        <CaseDocumentFlow
+          view={view}
+          onUpdated={refresh}
+          onBusyChange={setBusy}
+          onDenial={setDenialReview}
+        />
+      </div>
       <section
         className="billless-document-card space-y-3"
         aria-label="Case documents"
@@ -826,7 +729,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         caseId={caseId}
         consent={s.consent}
         imessageLinked={Boolean(imessage?.linked)}
-        disabled={busy || Boolean(preferences)}
+        disabled={busy}
         onChange={refresh}
       />
       <div className="paper-findings">
@@ -842,10 +745,17 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
               : "Before a call, get Billy ready for this case."}
           </p>
           <p className="paper-copy text-xs">
-            Billy talks about whichever case pressed this last, so press it right before the call.
+            Billy talks about whichever case pressed this last, so press it
+            right before the call.
           </p>
-          <button className="paper-primary mt-2" disabled={busy} onClick={armCall}>
-            {s.callArmedAt ? "Get Billy ready again" : "Get Billy ready for this case"}
+          <button
+            className="paper-primary mt-2"
+            disabled={busy}
+            onClick={armCall}
+          >
+            {s.callArmedAt
+              ? "Get Billy ready again"
+              : "Get Billy ready for this case"}
           </button>
         </div>
         {(s.calls ?? []).length === 0 && (
@@ -953,7 +863,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </ul>
         <button
           className="paper-secondary mt-2"
-          disabled={busy || Boolean(preferences)}
+          disabled={busy}
           onClick={addLatestCall}
         >
           Add the latest call to this case
