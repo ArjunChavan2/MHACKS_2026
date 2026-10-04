@@ -1,22 +1,27 @@
 /**
  * @file Dispute letter and itemized-bill request drafting (SPEC.md §4.2, §4.5).
  *
- * Gemini writes structure and prose with placeholders; `placeholders.ts` fills every fact and
- * rejects drafts that invent facts. If Gemini is unavailable or its draft is rejected, a
- * deterministic template (same placeholders, same fill path) is used instead, and the draft is
- * marked `author: "template"`.
+ * The model (Grok or Gemini) writes structure and connecting prose with placeholders;
+ * `placeholders.ts` fills every fact and rejects drafts that invent facts. Each finding enters the
+ * letter as `{{finding:<id>:letter}}`: a first-person paragraph written by code, which must start a
+ * sentence. If the model is unavailable or its draft is rejected, a deterministic template (same
+ * placeholders, same fill path) is used instead, and the draft is marked `author: "template"`.
  */
 import { z } from "zod";
 import { generateJson, type LlmClient } from "@/lib/llm";
 import type { ConfirmedBill, Draft, Finding } from "@/lib/types";
-import { allowedTokens, fillContext, fillDraft, type BillContext, type FillContext } from "./placeholders";
+import { allowedTokens, fillContext, fillDraft, misplacedLetterText, type BillContext, type FillContext } from "./placeholders";
 
 /** Closing disclaimer on every letter (SPEC.md §4.5). */
 export const DISCLAIMER =
   "This letter was prepared with help from an app. It is plain-language help, not legal or financial advice; rules vary by state and by plan.";
 
-/** Shape of the model's draft. */
-const DraftReplySchema = z.object({ subject: z.string().min(1), paragraphs: z.array(z.string().min(1)).min(2) });
+/** Shape of the model's draft. Misplaced finding text fails validation, so the model gets one retry. */
+const DraftReplySchema = z
+  .object({ subject: z.string().min(1), paragraphs: z.array(z.string().min(1)).min(2) })
+  .superRefine((v, ctx) => {
+    for (const message of misplacedLetterText(v.paragraphs)) ctx.addIssue({ code: "custom", message });
+  });
 
 /** JSON Schema for the model's draft. */
 const DRAFT_JSON_SCHEMA = {
@@ -31,8 +36,16 @@ const DRAFT_SYSTEM = [
   "You may ONLY state facts through the placeholders you are given. Never write a dollar amount, date,",
   "billing code, account number, or name yourself; use the matching placeholder.",
   "Describe issues as potential issues to be checked, never as proven errors or accusations.",
+  "Write in the first person as the patient (\"my bill\", \"I received\"); never refer to the patient by",
+  "name. Keep it short: one opening paragraph, one paragraph per finding, and one closing request.",
+  "Do not write a greeting or a sign-off; code adds them.",
   "Do not give medical advice, threaten, or promise anything on the patient's behalf.",
 ].join(" ");
+
+/** Greeting added by code to every dispute letter. */
+const GREETING = "To the billing office at {{provider}}:";
+/** Sign-off added by code to every dispute letter. */
+const SIGN_OFF = "Thank you,\n{{patient_name}}";
 
 /**
  * Deterministic dispute-letter template using the same placeholders as the model.
@@ -44,11 +57,11 @@ export function disputeTemplate(findings: Finding[]): { subject: string; paragra
   return {
     subject: "Request for review of account {{account_number}}",
     paragraphs: [
-      "To the billing office at {{provider}}:",
+      GREETING,
       "I am writing about the bill for {{patient_name}}, account {{account_number}}, for services on {{service_dates}}, with {{amount_due}} shown as due. Before I pay, I would like you to review the items below.",
-      ...findings.map((f) => `{{finding:${f.id}:title}}. {{finding:${f.id}:explanation}} {{finding:${f.id}:ask}}`),
+      ...findings.map((f) => `{{finding:${f.id}:letter}}`),
       "Please send me a written response and, if any charges change, a revised statement. I am not refusing to pay amounts I owe; I am asking you to confirm these items first.",
-      "Thank you,\n{{patient_name}}",
+      SIGN_OFF,
     ],
   };
 }
@@ -71,10 +84,15 @@ export async function draftDisputeLetter(bill: ConfirmedBill, findings: Finding[
         {
           system: DRAFT_SYSTEM,
           prompt: [
-            "Write a dispute letter covering every finding below. Mention each finding at least once.",
+            "Write a dispute letter covering every finding below.",
             `Allowed placeholders: ${allowedTokens(ctx).join(", ")}`,
-            "Findings (for your understanding only; refer to them only via placeholders):",
-            ...findings.map((f) => `- ${f.id}: ${f.rule}`),
+            "Each {{finding:<id>:letter}} placeholder becomes one or more complete sentences that describe the",
+            "issue and ask for something, already written in the first person. Give each finding its own",
+            "paragraph containing its letter placeholder. The placeholder must start a sentence: either begin",
+            "the paragraph with it, or put at most one short sentence of your own before it, ending with a",
+            "period. Never wrap it inside a sentence (no 'regarding ...', 'described as ...', 'which says ...').",
+            "Findings (refer to them only via placeholders):",
+            ...findings.map((f) => `- ${f.id}: ${f.rule.replaceAll("_", " ")}`),
             "End with a request for a written response and a revised statement if anything changes.",
           ].join("\n"),
           jsonSchema: DRAFT_JSON_SCHEMA,
@@ -83,7 +101,7 @@ export async function draftDisputeLetter(bill: ConfirmedBill, findings: Finding[
         },
         client,
       );
-      return finish("dispute_letter", value.subject, value.paragraphs, ctx, "llm");
+      return finish("dispute_letter", value.subject, [GREETING, ...value.paragraphs, SIGN_OFF], ctx, "llm");
     } catch {
       // LLM unavailable, invalid twice, or draft rejected by the placeholder guard:
       // fall through to the deterministic template, which uses the same fill path.

@@ -68,18 +68,38 @@ export function fillContext(bill: BillContext, findings: Finding[]): FillContext
   };
 }
 
+/** Finding fields a letter may use. Title, explanation, and ask speak to the patient, so letters use `letter`. */
+const LETTER_FINDING_FIELDS = ["letter", "amount"] as const;
+
 /**
  * Lists the placeholder names a draft may use, for the model's instructions.
  *
  * @param ctx - Fill context.
- * @returns Allowed tokens such as "{{provider}}" and "{{finding:dup-1:ask}}".
+ * @returns Allowed tokens such as "{{provider}}" and "{{finding:dup-1:letter}}".
  */
 export function allowedTokens(ctx: FillContext): string[] {
   const simple = Object.keys(ctx.simple).map((k) => `{{${k}}}`);
-  const per = [...ctx.findings.keys()].flatMap((id) =>
-    ["title", "explanation", "ask", "amount"].map((f) => `{{finding:${id}:${f}}}`),
-  );
+  const per = [...ctx.findings.keys()].flatMap((id) => LETTER_FINDING_FIELDS.map((f) => `{{finding:${id}:${f}}}`));
   return [...simple, ...per];
+}
+
+/**
+ * Finds `{{finding:<id>:letter}}` placeholders that don't start a sentence. The letter text is
+ * complete sentences, so wrapping it inside another sentence ("regarding ... which says ...") reads
+ * badly and is rejected.
+ *
+ * @param paragraphs - Draft paragraphs with placeholders still in place.
+ * @returns One reason per misplaced placeholder; empty when every one starts a sentence.
+ */
+export function misplacedLetterText(paragraphs: string[]): string[] {
+  const reasons: string[] = [];
+  for (const p of paragraphs) {
+    for (const m of p.matchAll(/\{\{\s*finding:([^:}]+):letter\s*\}\}/g)) {
+      const before = p.slice(0, m.index).trimEnd();
+      if (before && !/[.!?:]$/.test(before)) reasons.push(`{{finding:${m[1]}:letter}} must start a sentence`);
+    }
+  }
+  return reasons;
 }
 
 /**
@@ -92,11 +112,12 @@ export function allowedTokens(ctx: FillContext): string[] {
 function resolve(token: string, ctx: FillContext): { value: string; sources: Source[] } | null {
   const t = token.trim();
   if (t in ctx.simple) return { value: ctx.simple[t], sources: [] };
-  const m = t.match(/^finding:([^:]+):(title|explanation|ask|amount)$/);
+  const m = t.match(/^finding:([^:]+):(title|explanation|ask|letter|amount)$/);
   if (!m) return null;
   const f = ctx.findings.get(m[1]);
   if (!f) return null;
-  const value = m[2] === "amount" ? usd(f.amountQuestionedCents) : f[m[2] as "title" | "explanation" | "ask"];
+  const value =
+    m[2] === "amount" ? usd(f.amountQuestionedCents) : m[2] === "letter" ? f.letterText : f[m[2] as "title" | "explanation" | "ask"];
   return { value, sources: f.sources };
 }
 
@@ -118,7 +139,8 @@ export function forbiddenFacts(text: string): string[] {
  * @param paragraphs - Body paragraphs with placeholders.
  * @param ctx - Fill context.
  * @returns The filled subject and paragraphs with sources.
- * @throws {DraftRejectedError} On unknown placeholders, forbidden facts, or findings never mentioned.
+ * @throws {DraftRejectedError} On unknown placeholders, forbidden facts, misplaced letter text, or
+ *   findings never mentioned.
  */
 export function fillDraft(subject: string, paragraphs: string[], ctx: FillContext): { subject: string; paragraphs: DraftParagraph[] } {
   const reasons: string[] = [];
@@ -141,6 +163,7 @@ export function fillDraft(subject: string, paragraphs: string[], ctx: FillContex
     const unique = [...new Map(sources.map((s) => [JSON.stringify(s), s])).values()];
     return { text: out, sources: unique };
   };
+  reasons.push(...misplacedLetterText(paragraphs));
   const s = fill(subject);
   const ps = paragraphs.map(fill);
   for (const id of ctx.findings.keys()) if (!mentioned.has(id)) reasons.push(`finding ${id} is never mentioned`);

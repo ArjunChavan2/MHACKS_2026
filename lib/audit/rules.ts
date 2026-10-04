@@ -67,6 +67,7 @@ export function findDuplicateCharges(bill: ConfirmedBill): Finding[] {
       title: `Potential duplicate charge: lines ${nums.join(" and ")}`,
       explanation: `Lines ${nums.join(" and ")} have the same code (${first.code}), service date (${longDate(first.serviceDate as string)}), and charge (${usd(first.chargeCents)}) from ${bill.billingEntity} for the same visit. This may be a duplicate, or they may be separate services; only documentation can tell.`,
       ask: `Ask ${bill.billingEntity} to confirm whether line${extra.length > 1 ? "s" : ""} ${extra.map((l) => l.lineNumber).join(", ")} ${extra.length > 1 ? "are" : "is"} a duplicate and, if so, remove ${extra.length > 1 ? "them" : "it"}.`,
+      letterText: `Lines ${nums.join(" and ")} show the same code (${first.code}), service date (${longDate(first.serviceDate as string)}), and charge (${usd(first.chargeCents)}). Please confirm whether line${extra.length > 1 ? "s" : ""} ${extra.map((l) => l.lineNumber).join(", ")} ${extra.length > 1 ? "are duplicates" : "is a duplicate"} and, if so, remove ${extra.length > 1 ? "them" : "it"} from my bill.`,
       amountQuestionedCents: extra.reduce((s, l) => s + lineAmount(l), 0),
       lineNumbers: extra.map((l) => l.lineNumber),
       sources: lines.map((l) => lineSource(bill, l)) as NonEmpty<Source>,
@@ -106,6 +107,7 @@ export function findBillExceedsEob(bill: ConfirmedBill, eob: ConfirmedEob | null
       title: `The bill asks for ${usd(diff)} more than your EOB says you owe`,
       explanation: `${bill.billingEntity} says ${usd(bill.amountDueCents)} is due. Your EOB from ${eob.insurer ?? "your insurer"} (claim ${eob.claimNumber ?? "unknown"}) says you owe ${usd(eob.totalPatientResponsibilityCents)}.${cause} An EOB is not a bill, but the amount you owe should normally match it.`,
       ask: `Ask ${bill.billingEntity} to explain the ${usd(diff)} difference from the EOB and correct the balance if it was billed in error.`,
+      letterText: `The bill shows ${usd(bill.amountDueCents)} due, but my explanation of benefits from ${eob.insurer ?? "my insurer"} (claim ${eob.claimNumber ?? "number not shown"}) shows ${usd(eob.totalPatientResponsibilityCents)} as my responsibility, a difference of ${usd(diff)}.${unmatched.length ? ` ${unmatched.length === 1 ? "This line does" : "These lines do"} not appear on the EOB: ${unmatched.map((l) => `line ${l.lineNumber} (${l.code}, ${usd(l.chargeCents)})`).join(", ")}.` : ""} Please explain the difference and correct the balance if it was billed in error.`,
       amountQuestionedCents: diff,
       lineNumbers: unmatched.map((l) => l.lineNumber),
       sources: [
@@ -189,6 +191,7 @@ export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact
       title: `No matching record for line ${line.lineNumber} (${exp.service})`,
       explanation: `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a ${exp.service} (${line.code}) on ${longDate(line.serviceDate)}, but none of your ${exp.category} records from ${providers.join(" or ")} within ${MATCH_WINDOW_DAYS} day of that date match it.${closestText} This doesn't prove the service didn't happen; your records may be incomplete.`,
       ask: `Ask ${bill.billingEntity} for documentation of this ${exp.service} (for example, the result or the order) before paying for line ${line.lineNumber}.`,
+      letterText: `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a ${exp.service} (${line.code}) on ${longDate(line.serviceDate)}. My ${exp.category} records from ${providers.join(" and ")} show no matching result within ${MATCH_WINDOW_DAYS} day of that date.${closest ? ` The closest is from ${closest.provider} on ${longDate(closest.recordedAt)}.` : ""} Please send documentation of this ${exp.service}, such as the result or the order, before I pay for line ${line.lineNumber}.`,
       amountQuestionedCents: lineAmount(line),
       lineNumbers: [line.lineNumber],
       sources: [

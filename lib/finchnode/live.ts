@@ -224,6 +224,17 @@ export async function connectSandboxPatient(key: string, externalId: string, tim
   throw new FinchNodeError(`FinchNode sandbox session ${created.id} did not finish within ${Math.round(timeoutMs / 1000)}s.`);
 }
 
+/**
+ * Whether to attempt a new sandbox Connect. `FINCHNODE_CONNECT=off` skips it (straight to the demo
+ * API) so a demo never waits on a stuck sandbox; a known subject (`FINCHNODE_SUBJECT`) is still used.
+ *
+ * @returns False when `FINCHNODE_CONNECT` is "off" or "false".
+ */
+export function connectEnabled(): boolean {
+  const v = (process.env.FINCHNODE_CONNECT ?? "").toLowerCase();
+  return v !== "off" && v !== "false";
+}
+
 /** After a failed sandbox Connect, skip reconnecting for this long so audits don't each wait the full timeout. */
 export const CONNECT_RETRY_AFTER_MS = 10 * 60_000;
 
@@ -249,7 +260,7 @@ export async function loadLiveRecords(opts: { key?: string; subject?: string; ex
 
   const known = opts.subject ?? process.env.FINCHNODE_SUBJECT ?? cache.__finchnodeSubject;
   const recentlyFailed = Date.now() - (cache.__finchnodeConnectFailedAt ?? 0) < CONNECT_RETRY_AFTER_MS;
-  if (key && (known || !recentlyFailed)) {
+  if (key && (known || (!recentlyFailed && connectEnabled()))) {
     try {
       let subject = known;
       if (!subject) {
@@ -265,6 +276,8 @@ export async function loadLiveRecords(opts: { key?: string; subject?: string; ex
     } catch (err) {
       warnings.push(`Live sandbox unavailable: ${err instanceof Error ? err.message : String(err)} Using FinchNode's demo API.`);
     }
+  } else if (key && !connectEnabled()) {
+    warnings.push("Sandbox Connect is turned off (FINCHNODE_CONNECT=off); using FinchNode's demo API.");
   } else if (key) {
     warnings.push("Live sandbox Connect failed recently; using FinchNode's demo API.");
   } else {

@@ -294,6 +294,11 @@ export interface Finding {
   explanation: string;
   /** What the patient can reasonably ask for (written by code). */
   ask: string;
+  /**
+   * The finding as a paragraph of the patient's letter to the billing office, in the first person
+   * ("my EOB", "Please confirm..."), with every fact filled by code from a template (SPEC.md §4.5).
+   */
+  letterText: string;
   /** Amount this finding questions, in cents (0 when not monetary). */
   amountQuestionedCents: Cents;
   /** Bill line numbers this finding covers, for de-duplicating the verdict total. */

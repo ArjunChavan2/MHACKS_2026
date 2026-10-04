@@ -36,7 +36,7 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
-  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 64 tests pass; build, lint, and types are clean.
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 67 tests pass; build, lint, and types are clean.
 - **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
   `gemini-3.5-flash` (including the prompt-injection bill), now the pinned default; the
@@ -48,8 +48,12 @@ Progress per rung is the Status column in SPEC.md §6.
 - **Fixtures rebuilt around the FinchNode patient** (Priya Ramaswamy, synthetic): $321 Quillhaven bill
   with a duplicate TSH, $68 over the EOB, and a free T4 with no same-day record whose finding cites
   Northstar's free T4 from 3 days earlier. Mock mode serves FinchNode's saved records. Details in
-  SPEC.md §7.2. Known rough edge: Grok's letter drafts paste whole findings into sentences; the
-  drafting prompt needs tightening.
+  SPEC.md §7.2.
+- **Letters read like letters now:** each finding carries a first-person `letterText` written by
+  code; the model may only place `{{finding:<id>:letter}}` at the start of a sentence (else retry,
+  then template); greeting and sign-off are added by code.
+- **Demo switch:** `FINCHNODE_CONNECT=off` skips the stuck sandbox Connect (no 45 s wait) and uses
+  FinchNode's demo API directly.
 - **Grok is now the default AI provider** (when `XAI_API_KEY` is set); Gemini stays for the judged
   demo (`LLM_PROVIDER=gemini`, MLH Gemini prize). Grok passes the extraction eval 334/334; PDFs are
   rendered to page images for it. Gemini's free tier is only 20 requests/day per project.

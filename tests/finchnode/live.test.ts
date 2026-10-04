@@ -83,3 +83,19 @@ describe("loadLiveRecords", () => {
     expect(r.records).toHaveLength(16);
   });
 });
+
+describe("FINCHNODE_CONNECT=off", () => {
+  /** Proves the switch skips sandbox Connect entirely and goes straight to the demo API. */
+  it("skips Connect and uses the demo API", async () => {
+    process.env.FINCHNODE_CONNECT = "off";
+    try {
+      const fetch = stubFetch([["/demo/v1/users/patient-demo-multi-source/records", snapshot]]);
+      const r = await loadLiveRecords({ key: "ck_test_x" });
+      expect(r.origin).toBe("demo-api");
+      expect(r.warnings[0]).toMatch(/turned off/);
+      expect(fetch.mock.calls.every(([url]) => !String(url).includes("/connect/sessions"))).toBe(true);
+    } finally {
+      delete process.env.FINCHNODE_CONNECT;
+    }
+  });
+});
