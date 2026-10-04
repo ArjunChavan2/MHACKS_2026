@@ -11,12 +11,14 @@ import { draftDisputeLetter, draftItemizedBillRequest } from "@/lib/draft/letter
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
 import { confirmDenial, denialFields } from "@/lib/extract/denial";
+import { evaluateDenial, type DenialEvaluation } from "@/lib/appeals/criteria";
+import { draftAppealLetter, draftDocumentationRequest } from "@/lib/appeals/letter";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
 import { mergeFindings } from "./responses";
-import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedDenial, ExtractedEob, Finding, Verdict } from "@/lib/types";
+import type { AuditResult, ConfirmedBill, ConfirmedDenial, ConfirmedEob, Draft, ExtractedBill, ExtractedDenial, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
 
 /** Names of the saved sample documents available for the labeled no-AI path. */
@@ -298,6 +300,46 @@ async function saveDraft(caseId: string, draft: Draft): Promise<string> {
     draft,
   });
   return id;
+}
+
+/** What `/api/appeals` returns: the criteria check and the drafted letter (MVP 5). */
+export interface AppealResponse {
+  evaluation: DenialEvaluation;
+  draft: Draft;
+  providers: string[];
+  recordsOrigin: RecordsOrigin;
+}
+
+/**
+ * Checks a confirmed denial letter against the patient's records and drafts the appeal (all criteria
+ * met) or a documentation request to the provider (anything missing). Deterministic; no model.
+ *
+ * @param documentId - The confirmed denial letter document.
+ * @returns Evaluation, draft, providers searched, and where the records came from.
+ * @throws {BadRequestError} When the document isn't a confirmed denial letter or the policy is unknown.
+ */
+export async function appealDenial(documentId: string): Promise<AppealResponse> {
+  const store = getStore();
+  const doc = await store.getDocument(documentId);
+  if (!doc || doc.docType !== "denial_letter") throw new BadRequestError("An appeal needs a denial letter");
+  if (!doc.confirmed) throw new BadRequestError("Confirm the denial letter's details first");
+  const denial = doc.confirmed as ConfirmedDenial;
+  const { records, origin } = await loadRecords(doc.caseId);
+  const evaluation = evaluateDenial(denial, records);
+  if (!evaluation.policyKnown) {
+    throw new BadRequestError(`We can't check policy ${denial.policyId ?? "(none)"} yet, so no appeal was drafted. A human advocate can review this denial.`);
+  }
+  const draft = evaluation.allMet ? draftAppealLetter(denial, evaluation) : draftDocumentationRequest(denial, evaluation);
+  const draftId = await saveDraft(doc.caseId, draft);
+  await store.addEvent(doc.caseId, "appeal_evaluated", {
+    documentId,
+    policyId: evaluation.policy?.id,
+    criteria: evaluation.criteria.map((c) => ({ id: c.id, status: c.status, records: c.evidence.map((r) => r.recordId) })),
+    allMet: evaluation.allMet,
+    draftId,
+    recordsOrigin: origin,
+  });
+  return { evaluation, draft, providers: evaluation.providers, recordsOrigin: origin };
 }
 
 /**

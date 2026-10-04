@@ -11,7 +11,7 @@ import { errorResponse, parseBody } from "@/lib/http";
 /** Request body: a draft as returned by the drafting routes. */
 const Body = z.object({
   draft: z.object({
-    kind: z.enum(["dispute_letter", "itemized_bill_request"]),
+    kind: z.enum(["dispute_letter", "itemized_bill_request", "appeal_letter", "documentation_request"]),
     subject: z.string(),
     paragraphs: z.array(z.object({ text: z.string(), sources: z.array(z.unknown()) })).min(1),
     author: z.enum(["llm", "template"]),
@@ -29,7 +29,7 @@ export async function POST(req: Request): Promise<Response> {
     const { draft } = await parseBody(req, Body);
     const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const pdf = await renderDraftPdf(draft as never, date);
-    const name = draft.kind === "dispute_letter" ? "dispute-letter.pdf" : "itemized-bill-request.pdf";
+    const name = `${draft.kind.replaceAll("_", "-")}.pdf`;
     return new Response(new Uint8Array(pdf), {
       headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store" },
     });

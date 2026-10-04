@@ -86,6 +86,7 @@ const RecordSchema = z
     startDate: z.string().nullish(),
     recordedDate: z.string().nullish(),
     onsetDate: z.string().nullish(),
+    status: z.string().nullish(),
   })
   .passthrough();
 
@@ -150,7 +151,7 @@ export function mapRecord(category: string, raw: unknown): VerbatimFact | string
       break;
     }
   }
-  return Object.freeze({ recordId: r.id, category: ours, text, code, codeSystem, recordedAt: date, provider: r.sourceName });
+  return Object.freeze({ recordId: r.id, category: ours, text, code, codeSystem, recordedAt: date, provider: r.sourceName, status: r.status ?? null });
 }
 
 /**

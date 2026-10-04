@@ -249,6 +249,8 @@ export interface VerbatimFact {
   recordedAt: IsoDate;
   /** Source provider, e.g. "Northstar Health System". */
   provider: string;
+  /** The record's own status as FinchNode gives it (e.g. "active", "final"), if any; copied verbatim. */
+  status?: string | null;
 }
 
 /** A pointer to the evidence behind a finding. Every finding needs at least one (SPEC.md §5.6). */
