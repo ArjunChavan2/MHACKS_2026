@@ -821,6 +821,8 @@ function AuditScreen({
   const [open, setOpen] = useState<string | null>(null);
   /** Server-produced monetary verdict and evidence-backed findings. */
   const { verdict, findings } = audit;
+  // Every issue is the insurer's (e.g. a line it paid $0 for): point the patient to the insurer.
+  const insurerOnly = findings.length > 0 && findings.every((f) => f.contact === "insurer");
   /** Maps bill lines to server findings for inspection, without calculating flags. */
   const flaggedLines = new Map<number, Finding[]>();
   for (const finding of findings) {
@@ -986,14 +988,18 @@ function AuditScreen({
         <aside className="paper-next" aria-label="Your next step">
           <p className="paper-eyebrow">YOUR NEXT STEP</p>
           <h3>
-            {findings.length
-              ? "Ask the billing office to review these charges."
-              : "You still have options."}
+            {!findings.length
+              ? "You still have options."
+              : insurerOnly
+                ? "Ask your insurer to review this claim."
+                : "Ask the billing office to review these charges."}
           </h3>
           <p className="paper-copy">
-            {findings.length
-              ? "Prepare a dispute draft with the evidence and documentation requests attached."
-              : "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."}
+            {!findings.length
+              ? "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."
+              : insurerOnly
+                ? "The provider billed what your EOB says, so this is for your insurer. Prepare a letter asking it to reprocess the claim or explain how to appeal. Billy can also call them."
+                : "Prepare a dispute draft with the evidence and documentation requests attached."}
           </p>
           {findings.length > 0 && (
             <button
@@ -1001,7 +1007,7 @@ function AuditScreen({
               disabled={busy}
               onClick={onLetter}
             >
-              {busy ? "Preparing your draft…" : "Prepare my dispute draft →"}
+              {busy ? "Preparing your draft…" : insurerOnly ? "Prepare my letter to the insurer →" : "Prepare my dispute draft →"}
             </button>
           )}
           <a

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { computeVerdict, runAudit } from "@/lib/audit";
 import {
   draftDisputeLetter,
+  draftInsurerLetter,
   draftItemizedBillRequest,
 } from "@/lib/draft/letters";
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
@@ -572,7 +573,16 @@ export async function draftLetter(
   await getStore().saveFindings(caseId, merged);
   // The letter covers only issues still in question (withdrawn ones stay out).
   // The billing-office letter covers provider issues only; insurer issues go to the insurer.
-  const findings = merged.filter((f) => f.status !== "withdrawn" && f.contact !== "insurer");
+  const active = merged.filter((f) => f.status !== "withdrawn");
+  const findings = active.filter((f) => f.contact !== "insurer");
+  // Only insurer issues: the letter goes to the insurer instead of the billing office.
+  const forInsurer = active.filter((f) => f.contact === "insurer");
+  if (!findings.length && forInsurer.length && eob) {
+    const draft = draftInsurerLetter(bill, eob, forInsurer);
+    const documentId = await saveDraft(caseId, draft);
+    await getStore().addEvent(caseId, "letter_drafted", { kind: draft.kind, author: draft.author, documentId, findings: forInsurer.map((f) => f.id) });
+    return draft;
+  }
   if (!findings.length)
     throw new BadRequestError(
       "No potential issues were found, so there is nothing to dispute.",
