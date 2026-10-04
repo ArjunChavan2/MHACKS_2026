@@ -8,21 +8,21 @@
  * document so a demo never passes a fixture off as live (SPEC.md §2 rule 9).
  */
 import { useEffect, useMemo, useState } from "react";
+import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
 import type { ExtractionResult } from "@/lib/extract/pipeline";
-import type { AuditResponse, CaseView, IngestResponse } from "@/lib/cases/service";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
+import type {
+  AuditResponse,
+  CaseView,
+  IngestResponse,
+} from "@/lib/cases/service";
 import { fieldLabel, usd } from "@/lib/format";
 import CaseScreen from "./CaseScreen";
 import { describeSource } from "./sources";
-import type {
-  Draft,
-  ExtractedBill,
-  Field,
-  Finding,
-} from "@/lib/types";
+import type { Draft, ExtractedBill, Field, Finding } from "@/lib/types";
 
-/** Which screen is showing. */
-type Step = "start" | "confirm" | "audit" | "letter" | "request" | "case";
+/** Which screen is showing, including the saved-case tracking screen. */
+type Step = ReviewStep | "case";
 
 /** One uploaded document as tracked in the browser. */
 interface DocState {
@@ -101,8 +101,11 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
  * @throws {Error} With a patient-readable message when the case is missing or the request fails.
  */
 async function fetchCase(id: string): Promise<CaseView> {
-  const res = await fetch(`/api/cases/${encodeURIComponent(id)}`, { cache: "no-store" });
-  if (res.status === 404) throw new Error("That case wasn't found. Start a new one below.");
+  const res = await fetch(`/api/cases/${encodeURIComponent(id)}`, {
+    cache: "no-store",
+  });
+  if (res.status === 404)
+    throw new Error("That case wasn't found. Start a new one below.");
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "Couldn't load the case");
   return data as CaseView;
@@ -123,17 +126,6 @@ export default function BillAuditApp() {
   const [error, setError] = useState<string | null>(null);
 
   const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
-
-  // Keep the case ID in the URL so a reload or shared link resumes the case.
-  // Only ever adds the ID: on first load caseId is still null while the resume effect below reads
-  // ?case=, so deleting here would drop the link before it's used. "Start over" removes it.
-  useEffect(() => {
-    if (!caseId) return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("case") === caseId) return;
-    url.searchParams.set("case", caseId);
-    window.history.replaceState(null, "", url);
-  }, [caseId]);
 
   const usedSample = [bill, eob].some(
     (d) => d?.ingest.result.meta.source === "saved-fixture",
@@ -184,16 +176,34 @@ export default function BillAuditApp() {
   function applyCase(view: CaseView) {
     for (const d of view.documents) {
       const r = d.ingest.result;
-      // A revised statement belongs to the case screen, not the original bill slot.
+      // Revised statements belong to case tracking, not the original bill slot.
       if (r.kind === "bill" && r.bill.docType === "revised_statement") continue;
-      const state: DocState = { ingest: d.ingest, corrections: {}, confirmedPaths: [], ackTotals: false, confirmed: d.confirmed, blocking: [] };
+      const state: DocState = {
+        ingest: d.ingest,
+        corrections: {},
+        confirmedPaths: [],
+        ackTotals: false,
+        confirmed: d.confirmed,
+        blocking: [],
+      };
       if (r.kind === "eob") setEob(state);
       else setBill(state);
     }
     setAudit(view.audit);
     setDraft(view.draft);
-    const tracking = view.draft?.kind === "dispute_letter" && view.state.phase !== "audited" && view.state.phase !== "intake";
-    setStep(tracking ? "case" : view.draft ? "letter" : view.audit ? "audit" : "start");
+    const tracking =
+      view.draft?.kind === "dispute_letter" &&
+      view.state.phase !== "audited" &&
+      view.state.phase !== "intake";
+    setStep(
+      tracking
+        ? "case"
+        : view.draft
+          ? "letter"
+          : view.audit
+            ? "audit"
+            : "start",
+    );
   }
 
   // Resume a saved case named in the URL (?case=…) once, on first load.
@@ -214,6 +224,14 @@ export default function BillAuditApp() {
       cancelled = true;
     };
   }, []);
+
+  // Keep the case ID in the URL so a reload or shared link resumes the case.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!caseId || url.searchParams.get("case") === caseId) return;
+    url.searchParams.set("case", caseId);
+    window.history.replaceState(null, "", url);
+  }, [caseId]);
 
   /** Uploads a file through Gemini extraction. */
   async function upload(file: File) {
@@ -354,11 +372,14 @@ export default function BillAuditApp() {
           disabled={busy}
           onClick={reset}
           className="paper-wordmark"
-          aria-label="Billkind home"
+          aria-label="BillLess home"
         >
-          billkind /
+          Bill<span>Less</span>
+          <span className="billless-brand-dot">.</span>
         </button>
-        <p className="paper-header-label">Your medical bill, made clearer.</p>
+        <p className="paper-header-label">
+          A little less worry. A clearer next step.
+        </p>
         <span className="paper-badge">
           {usedSample ? "Synthetic demo" : "Patient workspace"}
         </span>
@@ -368,6 +389,16 @@ export default function BillAuditApp() {
           </button>
         )}
       </header>
+      {step !== "case" && <ReviewProgress step={step} />}
+      {step !== "case" && (
+        <BillyGuide
+          key={step}
+          step={step}
+          busy={busy}
+          error={Boolean(error)}
+          noFindings={step === "audit" && audit?.findings.length === 0}
+        />
+      )}
       {usedSample && (
         <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
           Sample document (synthetic data), read without AI from a saved answer.
@@ -396,14 +427,6 @@ export default function BillAuditApp() {
       )}
       {step === "confirm" && bill && (
         <section className="paper-flow space-y-6">
-          <div className="paper-page-heading">
-            <p className="paper-eyebrow">STEP 2 / CONFIRM DOCUMENTS</p>
-            <h2>Let’s get the details right.</h2>
-            <p>
-              Review the extracted values against your original documents before
-              we check the bill.
-            </p>
-          </div>
           <ConfirmPanel title="Your bill" doc={bill} onChange={setBill} />
           {eob && (
             <ConfirmPanel
@@ -452,7 +475,12 @@ export default function BillAuditApp() {
         </section>
       )}
       {step === "letter" && draft && (
-        <LetterScreen draft={draft} onTrack={draft.kind === "dispute_letter" ? () => setStep("case") : undefined} />
+        <LetterScreen
+          draft={draft}
+          onTrack={
+            draft.kind === "dispute_letter" ? () => setStep("case") : undefined
+          }
+        />
       )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
     </main>
@@ -482,97 +510,153 @@ function StartScreen(props: {
 }) {
   const { bill, eob, busy } = props;
   return (
-    <section className="paper-flow space-y-6">
-      <div className="paper-page-heading">
-        <p className="paper-eyebrow">A LITTLE CLARITY GOES A LONG WAY</p>
-        <h2>
-          Make sense of your
-          <br />
-          medical bill.
-        </h2>
-        <p>
-          Review your charges, see the evidence, and prepare your next step. You
-          stay in control.
-        </p>
+    <section className="paper-flow billless-upload-flow">
+      <div className="billless-upload-grid">
+        <UploadSlot
+          title="Your itemized bill"
+          label="Add your bill"
+          description="The bill from your hospital or provider, with individual charges."
+          ready={Boolean(bill)}
+          busy={busy}
+          onUpload={props.onUpload}
+        />
+        <UploadSlot
+          title="Insurance explanation"
+          label="Add an EOB"
+          description="Optional. Your explanation of benefits (EOB) shows what insurance paid and what you may owe."
+          ready={Boolean(eob)}
+          busy={busy}
+          optional
+          onUpload={props.onUpload}
+        />
       </div>
-      <div className="rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
-        <h2 className="text-lg font-semibold">What do you have?</h2>
-        <p className="mt-1 text-sm text-[var(--paper-muted)]">
-          Upload your itemized bill and, if you have it, the explanation of
-          benefits (EOB) from your insurer. A PDF works best; a clear photo
-          works too.
+      <div className="billless-continue-row">
+        <p className="paper-copy">
+          PDF or a clear photo.
+          <br />
+          <span className="text-sm">
+            Use synthetic documents for this demo.
+          </span>
         </p>
-        <label className="mt-4 block cursor-pointer rounded-lg border-2 border-dashed border-[var(--paper-border)] p-6 text-center text-sm text-[var(--paper-muted)] hover:bg-[var(--paper-surface)]">
-          {busy
-            ? "Reading your document…"
-            : "Tap to upload a bill, EOB, or statement"}
-          <input
-            type="file"
-            accept="application/pdf,image/*"
-            className="sr-only"
-            disabled={busy}
-            onChange={(e) =>
-              e.target.files?.[0] && props.onUpload(e.target.files[0])
-            }
-          />
-        </label>
-        <ul className="mt-4 space-y-1 text-sm">
-          <li>
-            Bill:{" "}
-            {bill ? (
-              <b>
-                {bill.ingest.result.kind === "bill"
-                  ? bill.ingest.result.bill.docType.replace("_", " ")
-                  : "?"}
-              </b>
-            ) : (
-              <span className="text-slate-400">not added</span>
-            )}
-          </li>
-          <li>
-            EOB:{" "}
-            {eob ? (
-              <b>added</b>
-            ) : (
-              <span className="text-slate-400">optional</span>
-            )}
-          </li>
-        </ul>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}
-          className="mt-4 w-full rounded-lg bg-[var(--paper-primary)] py-3 font-semibold text-white disabled:opacity-40"
+          className="paper-primary"
         >
-          Continue
+          {busy ? "Reading your document…" : "Continue to confirm →"}
         </button>
       </div>
-      <div className="rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
-        <h3 className="font-semibold">Try with sample documents (synthetic)</h3>
-        <div className="mt-3 flex flex-wrap gap-2 text-sm">
+      <div className="billless-trust-note">
+        <span aria-hidden="true">✓</span>
+        <p>
+          You review the details first. Nothing is sent or agreed to without
+          your approval.
+        </p>
+      </div>
+      <details className="billless-demo">
+        <summary>Just exploring? Try a synthetic demo</summary>
+        <div className="billless-demo-actions">
           <button
             disabled={busy}
             onClick={props.onDemo}
-            className="rounded-md bg-[var(--paper-primary)] px-3 py-2 text-white"
+            className="paper-secondary"
           >
             Sample bill + EOB
           </button>
           <button
             disabled={busy}
             onClick={() => props.onSample("balance-statement")}
-            className="rounded-md bg-[var(--paper-surface)] px-3 py-2"
+            className="paper-text-button"
           >
             Only a balance statement
           </button>
           <button
             disabled={busy}
             onClick={() => props.onSample("bill-broken-totals")}
-            className="rounded-md bg-[var(--paper-surface)] px-3 py-2"
+            className="paper-text-button"
           >
             Bill with broken totals
           </button>
         </div>
-      </div>
+      </details>
     </section>
+  );
+}
+
+/**
+ * A labeled upload slot with its document requirement and detected receipt status.
+ * @param props - Administrative display copy, ready/busy state, and the existing intake callback.
+ * @returns A keyboard-accessible file input. The server still identifies the document type.
+ * Does not interpret documents or bypass patient confirmation (SPEC.md §4.2).
+ */
+function UploadSlot({
+  title,
+  label,
+  description,
+  ready,
+  busy,
+  optional = false,
+  onUpload,
+}: {
+  /** Patient-facing document heading. */ title: string;
+  /** Accessible file-input action label. */ label: string;
+  /** Plain-language document description. */ description: string;
+  /** A document of this type has been received. */ ready: boolean;
+  /** An intake request is running. */ busy: boolean;
+  /** Whether the document can be omitted. */ optional?: boolean;
+  /** Existing server-backed upload action, called with the selected file. */ onUpload: (
+    file: File,
+  ) => void;
+}) {
+  return (
+    <div className={`billless-upload-slot ${ready ? "is-ready" : ""}`}>
+      <div className="billless-upload-slot-heading">
+        <span className="billless-document-icon" aria-hidden="true">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+            <path d="M14 3v6h6M8 13h8M8 17h5" />
+          </svg>
+        </span>
+        <span className="billless-slot-tag">
+          {optional ? "OPTIONAL" : "START HERE"}
+        </span>
+      </div>
+      <h2>{title}</h2>
+      <p className="paper-copy">{description}</p>
+      <label className="billless-dropzone">
+        <span className="billless-upload-plus" aria-hidden="true">
+          {ready ? "✓" : "+"}
+        </span>
+        <strong>
+          {busy ? "Reading document…" : ready ? "Document added" : label}
+        </strong>
+        <span>
+          {ready
+            ? "Choose another file to replace it"
+            : "Choose a PDF or photo"}
+        </span>
+        <input
+          type="file"
+          accept="application/pdf,image/*"
+          className="sr-only"
+          aria-label={label}
+          disabled={busy}
+          onChange={(event) => {
+            if (event.target.files?.[0]) onUpload(event.target.files[0]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+    </div>
   );
 }
 
@@ -775,10 +859,10 @@ function ConfirmPanel({
 function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
   if (origin === "live-sandbox") return " (live FinchNode sandbox, synthetic)";
   if (origin === "demo-api") return " (FinchNode demo API, synthetic)";
-  if (origin === "saved-snapshot") return " (saved FinchNode snapshot, synthetic)";
+  if (origin === "saved-snapshot")
+    return " (saved FinchNode snapshot, synthetic)";
   return "";
 }
-
 
 /**
  * Responsive Paper case review driven entirely by the server audit (SPEC.md §4.3–4.4).
@@ -828,14 +912,6 @@ function AuditScreen({
   return (
     <section className="space-y-8">
       <div className="paper-case-heading">
-        <div className="paper-page-heading">
-          <p className="paper-eyebrow">YOUR CASE / BILL REVIEW</p>
-          <h2>A clearer picture of your bill.</h2>
-          <p>
-            Review the findings and their sources before choosing your next
-            step.
-          </p>
-        </div>
         <span
           className={`paper-badge ${findings.length ? "paper-review-badge" : ""}`}
         >
@@ -882,12 +958,6 @@ function AuditScreen({
           </small>
         </div>
       </dl>
-      <nav className="paper-progress" aria-label="Case progress">
-        <span>✓ Uploaded</span>
-        <span>✓ Fields confirmed</span>
-        <strong aria-current="step">3. Review findings</strong>
-        <span>4. Review draft</span>
-      </nav>
       <div className="paper-workspace">
         <div className="paper-findings">
           {findings.length > 0 ? (
@@ -910,13 +980,7 @@ function AuditScreen({
                     </h4>
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
-                  <p className="paper-copy">{finding.explanation}</p>
-                  <p className="paper-copy">
-                    <strong className="text-[var(--paper-ink)]">
-                      What to ask:
-                    </strong>{" "}
-                    {finding.ask}
-                  </p>
+                  <p className="paper-copy">{finding.ask}</p>
                   <div className="paper-evidence">
                     Bill{" "}
                     {finding.lineNumbers.length
@@ -935,30 +999,33 @@ function AuditScreen({
                   >
                     {open === finding.id
                       ? "Hide evidence ↑"
-                      : "View original evidence →"}
+                      : "Explanation & evidence →"}
                   </button>
                   {open === finding.id && (
-                    <ul
+                    <div
                       id={`evidence-${finding.id}`}
-                      className="paper-evidence"
+                      className="billless-finding-details"
                     >
-                      {finding.sources.map((source, sourceIndex) => (
-                        <li key={sourceIndex}>
-                          <p>{describeSource(source)}</p>
-                          {source.kind === "bill_line" && (
-                            <a
-                              className="paper-text-button inline-flex items-center min-h-11"
-                              href={`/api/documents/${source.documentId}/file#page=${source.provenance.page ?? 1}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Open original bill · page{" "}
-                              {source.provenance.page ?? 1} ↗
-                            </a>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
+                      <p className="paper-copy">{finding.explanation}</p>
+                      <ul className="paper-evidence">
+                        {finding.sources.map((source, sourceIndex) => (
+                          <li key={sourceIndex}>
+                            <p>{describeSource(source)}</p>
+                            {source.kind === "bill_line" && (
+                              <a
+                                className="paper-text-button inline-flex items-center min-h-11"
+                                href={`/api/documents/${source.documentId}/file#page=${source.provenance.page ?? 1}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Open original bill · page{" "}
+                                {source.provenance.page ?? 1} ↗
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </article>
               ))}
@@ -1011,7 +1078,7 @@ function AuditScreen({
               disabled={busy}
               onClick={onLetter}
             >
-              {busy ? "Preparing your draft…" : "Review dispute draft →"}
+              {busy ? "Preparing your draft…" : "Prepare my dispute draft →"}
             </button>
           )}
           <a
@@ -1091,7 +1158,13 @@ function AuditScreen({
  * @param props.onTrack - Opens the case screen (dispute letters only).
  * @returns The letter screen.
  */
-function LetterScreen({ draft, onTrack }: { draft: Draft; onTrack?: () => void }) {
+function LetterScreen({
+  draft,
+  onTrack,
+}: {
+  draft: Draft;
+  onTrack?: () => void;
+}) {
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   /** Visible PDF failure; a failed request must never be downloaded as a document. */
@@ -1136,13 +1209,6 @@ function LetterScreen({ draft, onTrack }: { draft: Draft; onTrack?: () => void }
 
   return (
     <section className="paper-flow space-y-4">
-      <div className="paper-page-heading">
-        <p className="paper-eyebrow">STEP 4 / REVIEW YOUR DRAFT</p>
-        <h2>Your next step, in writing.</h2>
-        <p>
-          Inspect the evidence behind each paragraph, then download your letter.
-        </p>
-      </div>
       <div className="rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
         <p className="text-xs text-[var(--paper-muted)]">
           {draft.author === "llm"
@@ -1198,7 +1264,10 @@ function LetterScreen({ draft, onTrack }: { draft: Draft; onTrack?: () => void }
         Download PDF
       </button>
       {onTrack && (
-        <button onClick={onTrack} className="w-full rounded-lg py-3 font-semibold ring-1 ring-[var(--paper-border)]">
+        <button
+          onClick={onTrack}
+          className="w-full rounded-lg py-3 font-semibold ring-1 ring-[var(--paper-border)]"
+        >
           Track this case →
         </button>
       )}

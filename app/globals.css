@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* Values exported from the approved Paper desktop and mobile frames. */
-  --paper-primary: #173f35;
-  --paper-surface: #eff5f1;
-  --paper-ink: #18201d;
-  --paper-muted: #606b65;
-  --paper-border: #dde6e0;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* BillLess direction chosen with the patient-facing design interview. */
+  --font-heading:
+    "Nunito", ui-rounded, "Arial Rounded MT Bold", var(--font-sans);
+  --paper-primary: #214e83;
+  --paper-surface: #eef5fc;
+  --paper-ink: #203653;
+  --paper-muted: #586b82;
+  --paper-border: #dce6f0;
 }
 
 body {
   font-family: var(--font-sans);
-  background: #ffffff;
+  background: #fcfdfe;
   color: var(--paper-ink);
 }
 
@@ -56,9 +59,10 @@ button {
   margin-bottom: 32px;
 }
 .paper-wordmark {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
   color: var(--paper-primary);
   text-decoration: none;
 }
@@ -83,7 +87,7 @@ button {
   text-underline-offset: 4px;
 }
 .paper-flow {
-  max-width: 880px;
+  max-width: 960px;
   margin: 0 auto;
 }
 .paper-page-heading {
@@ -252,7 +256,7 @@ button {
   min-height: 50px;
 }
 .paper-primary:hover:not(:disabled) {
-  background: #245648;
+  background: #163b66;
 }
 .paper-primary:disabled {
   opacity: 0.5;
@@ -417,5 +421,440 @@ button {
   .paper-progress {
     gap: 12px;
     font-size: 12px;
+  }
+}
+
+/* Rounded type and a restrained blue palette keep the guide warm without changing evidence. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+}
+.paper-app {
+  max-width: 1280px;
+}
+.paper-wordmark > span:first-child {
+  color: #507baa;
+}
+.billless-brand-dot {
+  color: #eeac82;
+}
+.billless-progress {
+  max-width: 960px;
+  margin: 0 auto 32px;
+}
+.billless-progress ol {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.billless-progress li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  color: var(--paper-muted);
+  font-size: 14px;
+}
+.billless-progress li::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--paper-border);
+  margin-left: 12px;
+}
+.billless-progress li:last-child {
+  flex: 0 0 auto;
+}
+.billless-progress li:last-child::after {
+  display: none;
+}
+.billless-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--paper-border);
+  background: white;
+  border-radius: 50%;
+  font-size: 13px;
+}
+.billless-progress .is-current {
+  color: var(--paper-primary);
+  font-weight: 700;
+}
+.billless-progress .is-current .billless-step-number {
+  background: var(--paper-primary);
+  color: white;
+  border-color: var(--paper-primary);
+}
+.billless-progress .is-complete .billless-step-number {
+  background: var(--paper-surface);
+  color: var(--paper-primary);
+}
+.billless-intro {
+  max-width: 960px;
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  animation: billless-step-in 0.45s ease-out both;
+}
+.billless-intro > div:first-child {
+  max-width: 650px;
+}
+.billless-intro h1 {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+  padding: 12px 0 18px;
+}
+.billless-guide-message {
+  font-size: 17px;
+  line-height: 27px;
+  color: var(--paper-muted);
+  max-width: 590px;
+}
+.billless-billy-scene {
+  width: 190px;
+  height: 218px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+.billless-billy-scene::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 176px;
+  height: 176px;
+  border-radius: 50%;
+  background: #e7f1fb;
+  transform: rotate(-10deg);
+}
+.billless-billy {
+  object-fit: contain;
+  width: 155px;
+  height: 195px;
+  transform-origin: 50% 90%;
+  animation: billy-greeting 1s ease-in-out both;
+}
+.billless-billy-shadow {
+  position: absolute;
+  bottom: 11px;
+  width: 100px;
+  height: 10px;
+  border-radius: 50%;
+  background: #214e8310;
+  z-index: -1;
+}
+.billless-orbit {
+  position: absolute;
+  border-radius: 50%;
+  z-index: -1;
+}
+.billless-orbit-one {
+  width: 12px;
+  height: 12px;
+  top: 32px;
+  left: 9px;
+  background: #b9d8f5;
+}
+.billless-orbit-two {
+  width: 8px;
+  height: 8px;
+  right: 10px;
+  bottom: 44px;
+  background: #e7b48e;
+}
+.is-working .billless-billy {
+  animation: billy-working 1.1s ease-in-out infinite;
+}
+.billless-upload-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.billless-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.billless-upload-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--paper-border);
+  border-radius: 24px;
+  background: white;
+}
+.billless-upload-slot h2 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.billless-upload-slot > .paper-copy {
+  flex: 1;
+}
+.billless-upload-slot-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.billless-document-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper-surface);
+  color: var(--paper-primary);
+  border-radius: 14px;
+}
+.billless-slot-tag {
+  color: var(--paper-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.billless-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  border: 1px dashed #afc8e4;
+  border-radius: 16px;
+  color: var(--paper-primary);
+  background: #f8fbff;
+  cursor: pointer;
+  min-height: 158px;
+}
+.billless-dropzone:hover,
+.billless-dropzone:focus-within {
+  background: var(--paper-surface);
+  border-color: var(--paper-primary);
+}
+.billless-dropzone:focus-within {
+  outline: 3px solid var(--paper-primary);
+  outline-offset: 4px;
+}
+.billless-dropzone strong {
+  font-size: 16px;
+}
+.billless-dropzone > span:last-of-type {
+  font-size: 13px;
+  color: var(--paper-muted);
+}
+.billless-upload-plus {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 32px;
+}
+.is-ready .billless-dropzone {
+  border-style: solid;
+  background: var(--paper-surface);
+}
+.billless-continue-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+.billless-continue-row .paper-primary {
+  min-width: 280px;
+}
+.billless-trust-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--paper-muted);
+  padding: 16px;
+  background: var(--paper-surface);
+  border-radius: 14px;
+}
+.billless-trust-note > span {
+  color: var(--paper-primary);
+}
+.billless-demo {
+  padding-top: 6px;
+  text-align: center;
+  color: var(--paper-muted);
+  font-size: 14px;
+}
+.billless-demo summary {
+  min-height: 44px;
+  padding: 12px;
+}
+.billless-demo-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 12px;
+}
+.billless-finding-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.paper-finding,
+.paper-next,
+.paper-empty {
+  background: white;
+}
+.paper-finding h4 {
+  font-weight: 800;
+}
+.paper-primary,
+.paper-secondary {
+  border-radius: 14px;
+}
+.paper-primary {
+  box-shadow: 0 3px 0 #153456;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.paper-primary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #153456;
+}
+@keyframes billy-greeting {
+  0% {
+    transform: rotate(-7deg) translateY(7px);
+  }
+  45% {
+    transform: rotate(5deg) translateY(-5px);
+  }
+  75% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+@keyframes billy-working {
+  0%,
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-9px);
+  }
+}
+@keyframes billless-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 700px) {
+  .billless-progress {
+    margin-bottom: 24px;
+  }
+  .billless-progress ol {
+    gap: 8px;
+  }
+  .billless-progress li {
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 11px;
+    text-align: center;
+  }
+  .billless-progress li:last-child {
+    flex: 1;
+  }
+  .billless-progress li::after {
+    display: none;
+  }
+  .billless-intro {
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: flex-start;
+  }
+  .billless-intro h1 {
+    font-size: 32px;
+    line-height: 38px;
+    padding-top: 10px;
+  }
+  .billless-intro > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .billless-guide-message {
+    font-size: 16px;
+    line-height: 25px;
+  }
+  .billless-billy-scene {
+    width: 76px;
+    height: 115px;
+    margin-top: 24px;
+  }
+  .billless-billy-scene::before {
+    width: 76px;
+    height: 76px;
+  }
+  .billless-billy {
+    width: 74px;
+    height: 102px;
+  }
+  .billless-billy-shadow {
+    width: 44px;
+    bottom: 6px;
+  }
+  .billless-orbit {
+    display: none;
+  }
+  .billless-upload-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .billless-upload-slot {
+    padding: 22px;
+    border-radius: 20px;
+  }
+  .billless-continue-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .billless-continue-row .paper-primary {
+    width: 100%;
+    min-width: 0;
+  }
+  .billless-trust-note {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .billless-billy,
+  .is-working .billless-billy,
+  .billless-intro {
+    animation: none;
+  }
+  .paper-primary {
+    transition: none;
   }
 }
