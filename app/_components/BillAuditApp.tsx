@@ -964,14 +964,6 @@ function AuditScreen({
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
                   <p className="paper-copy">{finding.ask}</p>
-                  <div className="paper-evidence">
-                    Bill{" "}
-                    {finding.lineNumbers.length
-                      ? `line${finding.lineNumbers.length === 1 ? "" : "s"} ${finding.lineNumbers.join(", ")}`
-                      : "total"}{" "}
-                    · {finding.status.replaceAll("_", " ")} ·{" "}
-                    {finding.rule.replaceAll("_", " ")}
-                  </div>
                   <button
                     className="paper-source-button"
                     aria-expanded={open === finding.id}
