@@ -141,7 +141,7 @@ export default async function Home({
                 priority
               />
             </div>
-            <div className="billless-home-speech">We’re the baah-st!</div>
+            <div className="billless-home-speech">We goat this.</div>
           </div>
         </section>
         <section
