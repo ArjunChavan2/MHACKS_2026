@@ -188,7 +188,14 @@ export default function BillAuditApp() {
           ? "letter"
           : view.audit
             ? "audit"
-            : "start",
+            : view.documents.some(
+                  (d) =>
+                    !d.confirmed &&
+                    d.ingest.result.kind === "bill" &&
+                    d.ingest.result.bill.docType === "itemized_bill",
+                )
+              ? "confirm"
+              : "start",
     );
   }
 
@@ -345,7 +352,22 @@ export default function BillAuditApp() {
           eobId: eob?.ingest.documentId ?? null,
         }),
       );
+      applyCase(await fetchCase(caseId!));
+      setDraft(null);
       setStep("audit");
+    });
+  }
+
+  /** Reopens the same unsent case; the server invalidates outdated findings and letter drafts first. */
+  async function correctDetails() {
+    await run(async () => {
+      if (!caseId) return;
+      const view = await postJson<CaseView>(
+        `/api/cases/${encodeURIComponent(caseId)}/reopen`,
+        {},
+      );
+      applyCase(view);
+      setStep("confirm");
     });
   }
 
@@ -499,6 +521,7 @@ export default function BillAuditApp() {
           documentId={bill.ingest.documentId}
           busy={busy}
           onLetter={makeLetter}
+          onCorrect={correctDetails}
         />
       )}
       {step === "request" && bill && (
@@ -712,7 +735,7 @@ function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
  * Preserves rule explanations and verbatim evidence; never invents findings or savings.
  *
  * @param props.audit - Deterministic findings, searched providers, and amounts in integer cents.
- * @param props.bill - Extracted document used only for the original-document line table.
+ * @param props.bill - Stored document values used only for the inspection table; includes saved corrections.
  * @param props.documentId - Original bill document identifier for evidence preview links.
  * @param props.busy - Whether a draft request is running.
  * @param props.onLetter - Generates a draft for patient review; sends nothing.
@@ -724,10 +747,11 @@ function AuditScreen({
   documentId,
   busy,
   onLetter,
+  onCorrect,
 }: {
   /** Audit response from our server. */
   audit: AuditResponse;
-  /** Original extracted values, not a substitute for corrected audit inputs. */
+  /** Stored extracted values including saved corrections; the server computes audit inputs. */
   bill: ExtractedBill;
   /** Identifier of the original bill PDF or image. */
   documentId: string;
@@ -735,12 +759,14 @@ function AuditScreen({
   busy: boolean;
   /** Requests a draft without submitting it. */
   onLetter: () => void;
+  /** Reopens document confirmation and invalidates the current audit and draft. */
+  onCorrect: () => void;
 }) {
   /** Expanded evidence panel, or null when all are collapsed. */
   const [open, setOpen] = useState<string | null>(null);
   /** Server-produced monetary verdict and evidence-backed findings. */
   const { verdict, findings } = audit;
-  /** Maps original bill lines to server findings for inspection, without calculating flags. */
+  /** Maps bill lines to server findings for inspection, without calculating flags. */
   const flaggedLines = new Map<number, Finding[]>();
   for (const finding of findings) {
     for (const source of finding.sources) {
@@ -759,6 +785,15 @@ function AuditScreen({
           <span className="paper-badge">✓ Review complete</span>
         </div>
       )}
+      <div className="flex justify-end">
+        <button
+          className="paper-source-button"
+          disabled={busy}
+          onClick={onCorrect}
+        >
+          Correct bill or EOB details
+        </button>
+      </div>
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
@@ -930,15 +965,16 @@ function AuditScreen({
       </div>
       <details>
         <summary className="paper-source-button py-3">
-          Inspect original extracted line items
+          Inspect document values
         </summary>
         <p className="paper-copy py-3">
-          These are the original extracted values. Your confirmed corrections
-          are used by the audit.
+          These values include your saved corrections. The audit uses your
+          confirmed details. To fix a value, choose “Correct bill or EOB
+          details.”
         </p>
         <div className="paper-table-wrap">
           <table className="paper-table">
-            <caption>Original bill line items</caption>
+            <caption>Extracted bill line items</caption>
             <thead>
               <tr>
                 <th scope="col">Line</th>

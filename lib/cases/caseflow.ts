@@ -150,6 +150,7 @@ function disputeDoc(c: StoredCase): StoredDocument | null {
       .filter(
         (d) =>
           d.direction === "outgoing" &&
+          d.status !== "superseded" &&
           (d.draft as Draft | null)?.kind === "dispute_letter",
       )
       .at(-1) ?? null
@@ -189,7 +190,9 @@ export function snapshotOf(c: StoredCase): {
   const snapshot: CaseSnapshot = {
     preferences,
     hasConfirmedBill: Boolean(orig),
-    audited: c.events.some((e) => e.type === "audit_run"),
+    audited: c.events
+      .slice(c.events.findLastIndex((e) => e.type === "review_reopened") + 1)
+      .some((e) => e.type === "audit_run"),
     findings: c.findings,
     tasks,
     dispute: dispute
@@ -249,6 +252,8 @@ const IMESSAGE_REPLY_LABEL: Record<string, string> = {
  */
 function summarize(type: string, data: Record<string, unknown>): string {
   switch (type) {
+    case "review_reopened":
+      return "You reopened the document details; previous findings and drafts need a new review";
     case "document_received":
       return `Document received: ${String(data.fileName ?? data.docType ?? "file")}`;
     case "case_preferences_updated":

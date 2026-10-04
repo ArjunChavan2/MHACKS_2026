@@ -81,7 +81,7 @@ export default function ConfirmPanel({
     ([, f]) => f.verification === "needs_attention",
   );
   const verified = fields.filter(
-    ([, f]) => f.verification === "verified" && f.status !== "absent",
+    ([, f]) => f.verification !== "needs_attention",
   );
   const r = doc.ingest.result;
   const docIssues =
@@ -129,9 +129,8 @@ export default function ConfirmPanel({
         )}
       </div>
       <p className="mt-1 text-xs text-[var(--paper-muted)]">
-        {r.meta.textLayerChecked
-          ? "Values were cross-checked against the PDF's own text."
-          : "Photo or scan: please check every value carefully."}
+        Compare these values with your document. Saved corrections are included;
+        correct anything that was read incorrectly.
       </p>
       <iframe
         title={`${title} preview`}
@@ -219,7 +218,7 @@ export default function ConfirmPanel({
         aria-expanded={showVerified}
         onClick={() => setShowVerified((s) => !s)}
       >
-        {showVerified ? "Hide" : "Review"} {verified.length} verified values
+        {showVerified ? "Hide" : "Review"} {verified.length} document values
       </button>
       {showVerified && (
         <ul className="mt-2 divide-y divide-slate-100 text-sm">
@@ -228,7 +227,13 @@ export default function ConfirmPanel({
               <span className="text-[var(--paper-muted)]">
                 {fieldLabel(path)}
               </span>
-              <span className="font-mono">{f.raw}</span>
+              <input
+                className="min-w-0 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
+                aria-label={`Correct ${fieldLabel(path)}`}
+                value={doc.corrections[path] ?? f.raw ?? ""}
+                disabled={doc.confirmed}
+                onChange={(e) => correct(path, e.target.value)}
+              />
             </li>
           ))}
         </ul>

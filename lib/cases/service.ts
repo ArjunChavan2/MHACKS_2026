@@ -16,8 +16,12 @@ import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import {
   confirmBill,
   confirmEob,
+  rawOf,
   type ConfirmInput,
 } from "@/lib/extract/confirm";
+import { buildBill, buildEob } from "@/lib/extract/build";
+import type { RawBill, RawEob } from "@/lib/extract/schemas";
+import type { Field } from "@/lib/types";
 import { confirmDenial, denialFields } from "@/lib/extract/denial";
 import { evaluateDenial, type DenialEvaluation } from "@/lib/appeals/criteria";
 import {
@@ -331,7 +335,12 @@ export async function confirmDocument(
       return { ok: false, blocking: [err.message] };
     }
   }
-  await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
+  await store.saveDocument({
+    ...doc,
+    extraction: correctedExtraction(doc, input.corrections),
+    status: "confirmed",
+    confirmed: r.value,
+  });
   await store.addEvent(doc.caseId, "fields_confirmed", {
     documentId,
     corrected: Object.keys(input.corrections),
@@ -343,6 +352,112 @@ export async function confirmDocument(
     await verifyRevisedStatement(doc.caseId, documentId);
   if (attached) await resumeCaseDocument(doc.caseId, documentId);
   return { ok: true };
+}
+
+/** Rebuilds patient-corrected raw fields for later editing; original files and source snippets remain intact.
+ * @param doc - Stored bill or EOB.
+ * @param corrections - Patient-entered raw values validated by the confirmation routine.
+ * @returns The current extraction, with corrected values normalized through the existing builders.
+ */
+function correctedExtraction(
+  doc: StoredDocument,
+  corrections: ConfirmInput["corrections"],
+): unknown {
+  if (!Object.keys(corrections).length) return doc.extraction;
+  if (doc.docType === "eob") {
+    const e = doc.extraction as ExtractedEob;
+    return buildEob(
+      {
+        docType: "eob",
+        insurer: rawOf(e.insurer, "insurer", corrections),
+        claimNumber: rawOf(e.claimNumber, "claimNumber", corrections),
+        provider: rawOf(e.provider, "provider", corrections),
+        totalPatientResponsibility: rawOf(
+          e.totalPatientResponsibility,
+          "totalPatientResponsibility",
+          corrections,
+        ),
+        lines: e.lines.map((line, i) =>
+          Object.fromEntries(
+            Object.entries(line).map(([key, field]) => [
+              key,
+              rawOf(field as Field<unknown>, `lines.${i}.${key}`, corrections),
+            ]),
+          ),
+        ) as RawEob["lines"],
+      },
+      null,
+    );
+  }
+  if (doc.docType !== "itemized_bill") return doc.extraction;
+  const b = doc.extraction as ExtractedBill;
+  return buildBill(
+    {
+      docType: b.docType,
+      header: Object.fromEntries(
+        Object.entries(b.header).map(([key, field]) => [
+          key,
+          rawOf(field, `header.${key}`, corrections),
+        ]),
+      ) as RawBill["header"],
+      lines: b.lines.map((line, i) =>
+        Object.fromEntries(
+          Object.entries(line).map(([key, field]) => [
+            key,
+            rawOf(field as Field<unknown>, `lines.${i}.${key}`, corrections),
+          ]),
+        ),
+      ) as RawBill["lines"],
+    },
+    null,
+  );
+}
+
+/** Reopens an unsent review for corrections, preserving documents and superseded drafts in its history.
+ * Refuses cases with recorded approvals or correspondence so editing cannot rewrite an active dispute.
+ * @param caseId - Existing case whose bill and EOB should be reconfirmed.
+ * @returns Updated view with no current audit or draft.
+ */
+export async function reopenReview(caseId: string): Promise<CaseView> {
+  const store = getStore();
+  const c = await store.getCase(caseId);
+  if (!c) throw new BadRequestError("Unknown case");
+  if (
+    c.events.some((e) =>
+      [
+        "approval_recorded",
+        "dispute_sent",
+        "response_recorded",
+        "consent_given",
+        "call_recorded",
+        "document_requested",
+        "follow_up_sent",
+      ].includes(e.type),
+    )
+  )
+    throw new BadRequestError(
+      "This case already has recorded approvals or correspondence. Its confirmed documents cannot be reopened.",
+    );
+  const editable = c.documents.filter(
+    (d) =>
+      d.direction === "incoming" &&
+      ["itemized_bill", "eob"].includes(d.docType),
+  );
+  if (!editable.some((d) => d.docType === "itemized_bill"))
+    throw new BadRequestError("This case has no itemized bill to correct");
+  // Invalidate before unlocking: interrupted work must not leave an old letter available to send.
+  for (const d of c.documents.filter(
+    (d) => d.direction === "outgoing" && d.draft && d.status !== "superseded",
+  ))
+    await store.saveDocument({ ...d, status: "superseded" });
+  await store.addEvent(caseId, "review_reopened", {
+    documentIds: editable.map((d) => d.id),
+  });
+  await store.saveFindings(caseId, []);
+  for (const d of editable)
+    await store.saveDocument({ ...d, status: "extracted", confirmed: null });
+  await store.setCaseStatus(caseId, "intake");
+  return (await loadCase(caseId))!;
 }
 
 /**
@@ -643,7 +758,10 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
         ]
       : [];
   });
-  const lastAudit = c.events.filter((e) => e.type === "audit_run").at(-1)
+  const currentEvents = c.events.slice(
+    c.events.findLastIndex((e) => e.type === "review_reopened") + 1,
+  );
+  const lastAudit = currentEvents.filter((e) => e.type === "audit_run").at(-1)
     ?.data as
     | {
         findings: string[];
@@ -666,7 +784,9 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     };
   }
   const lastDraft = c.documents
-    .filter((d) => d.direction === "outgoing" && d.draft)
+    .filter(
+      (d) => d.direction === "outgoing" && d.status !== "superseded" && d.draft,
+    )
     .at(-1);
   return {
     caseId: c.id,
