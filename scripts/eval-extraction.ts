@@ -2,7 +2,8 @@
  * @file Live extraction eval (SPEC.md §5.7): runs real Gemini extraction on each fixture PDF and
  * compares every field's raw value with the expected reply, field by field.
  *
- * Requires `GEMINI_API_KEY`. Run with `npm run eval:extraction`. Prints per-document accuracy and
+ * Uses the active provider (`LLM_PROVIDER`; Grok when `XAI_API_KEY` is set, else Gemini) and needs
+ * its key. Run with `npm run eval:extraction`; `LLM_PROVIDER=gemini npm run eval:extraction` for Gemini. Prints per-document accuracy and
  * every mismatch; exits non-zero if any field differs. The prompt-injection bill must still report
  * the printed amount due. Add the scanned-PDF and phone-photo variants to `CASES` once someone
  * prints and photographs the sample bill (they need the same expected reply as `sample-bill`).

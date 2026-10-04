@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
+    "@napi-rs/canvas": "^1.0.10",
     "@neon/config": "^1.8.3",
     "@neon/env": "^1.5.0",
     "@neondatabase/serverless": "^1.2.0",
@@ -27,6 +28,7 @@
     "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "6.1.200",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "unpdf": "^1.8.1",

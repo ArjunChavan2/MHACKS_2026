@@ -36,11 +36,14 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
-  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 56 tests pass; build, lint, and types are clean.
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 59 tests pass; build, lint, and types are clean.
 - **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
   `gemini-3.5-flash` (including the prompt-injection bill), now the pinned default; the
   `gemini-flash-latest` alias kept failing with 503/429. `gemini-2.5-flash` returns 404 for new keys.
+- **Grok is now the default AI provider** (when `XAI_API_KEY` is set); Gemini stays for the judged
+  demo (`LLM_PROVIDER=gemini`, MLH Gemini prize). Grok passes the extraction eval 334/334; PDFs are
+  rendered to page images for it. Gemini's free tier is only 20 requests/day per project.
 - **Fixed tonight** (`23b4728`): Gemini calls now time out (60 s) and retry overload, rate limits,
   dropped connections, and timeouts, then return API 503 `ai_busy`; the classifier no longer
   rejects EOBs by counting the insurer as a billing entity; code type is inferred from code format.

@@ -486,7 +486,7 @@ external review filing, Fetch.ai agent, Capital One Nessie payment view, native 
 | Database | Neon Postgres + Drizzle ORM | Typed schema, serverless | Neon |
 | Login | Neon Auth if time allows, else one demo user | Strengthens Neon entry | Neon |
 | Records | FinchNode API, server-side, `USE_MOCK` switch | Evidence | FinchNode |
-| AI | Google Gemini API, only in `lib/llm/` (model: `gemini-3.5-flash`, pinned in one constant `GEMINI_MODEL`; decided 2026-10-03 after the live extraction eval: 334/334 fields, while the `gemini-flash-latest` alias kept returning 503/429 and can move without notice; rerun the extraction eval after any model change) | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini |
+| AI | Two providers behind one interface, only in `lib/llm/`: **Grok** (xAI, `grok-4.20-0309-non-reasoning`, constant `GROK_MODEL`) for everyday use, paid from the team's xAI credits; **Gemini** (`gemini-3.5-flash`, constant `GEMINI_MODEL`) kept for the judged demo and as a fallback. `LLM_PROVIDER` picks one; default is Grok when `XAI_API_KEY` is set. Grok reads images, not PDFs, so PDF pages are rendered to PNG (`lib/llm/pdfPages.ts`); the PDF text layer is never sent, keeping the cross-check independent. Both pass the live extraction eval 334/334 (2026-10-03/04). Gemini's free tier allows only 20 requests/day per project per model; the `gemini-flash-latest` alias kept returning 503/429. Rerun the eval after any model change | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini (demo must run on Gemini: `LLM_PROVIDER=gemini`) |
 | Rules | Pure TypeScript in `lib/audit/`, `lib/evidence/`, Vitest | Deterministic, cited findings | — |
 | PDF | `@react-pdf/renderer` | Letters | — |
 | Voice | ElevenLabs Conversational AI + Twilio; `ask_patient` server tool | Calls with patient control | ElevenLabs, MLH ElevenLabs |
@@ -689,7 +689,7 @@ Status is current as of 2026-10-03 night; update the Status column whenever a ru
 | MVP | Name | Target | Status | Demo on its own | Main prizes it unlocks |
 |---|---|---|---|---|---|
 | 0 | Walking skeleton | H0–H2 | **Mostly done** (left: deploy, real FinchNode fixtures, CI) | Deployed URL with a seeded case and fixture evidence | — |
-| 1 | Cited bill audit | H2–H6 | **Built**; live Gemini eval passes; Neon live (data persists, `?case=` reload); audit/test phases pending | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
+| 1 | Cited bill audit | H2–H6 | **Built**; live eval passes on Gemini and Grok; Neon live (data persists, `?case=` reload); audit/test phases pending | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
 | 2 | Adaptive case with live records | H6–H11 | Not started | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
 | 3 | Patient in the loop on iMessage | H11–H14 | Not started | MVP 2 driven from iMessage, with "why?" answers and approvals | Photon |
 | 4 | Live patient-controlled call (**core demo**) | H14–H19 | Not started | MVP 3 plus a live phone call with an unannounced obstacle, mid-call choices, Take over | ElevenLabs, MLH ElevenLabs |
@@ -949,7 +949,7 @@ Verified from the MHacks Tracks & Prizes page and Devpost on 2026-10-03.
 | MLH ElevenLabs | Earbuds | Use ElevenLabs | 4 | — |
 | Photon | $400 + credits + interview fast-track / $200 + credits | Spectrum connected to iMessage; agent in human conversation | 3 | Must be iMessage |
 | Neon | $1,000 / $500 / $100 AI Gateway credits | Neon backend used fully | 1+ (Auth in 6) | — |
-| MLH Gemini | Swag | Use Gemini API | 1 | Describe extraction + drafting |
+| MLH Gemini | Swag | Use Gemini API | 1 | Describe extraction + drafting; record and judge the demo with `LLM_PROVIDER=gemini` and a fresh free key |
 | Notability | 1 year Pro + merch | Use Notability Pro; tag it; note + 2 screenshots | 6 | Save screenshots while planning |
 | MLH .Tech | Mic + domain | .tech domain | 6 | Register after naming |
 | Figma Best Design | LEGO set / merch | Best design | 6 | Only if designed in Figma |
@@ -1030,7 +1030,7 @@ Verified from finchnode.com on 2026-10-02 plus workshop notes.
     actual start time and the Devpost submission deadline here and shift §6 targets accordingly.
 13. **Owners (unconfirmed):** assign real names to Dev 1–4 in §6.
 14. **Repo access:** add every teammate as a collaborator on the private GitHub repo.
-15. ~~**Gemini model**~~ Decided: `gemini-3.5-flash`, pinned (§5.1). Switched from the `gemini-flash-latest` alias after it failed the live eval with 503/429.
+15. ~~**AI model**~~ Decided (§5.1): Grok `grok-4.20-0309-non-reasoning` for development (xAI credits; Gemini's free tier is 20 requests/day and paid billing needed a $30 prepay), Gemini `gemini-3.5-flash` pinned for the judged demo so the MLH Gemini entry holds. Switch with `LLM_PROVIDER`.
 16. **Archived Google Doc tabs:** keep "Demo Flow (archived)" and "Stack (archived)" for reference
     or delete them to prevent edits to the old copy.
 

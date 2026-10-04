@@ -70,12 +70,13 @@ fi
 say "4/5 Verify Neon"
 npm run --silent db:check || { echo "Database check failed (see above). Wrong or expired DATABASE_URL?"; exit 1; }
 
-say "5/5 Gemini (optional)"
-if [ -n "$(env_value GEMINI_API_KEY)" ]; then
-  echo "GEMINI_API_KEY set: real uploads work"
+say "5/5 AI keys (optional)"
+if [ -n "$(env_value XAI_API_KEY)" ] || [ -n "$(env_value GEMINI_API_KEY)" ]; then
+  [ -n "$(env_value XAI_API_KEY)" ] && echo "XAI_API_KEY set: real uploads use Grok by default"
+  [ -n "$(env_value GEMINI_API_KEY)" ] && echo "GEMINI_API_KEY set: LLM_PROVIDER=gemini uses Gemini"
 else
-  echo "GEMINI_API_KEY not set: the sample bill flow works; real uploads need a key from"
-  echo "https://aistudio.google.com/apikey added to $ENV_FILE as GEMINI_API_KEY=..."
+  echo "No AI key: the sample bill flow works; real uploads need XAI_API_KEY (console.x.ai) or"
+  echo "GEMINI_API_KEY (https://aistudio.google.com/apikey) in $ENV_FILE"
 fi
 
 say "Ready. Start the app with: npm run dev"

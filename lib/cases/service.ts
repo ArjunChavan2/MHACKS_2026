@@ -12,6 +12,7 @@ import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
 import { getRecords, providersOf } from "@/lib/finchnode";
+import { llmConfigured } from "@/lib/llm";
 import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
 
@@ -106,7 +107,7 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
  * @param bytes - File bytes.
  * @returns The ingest response.
  * @throws {BadRequestError} For unsupported file types.
- * @throws {import("@/lib/llm").LlmUnavailableError} When no Gemini key is set.
+ * @throws {import("@/lib/llm").LlmUnavailableError} When the active AI provider's key is not set.
  */
 export async function ingestUpload(caseId: string | null, fileName: string, mimeType: string, bytes: Uint8Array): Promise<IngestResponse> {
   const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -212,7 +213,7 @@ export async function draftLetter(caseId: string, billId: string, eobId: string 
   const records = getRecords();
   const { findings } = runAudit(bill, eob, records, providersOf(records));
   if (!findings.length) throw new BadRequestError("No potential issues were found, so there is nothing to dispute.");
-  const draft = await draftDisputeLetter(bill, findings, process.env.GEMINI_API_KEY ? undefined : null);
+  const draft = await draftDisputeLetter(bill, findings, llmConfigured() ? undefined : null);
   const documentId = await saveDraft(caseId, draft);
   await getStore().setCaseStatus(caseId, "letter_drafted");
   await getStore().addEvent(caseId, "letter_drafted", { kind: draft.kind, author: draft.author, documentId, findings: findings.map((f) => f.id) });

@@ -9,8 +9,9 @@
 import { PDFDocument } from "pdf-lib";
 import {
   DOCUMENT_SYSTEM_INSTRUCTION,
-  GEMINI_MODEL,
+  llmProvider,
   PROMPT_VERSION,
+  activeModel,
   generateJson,
   type FilePart,
   type LlmClient,
@@ -45,8 +46,8 @@ export interface ExtractionMeta {
   textLayerChecked: boolean;
   /** Raw model replies, in call order. */
   rawReplies: string[];
-  /** "gemini" for live extraction, "saved-fixture" for the labeled no-AI path. */
-  source: "gemini" | "saved-fixture";
+  /** The provider for live extraction ("grok" or "gemini"), "saved-fixture" for the labeled no-AI path. */
+  source: "gemini" | "grok" | "saved-fixture";
 }
 
 /** Result of extracting one uploaded document. */
@@ -148,12 +149,12 @@ export async function extractDocument(file: FilePart, client?: LlmClient): Promi
   const layer: TextLayer = isPdf ? await readTextLayer(file.bytes) : null;
   const rawReplies: string[] = [];
   const meta = (): ExtractionMeta => ({
-    model: GEMINI_MODEL,
+    model: activeModel(),
     promptVersion: PROMPT_VERSION,
     schemaVersion: SCHEMA_VERSION,
     textLayerChecked: layer !== null,
     rawReplies,
-    source: "gemini",
+    source: llmProvider(),
   });
 
   const c = await classify(file, client);

@@ -38,3 +38,9 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
 - **`gemini-flash-latest` alias kept failing with 503/429** during the live eval while
   `gemini-3.5-flash` passed 334/334 fields. Fix: default pinned to `gemini-3.5-flash` in `lib/llm/index.ts`.
   `gemini-2.5-flash` returns 404 for new keys.
+- **Gemini 429 "quota exceeded … limit: 20".** Free tier is 20 requests/day per project per model.
+  Fix: Grok provider (`lib/llm/grok.ts`) is the default when `XAI_API_KEY` is set.
+- **`The API version "6.4.299" does not match the Worker version "6.1.200"`** when rendering PDFs
+  for Grok. `unpdf` bundles PDF.js 6.1.200; a newer `pdfjs-dist` clashes. Fix: `pdfjs-dist` pinned
+  to exactly the version `unpdf` expects (check `node_modules/unpdf/package.json` before upgrading).
+- **New Gemini keys start with `AQ.`**, not `AIza`; that's Google's new format, not a wrong key.

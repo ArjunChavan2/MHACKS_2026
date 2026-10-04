@@ -36,7 +36,7 @@ export function errorResponse(err: unknown): Response {
   if (err instanceof BadRequestError) return Response.json({ error: "bad_request", message: err.message }, { status: 400 });
   if (err instanceof LlmUnavailableError) {
     return Response.json(
-      { error: "no_ai", message: "AI reading isn't configured (GEMINI_API_KEY). Use a sample document instead." },
+      { error: "no_ai", message: `AI reading isn't configured (${err.envVar}). Use a sample document instead.` },
       { status: 503 },
     );
   }

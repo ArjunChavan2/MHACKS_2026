@@ -1,21 +1,64 @@
 /**
- * @file The only code that talks to Gemini (SPEC.md §5.1, §5.3).
+ * @file The only code that talks to AI models (SPEC.md §5.1, §5.3).
  *
- * Exposes `generateJson`: send instructions plus optional file parts, require JSON matching a
- * schema, validate the reply with zod, retry once on invalid output, then fail visibly
- * (SPEC.md §5.6). Temperature is fixed at 0 for extraction (SPEC.md §4.2 step 3). The model is
- * pinned in one constant (SPEC.md §12, open decision 15).
+ * Two providers sit behind one `LlmClient` interface: Grok (xAI, `./grok.ts`) and Gemini (Google).
+ * `llmProvider()` picks one from `LLM_PROVIDER`, defaulting to Grok when `XAI_API_KEY` is set
+ * (SPEC.md §12, open decision 15). Exposes `generateJson`: send instructions plus optional file
+ * parts, require JSON matching a schema, validate the reply with zod, retry once on invalid output,
+ * then fail visibly (SPEC.md §5.6). Temperature is fixed at 0 for extraction (SPEC.md §4.2 step 3).
+ * Each provider's model is pinned in one constant.
  */
 import { GoogleGenAI } from "@google/genai";
 import type { z } from "zod";
+import { grokClient } from "./grok";
+import { REQUEST_TIMEOUT_MS, withRetry } from "./retry";
 
 /**
- * Gemini model used everywhere. Override with `GEMINI_MODEL`. Pinned in one place so the team can
+ * Gemini model used when the provider is Gemini. Override with `GEMINI_MODEL`. Pinned in one place so the team can
  * change it without touching callers. Pinned to `gemini-3.5-flash` (decided 2026-10-03, SPEC.md §5.1):
  * it passed the live extraction eval 334/334, while the `gemini-flash-latest` alias kept returning
  * 503/429 and can move to a different model without notice. Rerun `npm run eval:extraction` after any change.
  */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
+/**
+ * Grok model used when the provider is Grok. Override with `XAI_MODEL`. Non-reasoning (fast, cheap)
+ * and accepts images, which is how PDFs reach it (pages are rendered to PNG in `./pdfPages.ts`).
+ */
+export const GROK_MODEL = process.env.XAI_MODEL || "grok-4.20-0309-non-reasoning";
+
+/** The model providers the app can use. */
+export type LlmProvider = "gemini" | "grok";
+
+/**
+ * Which provider to use: `LLM_PROVIDER` if set to "gemini" or "grok", otherwise Grok when
+ * `XAI_API_KEY` is set, otherwise Gemini.
+ *
+ * @returns The active provider.
+ */
+export function llmProvider(): LlmProvider {
+  const p = process.env.LLM_PROVIDER;
+  if (p === "gemini" || p === "grok") return p;
+  return process.env.XAI_API_KEY ? "grok" : "gemini";
+}
+
+/**
+ * The model name of the active provider, stored with every extraction for traceability.
+ *
+ * @returns e.g. "grok-4.20-0309-non-reasoning" or "gemini-3.5-flash".
+ */
+export function activeModel(): string {
+  return llmProvider() === "grok" ? GROK_MODEL : GEMINI_MODEL;
+}
+
+/**
+ * Whether the active provider has an API key, so AI features (reading uploads, drafting) can run.
+ *
+ * @returns True when the active provider's key is set.
+ */
+export function llmConfigured(): boolean {
+  return Boolean(llmProvider() === "grok" ? process.env.XAI_API_KEY : process.env.GEMINI_API_KEY);
+}
 
 /** Version tag for prompts, stored with every extraction for traceability (SPEC.md §4.2 step 9). */
 export const PROMPT_VERSION = "extract-v1";
@@ -51,10 +94,10 @@ export interface GenerateJsonResult<T> {
   model: string;
 }
 
-/** Thrown when no Gemini API key is configured. Callers fall back to the no-AI path. */
+/** Thrown when the active provider's API key is not configured. Callers fall back to the no-AI path. */
 export class LlmUnavailableError extends Error {
-  constructor() {
-    super("GEMINI_API_KEY is not set.");
+  constructor(public readonly envVar: string = "GEMINI_API_KEY") {
+    super(`${envVar} is not set.`);
     this.name = "LlmUnavailableError";
   }
 }
@@ -67,62 +110,7 @@ export class LlmInvalidOutputError extends Error {
   }
 }
 
-/** Thrown when Gemini stays overloaded, rate-limited, or unreachable after retries (`status` 0 = network/timeout). */
-export class LlmBusyError extends Error {
-  constructor(public readonly status: number) {
-    super(`Gemini is temporarily unavailable (${status ? `HTTP ${status}` : "network error or timeout"}).`);
-    this.name = "LlmBusyError";
-  }
-}
-
-/** HTTP statuses worth retrying: rate limits and temporary server overload. */
-const RETRYABLE = new Set([429, 500, 503, 504]);
-
-/**
- * Whether an error is a dropped or failed network connection (e.g. ECONNRESET on flaky Wi-Fi).
- *
- * @param err - Thrown value.
- * @returns True for fetch failures, request timeouts (aborts), and common socket error codes.
- */
-export function isNetworkError(err: unknown): boolean {
-  const codes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"]);
-  const e = err as { name?: string; message?: string; code?: string; cause?: { code?: string } } | null;
-  return Boolean(
-    e &&
-      (e.name === "AbortError" || e.name === "TimeoutError" || e.message === "fetch failed" ||
-        codes.has(e.code ?? "") || codes.has(e.cause?.code ?? "")),
-  );
-}
-
-/** Per-attempt request timeout in milliseconds; a hung request is aborted and retried. */
-export const REQUEST_TIMEOUT_MS = 60_000;
-
-/** Backoff delays in milliseconds between retries of a temporary error. */
-export const RETRY_DELAYS_MS = [1500, 4000, 9000];
-
-/**
- * Runs a request, retrying temporary Gemini errors with backoff.
- *
- * Side effects: waits between attempts.
- *
- * @param fn - The request.
- * @param delays - Backoff schedule (injectable for tests).
- * @returns The request's result.
- * @throws {LlmBusyError} When every attempt hits a retryable status or network error (status 0 for network).
- * @throws The original error for non-retryable failures.
- */
-export async function withRetry<T>(fn: () => Promise<T>, delays: number[] = RETRY_DELAYS_MS): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const status = typeof err === "object" && err !== null && "status" in err ? Number((err as { status: unknown }).status) : NaN;
-      if (!RETRYABLE.has(status) && !isNetworkError(err)) throw err;
-      if (attempt >= delays.length) throw new LlmBusyError(Number.isNaN(status) ? 0 : status);
-      await new Promise((r) => setTimeout(r, delays[attempt]));
-    }
-  }
-}
+export { LlmBusyError, REQUEST_TIMEOUT_MS, RETRY_DELAYS_MS, isNetworkError, withRetry } from "./retry";
 
 /** Minimal client interface so tests can inject a fake model. */
 export interface LlmClient {
@@ -145,7 +133,7 @@ export interface LlmClient {
  */
 export function geminiClient(): LlmClient {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new LlmUnavailableError();
+  if (!apiKey) throw new LlmUnavailableError("GEMINI_API_KEY");
   const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: REQUEST_TIMEOUT_MS } });
   return {
     async complete(args) {
@@ -169,12 +157,22 @@ export function geminiClient(): LlmClient {
 }
 
 /**
+ * Creates the client for the active provider (`llmProvider()`).
+ *
+ * @returns A Grok or Gemini `LlmClient`.
+ * @throws {LlmUnavailableError} When the active provider's API key is not set.
+ */
+export function defaultClient(): LlmClient {
+  return llmProvider() === "grok" ? grokClient() : geminiClient();
+}
+
+/**
  * Asks the model for JSON, validates it, and retries once on invalid output.
  *
- * Side effects: network calls to Gemini (through `client`).
+ * Side effects: network calls to the model provider (through `client`).
  *
  * @param args - Instructions, files, and schemas.
- * @param client - Model client; defaults to the real Gemini client.
+ * @param client - Model client; defaults to the active provider's client (`defaultClient`).
  * @returns The validated value and the raw reply text.
  * @throws {LlmUnavailableError} When no API key is configured and no client is given.
  * @throws {LlmInvalidOutputError} When the reply fails JSON parsing or zod validation twice.
@@ -183,7 +181,7 @@ export function geminiClient(): LlmClient {
  */
 export async function generateJson<T>(
   args: GenerateJsonArgs<T>,
-  client: LlmClient = geminiClient(),
+  client: LlmClient = defaultClient(),
 ): Promise<GenerateJsonResult<T>> {
   const { validator, ...request } = args;
   let lastError = "";
@@ -191,7 +189,7 @@ export async function generateJson<T>(
     const rawText = await client.complete(request);
     try {
       const parsed = validator.safeParse(JSON.parse(rawText));
-      if (parsed.success) return { value: parsed.data, rawText, model: GEMINI_MODEL };
+      if (parsed.success) return { value: parsed.data, rawText, model: activeModel() };
       lastError = parsed.error.message;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
