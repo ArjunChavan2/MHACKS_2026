@@ -491,25 +491,7 @@ export default function BillAuditApp() {
           </button>
         )}
       </header>
-      <nav
-        className="paper-flow billless-back-navigation"
-        aria-label="Previous screen"
-      >
-        {step === "start" ? (
-          <Link href="/" className="paper-source-button">
-            ← Back to home
-          </Link>
-        ) : (
-          <button
-            type="button"
-            className="paper-source-button"
-            disabled={busy}
-            onClick={goBack}
-          >
-            ← {backLabel}
-          </button>
-        )}
-      </nav>
+
       {step !== "case" && <ReviewProgress step={step} />}
       {step !== "case" && (
         <BillyGuide
@@ -553,13 +535,13 @@ export default function BillAuditApp() {
           bill={bill}
           eob={eob}
           busy={busy}
+          processingFile={processingFile}
           onUpload={upload}
           onSample={loadSample}
           onDemo={loadDemoPair}
           onNext={next}
         />
       )}
-      {processingFile && <ProcessingStatus filename={processingFile} />}
       {step === "confirm" && bill && (
         <section className="paper-flow space-y-6">
           <ConfirmPanel title="Your bill" doc={bill} onChange={setBill} />
@@ -647,6 +629,25 @@ export default function BillAuditApp() {
         />
       )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
+      <nav
+        className="paper-flow billless-back-navigation"
+        aria-label="Previous screen"
+      >
+        {step === "start" ? (
+          <Link href="/" className="paper-secondary">
+            ← Back to home
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="paper-secondary"
+            disabled={busy}
+            onClick={goBack}
+          >
+            ← {backLabel}
+          </button>
+        )}
+      </nav>
     </main>
   );
 }
@@ -667,6 +668,8 @@ function StartScreen(props: {
   bill: DocState | null;
   eob: DocState | null;
   busy: boolean;
+  /** Active upload filename; replaces readiness text while the file is processed. */
+  processingFile: string | null;
   onUpload: (f: File) => void;
   onSample: (name: string) => void;
   onDemo: () => void;
@@ -696,17 +699,23 @@ function StartScreen(props: {
       </div>
       <div className="billless-continue-row">
         <div className="billless-action-progress">
-          <p>
-            {bill
-              ? "Your bill is ready to confirm"
-              : "Add your bill to continue"}
-          </p>
-          <progress
-            aria-label="Upload preparation progress"
-            max={1}
-            value={bill ? 1 : 0}
-          />
-          <small>{eob ? "Bill and EOB added" : "EOB optional"}</small>
+          {props.processingFile ? (
+            <ProcessingStatus filename={props.processingFile} inline />
+          ) : (
+            <>
+              <p>
+                {bill
+                  ? "Your bill is ready to confirm"
+                  : "Add your bill to continue"}
+              </p>
+              <progress
+                aria-label="Upload preparation progress"
+                max={1}
+                value={bill ? 1 : 0}
+              />
+              <small>{eob ? "Bill and EOB added" : "EOB optional"}</small>
+            </>
+          )}
         </div>
         <button
           disabled={!bill || busy}
