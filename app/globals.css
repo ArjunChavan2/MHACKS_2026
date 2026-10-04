@@ -1643,3 +1643,7 @@ h4 {
 .billless-processing-panel { margin-block: 20px; padding: 20px; border-radius: 16px; background: var(--paper-sky, #eef5fc); overflow-wrap: anywhere; }
 .billless-case-document-row { display: flex; justify-content: space-between; gap: 16px; overflow-wrap: anywhere; }
 @media (max-width: 700px) { .billless-case-document-row { flex-direction: column; gap: 4px; } .billless-preferences-panel { padding: 16px; } }
+
+/* Keep corrections beside the findings count, wrapping when space is limited. */
+.billless-findings-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.billless-findings-heading h3 { margin: 0; }
