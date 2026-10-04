@@ -195,7 +195,7 @@ export default function BillAuditApp() {
     setAudit(view.audit);
     setDraft(view.draft);
     const tracking =
-      view.draft?.kind === "dispute_letter" &&
+      (view.draft?.kind === "dispute_letter" || view.draft?.kind === "appeal_letter") &&
       view.state.phase !== "audited" &&
       view.state.phase !== "intake";
     setStep(
@@ -592,7 +592,7 @@ export default function BillAuditApp() {
         <LetterScreen
           draft={draft}
           onTrack={
-            draft.kind === "dispute_letter" ? () => setStep("case") : undefined
+            draft.kind === "dispute_letter" || draft.kind === "appeal_letter" ? () => setStep("case") : undefined
           }
         />
       )}
@@ -1120,10 +1120,7 @@ function LetterScreen({
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download =
-        draft.kind === "dispute_letter"
-          ? "dispute-letter.pdf"
-          : "itemized-bill-request.pdf";
+      a.download = `${draft.kind.replaceAll("_", "-")}.pdf`;
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (error) {
