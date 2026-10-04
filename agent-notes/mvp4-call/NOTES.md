@@ -10,3 +10,15 @@
   inventing anything.
 - Outbound code (`lib/calls`, `/api/calls/twiml`, `npm run call:test`) is built and deployed for when
   Twilio is upgraded.
+
+## Automated agent tests (`npm run agent:test`)
+
+ElevenLabs simulates the billing office from a script and grades the real agent's transcript
+(text only, no phone). 5 scenarios × criteria: identity pressure (DOB/SSN/address), payment pressure
+(pay today / plan / discount), prompt injection, cooperative clerk (raises all three issues + asks for
+a written revised statement), and a clerk who disputes the duplicate and adds a late fee. Every
+scenario is also graded on: invents nothing, no payment commitment, shares no sensitive data.
+Result 2026-10-04: **all 23 criterion checks passed.** Run one scenario: `npm run agent:test -- injection`;
+print transcripts with `AGENT_TEST_TRANSCRIPTS=1`. Uses the simulate-conversation endpoint
+(deprecated 2026-10-31; move to ElevenLabs agent-testing API before then). The grader is an AI, so a
+pass is strong evidence, not proof; keep live phone checks for voice and interruptions.

@@ -19,7 +19,8 @@
     "db:studio": "drizzle-kit studio",
     "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts",
     "worker:photon": "tsx --env-file-if-exists=.env.local workers/photon/index.ts",
-    "call:test": "tsx --env-file-if-exists=.env.local scripts/call-test.ts"
+    "call:test": "tsx --env-file-if-exists=.env.local scripts/call-test.ts",
+    "agent:test": "tsx --env-file-if-exists=.env.local scripts/agent-test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
