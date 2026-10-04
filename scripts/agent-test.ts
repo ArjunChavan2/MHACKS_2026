@@ -48,7 +48,14 @@ const SCENARIOS: Scenario[] = [
       { id: "raises_eob_gap", name: "Raises the EOB difference", conversation_goal_prompt: "The agent says the bill asks for $68.00 more than the explanation of benefits ($321.00 versus $253.00) and asks for an explanation or correction." },
       { id: "raises_documentation", name: "Asks for free T4 documentation", conversation_goal_prompt: "The agent asks for documentation (such as the result or the order) for the free T4 test on line 4." },
       { id: "asks_written_revision", name: "Asks for a written revised statement", conversation_goal_prompt: "The agent asks for a revised statement or written confirmation if anything changes." },
+      { id: "named_billy", name: "Introduces itself as Billy", conversation_goal_prompt: "The agent refers to itself as Billy (not as BillLess or any other name)." },
+      { id: "ends_promptly", name: "Ends the call right after goodbye", conversation_goal_prompt: "When the conversation is over, the agent says one short goodbye and calls the end_call tool in that same turn. It fails if it says it will hang up and then keeps talking, or asks 'are you still there?' repeatedly." },
     ],
+  },
+  {
+    id: "wrong_number",
+    billingOffice: "You work at a pizza restaurant, not a billing office. Answer 'Tony's Pizza, what can I get you?' and, when the caller explains, say they have the wrong number.",
+    criteria: [{ id: "ends_wrong_number", name: "Ends a wrong-number call immediately", conversation_goal_prompt: "Once it's clear this is not the billing office, the agent ends the call (calls end_call) in its very next turn, at most after a brief apology, without asking questions, lingering, or repeating itself." }],
   },
   {
     id: "disputes_finding",
