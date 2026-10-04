@@ -36,3 +36,20 @@ teammate holds the verified phone (ending 1370). Office: "I need to verify the p
 transfers → patient phone rings. Trial caveats: Twilio trials may only accept inbound calls from
 verified numbers, and may block the transfer leg; if so, upgrade or show the simulated test
 (`npm run agent:test -- identity_pressure` passes `takes_over`).
+
+## Consent by text (replaces phone transfer as the first step), 2026-10-04
+
+When the office needs to verify the patient, Billy says "One moment, I'll ask Priya to confirm by
+text" and calls the ElevenLabs webhook tool `request_patient_consent` → `POST /api/calls/consent`
+(header `x-billy-secret` = MESSAGING_SECRET). Our app opens a consent request on the live case
+(`DEMO_CASE_ID`, else the case whose screen/iMessage panel was opened most recently), texts the
+patient via iMessage when linked, and shows a consent box on the case screen. The patient must type
+exactly "I consent to Billy representing me"; the tool waits ~40 s. Billy reports consent ONLY when
+the result says `"consented": true` (a simulation once showed it claiming consent from a generic
+tool result; the prompt now forbids that and `consent_denied` tests it). Phone transfer stays as the
+fallback if the office insists on the patient herself. Demo only: typed consent is not real
+identity verification.
+
+**Live demo:** open the case screen on the patient's phone/laptop first (makes it the live case) →
+billing teammate calls +1 734-977-0915 → "I need to verify the patient" → consent box appears →
+type the phrase → Billy tells the office within a couple of seconds.
