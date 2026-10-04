@@ -24,11 +24,14 @@ export function checkWorkerAuth(req: Request): Response | null {
 }
 
 /**
- * The origin used in case links sent by text: `APP_URL` if set, else the request's own origin.
+ * The origin used in case links sent by text: `PUBLIC_APP_URL` if set (the patient-facing domain,
+ * e.g. https://billless.tech), else `APP_URL` (which the call code also uses for Twilio callbacks),
+ * else the request's own origin (whatever host the worker called).
  *
  * @param req - Incoming request.
- * @returns e.g. "https://billless.tech".
+ * @returns e.g. "https://billless.tech", without a trailing slash.
  */
 export function publicOrigin(req: Request): string {
-  return process.env.APP_URL?.trim().replace(/\/+$/, "") || new URL(req.url).origin;
+  const configured = [process.env.PUBLIC_APP_URL, process.env.APP_URL].map((v) => v?.trim().replace(/\/+$/, "")).find(Boolean);
+  return configured || new URL(req.url).origin;
 }

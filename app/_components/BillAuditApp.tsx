@@ -7,100 +7,30 @@
  * `/api/audit` and letters from `/api/letters`. Labels anything that came from a saved sample
  * document so a demo never passes a fixture off as live (SPEC.md §2 rule 9).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
-import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
 import type {
   AuditResponse,
   CaseView,
   IngestResponse,
 } from "@/lib/cases/service";
-import { fieldLabel, usd } from "@/lib/format";
+import { usd } from "@/lib/format";
 import CaseScreen from "./CaseScreen";
+import ConfirmPanel, {
+  confirmationProgress,
+  TypeDoubts,
+  typeIssuesOf,
+  type DocState,
+} from "./DocumentConfirmation";
+import ProcessingStatus from "./ProcessingStatus";
+import type { CasePreferencesInput } from "@/lib/cases/preferences";
 import { describeSource } from "./sources";
-import type { Draft, ExtractedBill, Field, Finding } from "@/lib/types";
+import type { Draft, ExtractedBill, Finding } from "@/lib/types";
 
 /** Which screen is showing, including the saved-case tracking screen. */
 type Step = ReviewStep | "case";
-
-/** One uploaded document as tracked in the browser. */
-interface DocState {
-  /** Server response for the document. */
-  ingest: IngestResponse;
-  /** Patient corrections by field path. */
-  corrections: Record<string, string | null>;
-  /** Paths the patient confirmed as printed. */
-  confirmedPaths: string[];
-  /** Whether the patient acknowledged that printed totals don't add up. */
-  ackTotals: boolean;
-  /** Whether the server locked the confirmation. */
-  confirmed: boolean;
-  /** Messages that blocked the last confirmation attempt. */
-  blocking: string[];
-  /** Whether the patient confirmed the document type despite the type checks' doubts. */
-  ackType: boolean;
-}
-
-/**
- * Reasons the type checks doubt the model's document type (empty for older stored extractions).
- *
- * @param r - Extraction result.
- * @returns Type doubts to show the patient.
- */
-function typeIssuesOf(r: ExtractionResult): string[] {
-  if (r.kind === "bill") return r.bill.typeIssues ?? [];
-  if (r.kind === "eob") return r.eob.typeIssues ?? [];
-  return [];
-}
-
-/**
- * Lists every field in an extraction with its path, in document order.
- *
- * @param r - Extraction result (bill or EOB).
- * @returns Path/field pairs; empty for unsupported documents.
- */
-function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
-  const out: Array<[string, Field<unknown>]> = [];
-  if (r.kind === "bill") {
-    for (const [k, f] of Object.entries(r.bill.header))
-      out.push([`header.${k}`, f]);
-    r.bill.lines.forEach((l, i) =>
-      Object.entries(l).forEach(([k, f]) =>
-        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
-      ),
-    );
-  } else if (r.kind === "eob") {
-    const {
-      insurer,
-      claimNumber,
-      provider,
-      patientName,
-      accountNumber,
-      totalPatientResponsibility,
-    } = r.eob;
-    out.push(
-      ["insurer", insurer],
-      ["claimNumber", claimNumber],
-      ["provider", provider],
-      // Absent on EOBs extracted before these fields existed.
-      ...(patientName
-        ? [["patientName", patientName] as [string, Field<unknown>]]
-        : []),
-      ...(accountNumber
-        ? [["accountNumber", accountNumber] as [string, Field<unknown>]]
-        : []),
-      ["totalPatientResponsibility", totalPatientResponsibility],
-    );
-    r.eob.lines.forEach((l, i) =>
-      Object.entries(l).forEach(([k, f]) =>
-        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
-      ),
-    );
-  }
-  return out;
-}
 
 /**
  * Sends JSON to an API route and returns the parsed reply or throws with the server's message.
@@ -145,6 +75,19 @@ async function fetchCase(id: string): Promise<CaseView> {
  * @returns The current screen.
  */
 export default function BillAuditApp() {
+  /** Latest explicit setup choices; saved before intake can advance. */
+  const [preferences, setPreferences] = useState<CasePreferencesInput>({
+    goal: "Review my medical bill",
+    noPayments: true,
+    pauseContact: false,
+  });
+  /** Whether setup choices are safely persisted for the current case. */
+  const [preferencesSaved, setPreferencesSaved] = useState(false);
+  /** Current file request and the last failed file retained for an explicit retry. */
+  const [processingFile, setProcessingFile] = useState<string | null>(null);
+  const [retryFile, setRetryFile] = useState<File | null>(null);
+  /** Synchronous lock prevents double submissions before React updates disabled controls. */
+  const running = useRef(false);
   const [step, setStep] = useState<Step>("start");
   const [bill, setBill] = useState<DocState | null>(null);
   const [eob, setEob] = useState<DocState | null>(null);
@@ -152,6 +95,20 @@ export default function BillAuditApp() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Combined document review progress shown beside the action that submits confirmation. */
+  const reviewProgress = [bill, eob].reduce(
+    (counts, doc) => {
+      if (!doc) return counts;
+      const progress = confirmationProgress(doc);
+      return {
+        total: counts.total + progress.total,
+        reviewed: counts.reviewed + progress.reviewed,
+        remaining: counts.remaining + progress.remaining,
+      };
+    },
+    { total: 0, reviewed: 0, remaining: 0 },
+  );
 
   const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
 
@@ -165,6 +122,8 @@ export default function BillAuditApp() {
    * @param fn - Action to run.
    */
   async function run(fn: () => Promise<void>) {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -172,6 +131,7 @@ export default function BillAuditApp() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      running.current = false;
       setBusy(false);
     }
   }
@@ -192,6 +152,10 @@ export default function BillAuditApp() {
       ackType: false,
     };
     const r = ingest.result;
+    if (r.kind === "denial")
+      throw new Error(
+        "Denial letters need the appeal review flow. Add a bill or EOB here.",
+      );
     if (r.kind === "unsupported") throw new Error(r.reason);
     if (r.kind === "eob") setEob(state);
     else setBill(state);
@@ -203,10 +167,22 @@ export default function BillAuditApp() {
    * @param view - The case as loaded from the server.
    */
   function applyCase(view: CaseView) {
+    const saved = view.state.preferences;
+    setPreferences({
+      goal: saved.goal ?? "Review my medical bill",
+      noPayments: saved.noPayments,
+      pauseContact: saved.pauseContact,
+    });
+    setPreferencesSaved(Boolean(saved.version));
     for (const d of view.documents) {
       const r = d.ingest.result;
       // Revised statements belong to case tracking, not the original bill slot.
-      if (r.kind === "bill" && r.bill.docType === "revised_statement") continue;
+      if (
+        r.kind === "denial" ||
+        r.kind === "unsupported" ||
+        (r.kind === "bill" && r.bill.docType === "revised_statement")
+      )
+        continue;
       const state: DocState = {
         ingest: d.ingest,
         corrections: {},
@@ -222,7 +198,8 @@ export default function BillAuditApp() {
     setAudit(view.audit);
     setDraft(view.draft);
     const tracking =
-      view.draft?.kind === "dispute_letter" &&
+      (view.draft?.kind === "dispute_letter" ||
+        view.draft?.kind === "appeal_letter") &&
       view.state.phase !== "audited" &&
       view.state.phase !== "intake";
     setStep(
@@ -232,7 +209,14 @@ export default function BillAuditApp() {
           ? "letter"
           : view.audit
             ? "audit"
-            : "start",
+            : view.documents.some(
+                  (d) =>
+                    !d.confirmed &&
+                    d.ingest.result.kind === "bill" &&
+                    d.ingest.result.bill.docType === "itemized_bill",
+                )
+              ? "confirm"
+              : "start",
     );
   }
 
@@ -266,13 +250,25 @@ export default function BillAuditApp() {
   /** Uploads a file through Gemini extraction. */
   async function upload(file: File) {
     await run(async () => {
-      const form = new FormData();
-      form.append("file", file);
-      if (caseId) form.append("caseId", caseId);
-      const res = await fetch("/api/documents", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? "Upload failed");
-      accept(data as IngestResponse);
+      setProcessingFile(file.name);
+      setRetryFile(null);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        if (caseId) form.append("caseId", caseId);
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message ?? "Upload failed");
+        accept(data as IngestResponse);
+      } catch (err) {
+        setRetryFile(file);
+        throw err;
+      } finally {
+        setProcessingFile(null);
+      }
     });
   }
 
@@ -305,14 +301,37 @@ export default function BillAuditApp() {
     });
   }
 
+  /**
+   * Persists explicit preferences and blocks progression if the save fails.
+   * @param id - Current case ID.
+   * Side effects: records the patient's choices on the server; sends nothing.
+   */
+  async function savePreferences(id: string) {
+    const res = await fetch(`/api/cases/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preferences),
+    });
+    const data = await res.json();
+    if (!res.ok)
+      throw new Error(
+        data.message ?? "Your choices could not be saved. Please try again.",
+      );
+    setPreferencesSaved(true);
+  }
+
   /** Moves on from the start screen once a bill is present. */
-  function next() {
-    if (
-      bill?.ingest.result.kind === "bill" &&
-      bill.ingest.result.bill.docType === "balance_statement"
-    )
-      setStep("request");
-    else setStep("confirm");
+  async function next() {
+    if (!caseId) return;
+    await run(async () => {
+      await savePreferences(caseId);
+      if (
+        bill?.ingest.result.kind === "bill" &&
+        bill.ingest.result.bill.docType === "balance_statement"
+      )
+        setStep("request");
+      else setStep("confirm");
+    });
   }
 
   /**
@@ -344,6 +363,7 @@ export default function BillAuditApp() {
   async function confirmAndAudit() {
     await run(async () => {
       if (!bill) return;
+      if (!preferencesSaved && caseId) await savePreferences(caseId);
       const okBill = await confirmOne(bill, setBill);
       const okEob = eob ? await confirmOne(eob, setEob) : true;
       if (!okBill || !okEob) return;
@@ -354,6 +374,34 @@ export default function BillAuditApp() {
           eobId: eob?.ingest.documentId ?? null,
         }),
       );
+      applyCase(await fetchCase(caseId!));
+      setDraft(null);
+      setStep("audit");
+    });
+  }
+
+  /** Reopens the same unsent case; the server invalidates outdated findings and letter drafts first. */
+  async function correctDetails() {
+    await run(async () => {
+      if (!caseId) return;
+      const view = await postJson<CaseView>(
+        `/api/cases/${encodeURIComponent(caseId)}/reopen`,
+        {},
+      );
+      applyCase(view);
+      setStep("confirm");
+    });
+  }
+
+  /** Persists a patient exclusion, refreshing the verdict and invalidating any older unsent draft. */
+  async function selectFinding(findingId: string, excluded: boolean) {
+    await run(async () => {
+      if (!caseId) return;
+      const view = await postJson<CaseView>(
+        `/api/cases/${encodeURIComponent(caseId)}/findings`,
+        { findingId, excluded },
+      );
+      applyCase(view);
       setStep("audit");
     });
   }
@@ -385,9 +433,55 @@ export default function BillAuditApp() {
     });
   }
 
+  /** Goes to the preceding screen without clearing local values or changing confirmed case facts.
+   * Tracking reloads the current saved draft so it never reopens an outdated local letter.
+   */
+  async function goBack() {
+    setError(null);
+    if (step === "case" && caseId) {
+      await run(async () => {
+        const view = await fetchCase(caseId);
+        applyCase(view);
+        setStep(view.draft ? "letter" : view.audit ? "audit" : "start");
+      });
+      return;
+    }
+    if (step === "letter")
+      setStep(
+        draft?.kind === "itemized_bill_request"
+          ? "request"
+          : audit
+            ? "audit"
+            : "confirm",
+      );
+    else if (step === "audit") setStep("confirm");
+    else setStep("start");
+  }
+
+  /** Destination labels make each backward action clear without implying a reset. */
+  const backLabel =
+    step === "confirm" || step === "request"
+      ? "Back to upload"
+      : step === "audit"
+        ? "Back to details"
+        : step === "case"
+          ? "Back to letter"
+          : draft?.kind === "itemized_bill_request"
+            ? "Back to request"
+            : audit
+              ? "Back to findings"
+              : "Back to details";
+
   /** Starts over. */
   function reset() {
     window.history.replaceState(null, "", window.location.pathname);
+    setPreferencesSaved(false);
+    setRetryFile(null);
+    setPreferences({
+      goal: "Review my medical bill",
+      noPayments: true,
+      pauseContact: false,
+    });
     setStep("start");
     setBill(null);
     setEob(null);
@@ -415,6 +509,7 @@ export default function BillAuditApp() {
           </button>
         )}
       </header>
+
       {step !== "case" && <ReviewProgress step={step} />}
       {step !== "case" && (
         <BillyGuide
@@ -428,8 +523,8 @@ export default function BillAuditApp() {
       {usedSample && (
         <div className="paper-flow">
           <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-            Sample document (synthetic data), read without AI from a saved answer.
-            Same checks as a live upload.
+            Sample document (synthetic data), read without AI from a saved
+            answer. Same checks as a live upload.
           </p>
         </div>
       )}
@@ -442,11 +537,23 @@ export default function BillAuditApp() {
         </p>
       )}
 
+      {retryFile && !busy && (
+        <div className="paper-flow">
+          <button className="paper-secondary" onClick={() => upload(retryFile)}>
+            Retry reading {retryFile.name}
+          </button>
+          <p className="paper-copy">
+            Check your saved case before retrying if the connection dropped
+            after upload.
+          </p>
+        </div>
+      )}
       {step === "start" && (
         <StartScreen
           bill={bill}
           eob={eob}
           busy={busy}
+          processingFile={processingFile}
           onUpload={upload}
           onSample={loadSample}
           onDemo={loadDemoPair}
@@ -463,13 +570,38 @@ export default function BillAuditApp() {
               onChange={setEob}
             />
           )}
-          <button
-            disabled={busy}
-            onClick={confirmAndAudit}
-            className="paper-primary w-full"
-          >
-            {busy ? "Checking…" : "Confirm and check my bill"}
-          </button>
+          <div className="billless-confirm-action">
+            <div className="billless-action-progress">
+              <p aria-live="polite">
+                {reviewProgress.remaining
+                  ? `${reviewProgress.remaining} ${reviewProgress.remaining === 1 ? "item" : "items"} left to review`
+                  : "Ready to check your bill"}
+              </p>
+              <progress
+                aria-label="Bill and EOB review progress"
+                max={100}
+                value={
+                  reviewProgress.total
+                    ? Math.round(
+                        (reviewProgress.reviewed / reviewProgress.total) * 100,
+                      )
+                    : 100
+                }
+              />
+              <small>
+                {reviewProgress.total
+                  ? `${reviewProgress.reviewed} of ${reviewProgress.total} items reviewed`
+                  : "No flagged fields"}
+              </small>
+            </div>
+            <button
+              disabled={busy}
+              onClick={confirmAndAudit}
+              className="paper-primary"
+            >
+              {busy ? "Checking…" : "Confirm and check my bill"}
+            </button>
+          </div>
         </section>
       )}
       {step === "audit" && audit && bill?.ingest.result.kind === "bill" && (
@@ -479,6 +611,8 @@ export default function BillAuditApp() {
           documentId={bill.ingest.documentId}
           busy={busy}
           onLetter={makeLetter}
+          onCorrect={correctDetails}
+          onSelectFinding={selectFinding}
         />
       )}
       {step === "request" && bill && (
@@ -488,7 +622,8 @@ export default function BillAuditApp() {
           </h2>
           <p className="text-sm text-[var(--paper-muted)]">
             Your statement shows a total, but we need individual charges to
-            review it. Prepare a request for an itemized bill from your provider.
+            review it. Prepare a request for an itemized bill from your
+            provider.
           </p>
           <p className="text-sm text-[var(--paper-muted)]">
             You can also download your EOB from your insurer’s website or app.
@@ -507,11 +642,28 @@ export default function BillAuditApp() {
         <LetterScreen
           draft={draft}
           onTrack={
-            draft.kind === "dispute_letter" ? () => setStep("case") : undefined
+            draft.kind === "dispute_letter" || draft.kind === "appeal_letter"
+              ? () => setStep("case")
+              : undefined
           }
         />
       )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
+      {step !== "start" && (
+        <nav
+          className="paper-flow billless-back-navigation"
+          aria-label="Previous screen"
+        >
+          <button
+            type="button"
+            className="paper-secondary"
+            disabled={busy}
+            onClick={goBack}
+          >
+            ← {backLabel}
+          </button>
+        </nav>
+      )}
     </main>
   );
 }
@@ -532,6 +684,8 @@ function StartScreen(props: {
   bill: DocState | null;
   eob: DocState | null;
   busy: boolean;
+  /** Active upload filename; replaces readiness text while the file is processed. */
+  processingFile: string | null;
   onUpload: (f: File) => void;
   onSample: (name: string) => void;
   onDemo: () => void;
@@ -560,6 +714,28 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
+        <Link href="/" className="paper-secondary billless-upload-back">
+          ← Back to home
+        </Link>
+        <div className="billless-action-progress">
+          {props.processingFile ? (
+            <ProcessingStatus filename={props.processingFile} inline />
+          ) : (
+            <>
+              <p>
+                {bill
+                  ? "Your bill is ready to confirm"
+                  : "Add your bill to continue"}
+              </p>
+              <progress
+                aria-label="Upload preparation progress"
+                max={1}
+                value={bill ? 1 : 0}
+              />
+              <small>{eob ? "Bill and EOB added" : "EOB optional"}</small>
+            </>
+          )}
+        </div>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}
@@ -568,9 +744,6 @@ function StartScreen(props: {
           {busy ? "Reading your document…" : "Continue to confirm →"}
         </button>
       </div>
-      <p className="text-center text-sm text-[var(--paper-muted)]">
-        Use synthetic documents for this demo.
-      </p>
       <details className="billless-demo">
         <summary>Just exploring? Try a synthetic demo</summary>
         <div className="billless-demo-actions">
@@ -658,9 +831,7 @@ function UploadSlot({
           {busy ? "Reading document…" : ready ? "Document added" : label}
         </strong>
         <span>
-          {ready
-            ? "Choose another file to replace it"
-            : "PDF or a clear photo"}
+          {ready ? "Choose another file to replace it" : "PDF or a clear photo"}
         </span>
         <input
           type="file"
@@ -673,243 +844,6 @@ function UploadSlot({
             event.target.value = "";
           }}
         />
-      </label>
-    </div>
-  );
-}
-
-/**
- * Confirm panel for one document: preview, flagged fields first, verified fields in one tap.
- *
- * @param props.title - Panel heading.
- * @param props.doc - Document state.
- * @param props.onChange - Updates the document state.
- * @returns The confirm panel.
- */
-function ConfirmPanel({
-  title,
-  doc,
-  onChange,
-}: {
-  title: string;
-  doc: DocState;
-  onChange: (d: DocState) => void;
-}) {
-  const fields = useMemo(
-    () => listFields(doc.ingest.result),
-    [doc.ingest.result],
-  );
-  const flagged = fields.filter(
-    ([, f]) => f.verification === "needs_attention",
-  );
-  const verified = fields.filter(
-    ([, f]) => f.verification === "verified" && f.status !== "absent",
-  );
-  const r = doc.ingest.result;
-  const docIssues =
-    r.kind === "bill"
-      ? r.bill.documentIssues
-      : r.kind === "eob"
-        ? r.eob.documentIssues
-        : [];
-  const [showVerified, setShowVerified] = useState(false);
-  const [previewPage, setPreviewPage] = useState(1);
-
-  /**
-   * Records a correction for a field.
-   *
-   * @param path - Field path.
-   * @param value - New raw value.
-   */
-  function correct(path: string, value: string) {
-    onChange({ ...doc, corrections: { ...doc.corrections, [path]: value } });
-  }
-
-  /**
-   * Toggles "confirmed as printed" for a flagged field.
-   *
-   * @param path - Field path.
-   */
-  function toggleConfirm(path: string) {
-    const has = doc.confirmedPaths.includes(path);
-    onChange({
-      ...doc,
-      confirmedPaths: has
-        ? doc.confirmedPaths.filter((p) => p !== path)
-        : [...doc.confirmedPaths, path],
-    });
-  }
-
-  return (
-    <div className="billless-document-card">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {doc.confirmed && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-            Confirmed and locked
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-xs text-[var(--paper-muted)]">
-        {r.meta.textLayerChecked
-          ? "Values were cross-checked against the PDF's own text."
-          : "Photo or scan: please check every value carefully."}
-      </p>
-      <iframe
-        title={`${title} preview`}
-        src={`/api/documents/${doc.ingest.documentId}/file#page=${previewPage}`}
-        className="mt-3 h-72 w-full rounded-md ring-1 ring-[var(--paper-border)]"
-      />
-
-      <TypeDoubts
-        doc={doc}
-        kind={r.kind === "eob" ? "an explanation of benefits (EOB) from my insurer" : "a medical bill"}
-        onChange={onChange}
-      />
-      {docIssues.length > 0 && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
-          {docIssues.map((m) => (
-            <p key={m}>{m}</p>
-          ))}
-          <label className="mt-2 flex items-start gap-2">
-            <input
-              type="checkbox"
-              checked={doc.ackTotals}
-              onChange={(e) =>
-                onChange({ ...doc, ackTotals: e.target.checked })
-              }
-            />
-            <span>
-              I checked the document: the printed totals themselves don&apos;t
-              add up (this is how the bill is printed).
-            </span>
-          </label>
-        </div>
-      )}
-
-      <h3 className="mt-5 text-sm font-semibold">
-        Needs your attention ({flagged.length})
-      </h3>
-      {flagged.length === 0 && (
-        <p className="text-sm text-[var(--paper-muted)]">Nothing flagged.</p>
-      )}
-      <ul className="mt-2 space-y-3">
-        {flagged.map(([path, f]) => (
-          <li
-            key={path}
-            className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200"
-          >
-            <div className="flex items-center justify-between text-sm font-medium">
-              <span>{fieldLabel(path)}</span>
-              {f.page && (
-                <button
-                  className="text-xs text-[var(--paper-muted)] underline"
-                  onClick={() => setPreviewPage(f.page ?? 1)}
-                >
-                  page {f.page}
-                </button>
-              )}
-            </div>
-            {f.issues.map((m) => (
-              <p key={m} className="text-xs text-amber-900">
-                {m}
-              </p>
-            ))}
-            {f.snippet && (
-              <p className="mt-1 rounded bg-white px-2 py-1 font-mono text-xs text-[var(--paper-muted)]">
-                “{f.snippet}”
-              </p>
-            )}
-            <div className="billless-correction-row">
-              <input
-                className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
-                aria-label={`Correct ${fieldLabel(path)}`}
-                defaultValue={f.raw ?? ""}
-                placeholder="[to confirm]"
-                onChange={(e) => correct(path, e.target.value)}
-              />
-              <label className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={doc.confirmedPaths.includes(path)}
-                  onChange={() => toggleConfirm(path)}
-                />{" "}
-                matches the document
-              </label>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <button
-        className="paper-source-button mt-4"
-        aria-expanded={showVerified}
-        onClick={() => setShowVerified((s) => !s)}
-      >
-        {showVerified ? "Hide" : "Review"} {verified.length} verified values
-      </button>
-      {showVerified && (
-        <ul className="mt-2 divide-y divide-slate-100 text-sm">
-          {verified.map(([path, f]) => (
-            <li key={path} className="billless-verified-row">
-              <span className="text-[var(--paper-muted)]">
-                {fieldLabel(path)}
-              </span>
-              <span className="font-mono">{f.raw}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {doc.blocking.length > 0 && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
-          <p className="font-medium">
-            Still needs fixing before we can check the bill:
-          </p>
-          {doc.blocking.map((m) => (
-            <p key={m}>• {m}</p>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Shows why the code checks doubt the model's document type, with the patient's confirmation box.
- * Renders nothing when the type looks right.
- *
- * @param props.doc - Document state.
- * @param props.kind - What the document should be, e.g. "a medical bill".
- * @param props.onChange - Updates the document state.
- * @returns The warning, or `null`.
- */
-function TypeDoubts({
-  doc,
-  kind,
-  onChange,
-}: {
-  doc: DocState;
-  kind: string;
-  onChange: (d: DocState) => void;
-}) {
-  const issues = typeIssuesOf(doc.ingest.result);
-  if (!issues.length || doc.confirmed) return null;
-  return (
-    <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
-      <p className="font-medium">This may not be {kind}:</p>
-      {issues.map((m) => (
-        <p key={m}>• {m}</p>
-      ))}
-      <label className="mt-2 flex items-start gap-2">
-        <input
-          type="checkbox"
-          checked={doc.ackType}
-          onChange={(e) => onChange({ ...doc, ackType: e.target.checked })}
-        />
-        <span>
-          I checked the document: it is {kind}. Otherwise, upload the right
-          document instead.
-        </span>
       </label>
     </div>
   );
@@ -934,7 +868,7 @@ function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
  * Preserves rule explanations and verbatim evidence; never invents findings or savings.
  *
  * @param props.audit - Deterministic findings, searched providers, and amounts in integer cents.
- * @param props.bill - Extracted document used only for the original-document line table.
+ * @param props.bill - Stored document values used only for the inspection table; includes saved corrections.
  * @param props.documentId - Original bill document identifier for evidence preview links.
  * @param props.busy - Whether a draft request is running.
  * @param props.onLetter - Generates a draft for patient review; sends nothing.
@@ -946,10 +880,12 @@ function AuditScreen({
   documentId,
   busy,
   onLetter,
+  onCorrect,
+  onSelectFinding,
 }: {
   /** Audit response from our server. */
   audit: AuditResponse;
-  /** Original extracted values, not a substitute for corrected audit inputs. */
+  /** Stored extracted values including saved corrections; the server computes audit inputs. */
   bill: ExtractedBill;
   /** Identifier of the original bill PDF or image. */
   documentId: string;
@@ -957,12 +893,25 @@ function AuditScreen({
   busy: boolean;
   /** Requests a draft without submitting it. */
   onLetter: () => void;
+  /** Reopens document confirmation and invalidates the current audit and draft. */
+  onCorrect: () => void;
+  /** Saves whether the patient wants to pursue a server-produced issue. */
+  onSelectFinding: (findingId: string, excluded: boolean) => void;
 }) {
   /** Expanded evidence panel, or null when all are collapsed. */
   const [open, setOpen] = useState<string | null>(null);
   /** Server-produced monetary verdict and evidence-backed findings. */
-  const { verdict, findings } = audit;
-  /** Maps original bill lines to server findings for inspection, without calculating flags. */
+  const { verdict } = audit;
+  /** Selected issues alone determine the next draft; excluded evidence stays available to restore. */
+  const findings = audit.findings.filter((finding) => !finding.patientExcluded);
+  /** Persisted issues the patient has chosen not to pursue. */
+  const excludedFindings = audit.findings.filter(
+    (finding) => finding.patientExcluded,
+  );
+  // Every issue is the insurer's (e.g. a line it paid $0 for): point the patient to the insurer.
+  const insurerOnly =
+    findings.length > 0 && findings.every((f) => f.contact === "insurer");
+  /** Maps bill lines to server findings for inspection, without calculating flags. */
   const flaggedLines = new Map<number, Finding[]>();
   for (const finding of findings) {
     for (const source of finding.sources) {
@@ -975,14 +924,12 @@ function AuditScreen({
   }
 
   return (
-    <section className="space-y-8">
-      <div className="paper-case-heading">
-        <span
-          className={`paper-badge ${findings.length ? "paper-review-badge" : ""}`}
-        >
-          {findings.length ? "◷ Review ready" : "✓ Review complete"}
-        </span>
-      </div>
+    <section className="paper-flow space-y-8">
+      {findings.length === 0 && (
+        <div className="paper-case-heading">
+          <span className="paper-badge">✓ Review complete</span>
+        </div>
+      )}
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
@@ -1025,12 +972,23 @@ function AuditScreen({
       </dl>
       <div className="paper-workspace">
         <div className="paper-findings">
-          {findings.length > 0 ? (
-            <>
+          <div className="billless-findings-heading">
+            {findings.length > 0 && (
               <h3>
                 {findings.length} item{findings.length === 1 ? "" : "s"} to
                 review
               </h3>
+            )}
+            <button
+              className="paper-source-button"
+              disabled={busy}
+              onClick={onCorrect}
+            >
+              Correct bill or EOB details
+            </button>
+          </div>
+          {findings.length > 0 ? (
+            <>
               <p className="paper-copy">
                 Potential issues are things to ask about, not proven errors.
                 Records searched:{" "}
@@ -1046,26 +1004,28 @@ function AuditScreen({
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
                   <p className="paper-copy">{finding.ask}</p>
-                  <div className="paper-evidence">
-                    Bill{" "}
-                    {finding.lineNumbers.length
-                      ? `line${finding.lineNumbers.length === 1 ? "" : "s"} ${finding.lineNumbers.join(", ")}`
-                      : "total"}{" "}
-                    · {finding.status.replaceAll("_", " ")} ·{" "}
-                    {finding.rule.replaceAll("_", " ")}
+                  <div className="billless-finding-actions">
+                    <button
+                      className="paper-source-button"
+                      aria-expanded={open === finding.id}
+                      aria-controls={`evidence-${finding.id}`}
+                      onClick={() =>
+                        setOpen(open === finding.id ? null : finding.id)
+                      }
+                    >
+                      {open === finding.id
+                        ? "Hide evidence ↑"
+                        : "Explanation & evidence →"}
+                    </button>
+                    <button
+                      className="paper-source-button billless-exclude-finding"
+                      disabled={busy}
+                      onClick={() => onSelectFinding(finding.id, true)}
+                      aria-label={`Exclude issue: ${finding.title}`}
+                    >
+                      Don’t include this issue
+                    </button>
                   </div>
-                  <button
-                    className="paper-source-button"
-                    aria-expanded={open === finding.id}
-                    aria-controls={`evidence-${finding.id}`}
-                    onClick={() =>
-                      setOpen(open === finding.id ? null : finding.id)
-                    }
-                  >
-                    {open === finding.id
-                      ? "Hide evidence ↑"
-                      : "Explanation & evidence →"}
-                  </button>
                   {open === finding.id && (
                     <div
                       id={`evidence-${finding.id}`}
@@ -1100,11 +1060,15 @@ function AuditScreen({
               <div className="paper-check" aria-hidden="true">
                 ✓
               </div>
-              <h3>No issues found in the checks we ran.</h3>
+              <h3>
+                {excludedFindings.length
+                  ? "No issues selected for your dispute."
+                  : "No issues found in the checks we ran."}
+              </h3>
               <p className="paper-copy">
-                Our supported checks did not flag this bill. This does not
-                guarantee every charge is correct or that the balance cannot be
-                reduced.
+                {excludedFindings.length
+                  ? "You’ve excluded every issue. Restore an issue below to include it in a draft."
+                  : "Our supported checks did not flag this bill. This does not guarantee every charge is correct or that the balance cannot be reduced."}
               </p>
               <div className="paper-evidence">
                 Supported checks: duplicate charges, bill vs. EOB when
@@ -1124,18 +1088,44 @@ function AuditScreen({
               </a>
             </div>
           )}
+          {excludedFindings.length > 0 && (
+            <div className="billless-excluded-findings">
+              <h4>Excluded from your dispute ({excludedFindings.length})</h4>
+              <p className="paper-copy">
+                These issues won’t appear in your letter or call brief.
+                Excluding an issue does not verify the charge.
+              </p>
+              {excludedFindings.map((finding) => (
+                <div key={finding.id} className="billless-excluded-item">
+                  <span>{finding.title}</span>
+                  <button
+                    className="paper-source-button"
+                    disabled={busy}
+                    onClick={() => onSelectFinding(finding.id, false)}
+                    aria-label={`Restore issue: ${finding.title}`}
+                  >
+                    Restore issue
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <aside className="paper-next" aria-label="Your next step">
           <p className="paper-eyebrow">YOUR NEXT STEP</p>
           <h3>
-            {findings.length
-              ? "Ask the billing office to review these charges."
-              : "You still have options."}
+            {!findings.length
+              ? "You still have options."
+              : insurerOnly
+                ? "Ask your insurer to review this claim."
+                : "Ask the billing office to review these charges."}
           </h3>
           <p className="paper-copy">
-            {findings.length
-              ? "Prepare a dispute draft with the evidence and documentation requests attached."
-              : "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."}
+            {!findings.length
+              ? "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."
+              : insurerOnly
+                ? "The provider billed what your EOB says, so this is for your insurer. Prepare a letter asking it to reprocess the claim or explain how to appeal. Billy can also call them."
+                : "Prepare a dispute draft with the evidence and documentation requests attached."}
           </p>
           {findings.length > 0 && (
             <button
@@ -1143,7 +1133,11 @@ function AuditScreen({
               disabled={busy}
               onClick={onLetter}
             >
-              {busy ? "Preparing your draft…" : "Prepare my dispute draft →"}
+              {busy
+                ? "Preparing your draft…"
+                : insurerOnly
+                  ? "Prepare my letter to the insurer →"
+                  : "Prepare my dispute draft →"}
             </button>
           )}
           <a
@@ -1162,15 +1156,16 @@ function AuditScreen({
       </div>
       <details>
         <summary className="paper-source-button py-3">
-          Inspect original extracted line items
+          Inspect document values
         </summary>
         <p className="paper-copy py-3">
-          These are the original extracted values. Your confirmed corrections
-          are used by the audit.
+          These values include your saved corrections. The audit uses your
+          confirmed details. To fix a value, choose “Correct bill or EOB
+          details.”
         </p>
         <div className="paper-table-wrap">
           <table className="paper-table">
-            <caption>Original bill line items</caption>
+            <caption>Extracted bill line items</caption>
             <thead>
               <tr>
                 <th scope="col">Line</th>
@@ -1255,10 +1250,7 @@ function LetterScreen({
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download =
-        draft.kind === "dispute_letter"
-          ? "dispute-letter.pdf"
-          : "itemized-bill-request.pdf";
+      a.download = `${draft.kind.replaceAll("_", "-")}.pdf`;
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (error) {
@@ -1329,10 +1321,7 @@ function LetterScreen({
         {busy ? "Preparing PDF…" : "Download PDF"}
       </button>
       {onTrack && (
-        <button
-          onClick={onTrack}
-          className="paper-secondary w-full"
-        >
+        <button onClick={onTrack} className="paper-secondary w-full">
           Track this case →
         </button>
       )}

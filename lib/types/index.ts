@@ -297,7 +297,7 @@ export type Source =
 export type NonEmpty<T> = [T, ...T[]];
 
 /** Which deterministic rule produced a finding (SPEC.md §4.3). */
-export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap";
+export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap" | "insurer_denied_line";
 
 /**
  * Finding status. MVP 1 only produces `potential`; later rungs move findings to `confirmed`,
@@ -311,6 +311,8 @@ export interface Finding {
   id: string;
   /** Rule that produced it. */
   rule: RuleId;
+  /** Patient chose not to pursue this issue; does not change its evidence or status. */
+  patientExcluded?: boolean;
   /** Current status. */
   status: FindingStatus;
   /** Short plain-language title, written by code from a template. */
@@ -330,6 +332,13 @@ export interface Finding {
   statusSources?: Source[];
   /** True once a patient-confirmed revised statement shows the correction (SPEC.md §4.6). */
   verified?: boolean;
+  /** Who can fix it: the provider's billing office (default) or the insurer (SPEC.md §3.4 routing). */
+  contact?: "provider" | "insurer";
+  /**
+   * Call stage: `claim` (initial call, default), `appeal` (the claim was denied; a secondary call
+   * appeals it), `escalated` (denied again on appeal; written appeal or a human advocate next).
+   */
+  stage?: "claim" | "appeal" | "escalated";
   /** Amount this finding questions, in cents (0 when not monetary). */
   amountQuestionedCents: Cents;
   /** Bill line numbers this finding covers, for de-duplicating the verdict total. */
@@ -376,7 +385,7 @@ export interface Draft {
 }
 
 /** How the counterparty answered one finding (recorded from the operator console, MVP 2). */
-export type ResponseKind = "confirms_error" | "provides_documentation" | "needs_more_info" | "will_send_later";
+export type ResponseKind = "confirms_error" | "provides_documentation" | "needs_more_info" | "will_send_later" | "refused";
 
 /**
  * A response from the billing office or insurer, recorded as structured data (SPEC.md §3.5).

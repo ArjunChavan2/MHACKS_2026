@@ -8,6 +8,7 @@
  * (SPEC.md §5.6).
  */
 import { readFileSync } from "node:fs";
+import { sameName } from "@/lib/cases/consistency";
 import type { VerbatimFact } from "@/lib/types";
 import { loadLiveRecords, mapSnapshot, savedSnapshotPath, type RecordsResult } from "./live";
 
@@ -55,8 +56,30 @@ export function providersOf(records: VerbatimFact[]): string[] {
  * @param externalId - Our identifier for a new sandbox Connect session (e.g. the case ID).
  * @returns Records with providers, origin, and warnings.
  */
-export async function loadRecords(externalId?: string): Promise<RecordsResult> {
-  if (!isMockMode()) return loadLiveRecords({ externalId });
-  const records = getRecords();
-  return { records, providers: providersOf(records), origin: "saved-snapshot", subject: "patient-demo-multi-source", warnings: [] };
+export async function loadRecords(externalId?: string, patientName?: string | null): Promise<RecordsResult> {
+  if (!isMockMode()) return forPatient(await loadLiveRecords({ externalId }), patientName);
+  const saved = mapSnapshot(JSON.parse(readFileSync(savedSnapshotPath(), "utf8")));
+  return forPatient(
+    { records: saved.records, providers: providersOf(saved.records), origin: "saved-snapshot", subject: "patient-demo-multi-source", patientName: saved.patientName, warnings: [] },
+    patientName,
+  );
+}
+
+/**
+ * Drops records that belong to someone else: FinchNode's synthetic sandbox has one patient, so a
+ * case for a different person (by name on the bill or letter) must not be checked against them.
+ * Pure.
+ *
+ * @param result - Records as loaded.
+ * @param patientName - The case's patient (bill or denial letter), or null/undefined to skip the check.
+ * @returns The same result, or one with no records and a plain warning when the names differ.
+ */
+export function forPatient(result: RecordsResult, patientName?: string | null): RecordsResult {
+  if (!patientName || !result.patientName || sameName(patientName, result.patientName)) return result;
+  return {
+    ...result,
+    records: [],
+    providers: [],
+    warnings: [...result.warnings, `The connected FinchNode records belong to a different patient, so none were used for ${patientName}.`],
+  };
 }

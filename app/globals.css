@@ -1,5 +1,54 @@
 @import "tailwindcss";
 
+/* The live filename and elapsed timer replace upload readiness beside Continue. */
+.billless-inline-processing { min-width: 0; overflow-wrap: anywhere; }
+.billless-inline-processing .paper-copy { font-size: 13px; font-weight: 400; line-height: 20px; }
+
+/* Back navigation stays in the shared content column and clears the workflow heading. */
+.billless-back-navigation { padding: 24px 0 0; }
+.billless-back-navigation .paper-secondary { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* Readiness and confirmation progress sit beside their primary action, stacking on phones. */
+.billless-confirm-action { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px; border-radius: 16px; background: var(--paper-surface); }
+.billless-action-progress { flex: 1; min-width: 0; max-width: 420px; }
+.billless-action-progress p { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.billless-action-progress small { color: var(--paper-muted); font-size: 12px; }
+.billless-action-progress progress { display: block; width: 100%; height: 8px; margin-bottom: 8px; border: 0; appearance: none; border-radius: 20px; overflow: hidden; background: var(--paper-border); }
+.billless-action-progress progress::-webkit-progress-bar { background: var(--paper-border); }
+.billless-action-progress progress::-webkit-progress-value { background: var(--paper-primary); border-radius: 20px; }
+.billless-action-progress progress::-moz-progress-bar { background: var(--paper-primary); border-radius: 20px; }
+@media (max-width: 700px) {
+  .billless-confirm-action { flex-direction: column; align-items: stretch; }
+  .billless-action-progress { max-width: none; flex: auto; }
+}
+
+/* Document confirmation progress describes patient review actions, not audit outcomes. */
+.billless-confirm-progress { margin-top: 24px; padding: 20px; border-radius: 16px; background: var(--paper-surface); }
+.billless-confirm-progress-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; font-size: 14px; }
+.billless-confirm-progress-heading span { color: var(--paper-muted); }
+.billless-confirm-progress progress { display: block; appearance: none; width: 100%; height: 8px; margin: 14px 0; border: 0; border-radius: 20px; overflow: hidden; background: var(--paper-border); }
+.billless-confirm-progress progress::-webkit-progress-bar { background: var(--paper-border); }
+.billless-confirm-progress progress::-webkit-progress-value { background: var(--paper-primary); border-radius: 20px; }
+.billless-confirm-progress progress::-moz-progress-bar { background: var(--paper-primary); border-radius: 20px; }
+.billless-confirm-progress .paper-copy { font-size: 14px; line-height: 22px; }
+.billless-confirm-progress summary { cursor: pointer; padding: 12px 0; font-size: 14px; }
+.billless-confirm-field { padding: 16px; border: 1px solid var(--paper-border); border-radius: 14px; scroll-margin-top: 24px; }
+.billless-confirm-field.is-pending { background: #fff8e8; border-color: #e8c878; }
+.billless-confirm-field.is-reviewed { background: var(--paper-surface); }
+.billless-field-state { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; background: white; white-space: nowrap; }
+.billless-field-hint { font-size: 13px; line-height: 20px; margin: 8px 0; color: var(--paper-muted); }
+.billless-confirm-field input[aria-invalid="true"] { border-color: #b47b12; }
+@media (max-width: 700px) {
+  .billless-confirm-field > div:first-child { flex-wrap: wrap; gap: 8px; }
+}
+
+/* The single-action balance-statement screen keeps explanatory text comfortably narrow. */
+.billless-request-screen {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 /* Existing MVP screens: readable document cards and responsive case actions. */
 .billless-document-card { background: white; border: 1px solid var(--paper-border); border-radius: 20px; padding: 28px; min-width: 0; }
 .billless-document-card h2 { font-family: var(--font-heading); font-size: 22px; line-height: 1.4; }
@@ -727,10 +776,11 @@ h4 {
 }
 .billless-continue-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   gap: 24px;
 }
+.billless-upload-back { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; white-space: nowrap; }
 .billless-continue-row .paper-primary {
   min-width: 280px;
 }
@@ -894,10 +944,13 @@ h4 {
     border-radius: 20px;
   }
   .billless-continue-row {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: stretch;
     gap: 16px;
   }
+  .billless-continue-row .billless-action-progress { grid-column: 1 / -1; grid-row: 1; }
+  .billless-continue-row .paper-primary { padding-inline: 12px; }
   .billless-continue-row .paper-primary {
     width: 100%;
     min-width: 0;
@@ -1580,3 +1633,30 @@ h4 {
     font-size: 18px;
   }
 }
+
+/* Patient goal, processing feedback and arrived-document controls (SPEC.md §3.1/§4.2). */
+.billless-preferences-panel { margin-block: 24px; padding: 20px; border: 1px solid var(--paper-border); border-radius: 20px; background: white; }
+.billless-goal-label { display: grid; gap: 8px; font-size: 15px; font-weight: 600; min-width: 0; }
+.billless-goal-label textarea, .billless-goal-label select, .billless-goal-label input { width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--paper-border); border-radius: 12px; font: inherit; font-weight: 400; }
+.billless-choice-label { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-block: 8px; }
+.billless-choice-label input { flex-shrink: 0; width: 18px; height: 18px; }
+.billless-processing-panel { margin-block: 20px; padding: 20px; border-radius: 16px; background: var(--paper-sky, #eef5fc); overflow-wrap: anywhere; }
+.billless-case-document-row { display: flex; justify-content: space-between; gap: 16px; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .billless-case-document-row { flex-direction: column; gap: 4px; } .billless-preferences-panel { padding: 16px; } }
+
+/* Keep corrections beside the findings count, wrapping when space is limited. */
+.billless-findings-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.billless-findings-heading h3 { margin: 0; }
+
+/* Make the review correction action visibly clickable beside the item count. */
+.billless-findings-heading .paper-source-button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Patient issue choices remain distinct from the evidence disclosure. */
+.billless-finding-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.billless-finding-actions .billless-exclude-finding { color: #b42318; text-decoration: underline; text-underline-offset: 3px; }
+.billless-excluded-findings { padding-top: 24px; border-top: 1px solid var(--paper-border); }
+.billless-excluded-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+.billless-excluded-item button { text-decoration: underline; text-underline-offset: 3px; }

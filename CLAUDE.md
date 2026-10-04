@@ -53,4 +53,9 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
   blank. Fix: `outputFileTracingIncludes` in `next.config.ts` (worker, `standard_fonts`, fixtures) and
   `useSystemFonts: false` + `standardFontDataUrl` in `lib/llm/pdfPages.ts`. Test uploads on the live URL.
 - **`vercel link` rewrites `.env.local`** (it added `VERCEL_OIDC_TOKEN`; keys survived). Back it up first.
+- **Texted case links pointed at `mhacks-2026.vercel.app`, not `billless.tech`.** Links used
+  `APP_URL` (also Twilio's callback base) or the host the worker called. Fix: `PUBLIC_APP_URL`
+  (set to `https://billless.tech` in Vercel) is read first in `publicOrigin` (`lib/messaging/auth.ts`).
+- **PGlite suites fail at random with "Hook timed out in 10000ms"** when all test files run in
+  parallel (migrations in `beforeAll`). Fix: `hookTimeout: 30_000` in `vitest.config.mts`.
 - **New Gemini keys start with `AQ.`**, not `AIza`; that's Google's new format, not a wrong key.

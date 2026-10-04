@@ -50,7 +50,7 @@ describe("intake guards", () => {
     const eob = await ingestSample(null, "sample-eob");
     await confirmDocument(bill.documentId, AS_PRINTED);
     await confirmDocument(eob.documentId, AS_PRINTED);
-    await expect(auditCase(bill.caseId, bill.documentId, eob.documentId)).rejects.toThrow(/not on this case/);
+    await expect(auditCase(bill.caseId, bill.documentId, eob.documentId)).rejects.toThrow(/belong to this case/);
   });
 
   /** Proves a revised statement printing only the last digits of the account is accepted. */

@@ -31,6 +31,10 @@ The team deleted the tabs for tracks we skip. Formatting convention for anything
 Michigan template copied from the user's EECS 445 write-up (headings Montserrat bold, blue
 #00274C, maize #FFCB05 underline on H1; body Lato 10.5; light maize shading for banners).
 
+## Patient case screen completion (2026-10-04)
+
+On branch `feat/mvp2-case-journey`: saved goals and explicit restrictions, honest processing/retry feedback, patient document attachment/confirmation from an active case, source-preserving EOB rechecks, and guarded revised-statement verification. See `agent-notes/mvp2-screen-shortfalls/IMPLEMENTATION.md` and `TEST_RESULTS.md`. 158 tests, lint, types and production build pass; synthetic browser checks cover desktop and narrow phones. No migration. Live call/denial UI remain later-rung work. Preview: http://localhost:3002/review in the isolated worktree `/private/tmp/billless-case-journey`.
+
 ## State right now (updated 2026-10-03 night)
 
 Progress per rung is the Status column in SPEC.md §6.
@@ -68,6 +72,9 @@ Progress per rung is the Status column in SPEC.md §6.
   URLs require a Vercel login. Env vars set in Vercel: XAI_API_KEY, GEMINI_API_KEY, GEMINI_MODEL,
   DATABASE_URL(_UNPOOLED), NEON_BRANCH, FINCHNODE_API_KEY, USE_MOCK=false (live FinchNode demo API records), FINCHNODE_CONNECT=off. Deploy:
   `npx vercel deploy --prod`. Live checks passed: full case flow on Neon, Grok upload 56/56 fields.
+- **Billy asks the patient by text** (`ask_patient` tool → `/api/calls/ask`, `lib/cases/patientQuestions.ts`):
+  the reply is read back verbatim; SSN/card/bank/password questions are refused in code. The tool must be
+  added to both ElevenLabs agents (setup in `agent-notes/mvp4-call/NOTES.md`).
 - **MVP 3 iMessage built** (`agent-notes/mvp3-imessage/IMPLEMENTATION.md`): `lib/messaging/`,
   `/api/messaging/{inbound,outbox,ack}` (Bearer `MESSAGING_SECRET`), case screen panel with a
   `LINK <code>`, and `workers/photon/` (`npm run worker:photon`, or `-- --local <handle>` to test

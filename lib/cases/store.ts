@@ -7,7 +7,7 @@
  * memory otherwise. Never expose stored files publicly.
  */
 import { neon } from "@neondatabase/serverless";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { caseEvents, cases, documents, files, findings } from "@/db/schema";
@@ -69,6 +69,10 @@ export interface CaseStore {
    * case with an event of that type.
    */
   findCasesByEvent(type: string, match: Record<string, string>): Promise<string[]>;
+  /** The case with the most recent event (the "live" case for demo calls), or `null` if none. */
+  latestCaseId(): Promise<string | null>;
+  /** The most recent event of this type across all cases (which case, and when), or `null`. */
+  latestEventOf(type: string): Promise<{ caseId: string; createdAt: string } | null>;
   /** Stores a file privately and returns its storage key. */
   putFile(bytes: Uint8Array, mimeType: string): Promise<string>;
   /** Reads a privately stored file, or `null` if the key is unknown. */
@@ -139,6 +143,13 @@ export function memoryStore(): CaseStore {
     },
     async addEvent(caseId, type, data) {
       events.push({ caseId, type, data: structuredClone(data), createdAt: new Date().toISOString() });
+    },
+    async latestCaseId() {
+      return events.at(-1)?.caseId ?? null;
+    },
+    async latestEventOf(type) {
+      const e = events.filter((x) => x.type === type).at(-1);
+      return e ? { caseId: e.caseId, createdAt: e.createdAt } : null;
     },
     async findCasesByEvent(type, match) {
       const hit = (data: unknown) => Object.entries(match).every(([k, v]) => (data as Record<string, unknown> | null)?.[k] === v);
@@ -238,6 +249,19 @@ export function pgStore(db: PgDb): CaseStore {
     },
     async addEvent(caseId, type, data) {
       await db.insert(caseEvents).values({ id: newId("evt"), caseId, type, data });
+    },
+    async latestCaseId() {
+      const [row] = await db.select({ caseId: caseEvents.caseId }).from(caseEvents).orderBy(desc(caseEvents.createdAt)).limit(1);
+      return row?.caseId ?? null;
+    },
+    async latestEventOf(type) {
+      const [row] = await db
+        .select({ caseId: caseEvents.caseId, createdAt: caseEvents.createdAt })
+        .from(caseEvents)
+        .where(eq(caseEvents.type, type))
+        .orderBy(desc(caseEvents.createdAt))
+        .limit(1);
+      return row ? { caseId: row.caseId, createdAt: new Date(row.createdAt).toISOString() } : null;
     },
     async findCasesByEvent(type, match) {
       const fields = Object.entries(match).map(([k, v]) => sql`${caseEvents.data}->>${k} = ${v}`);

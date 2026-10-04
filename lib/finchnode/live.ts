@@ -58,6 +58,8 @@ export interface RecordsResult {
   origin: RecordsOrigin;
   /** FinchNode subject the records belong to. */
   subject: string;
+  /** The patient's name from FinchNode's demographics, or null when not given. */
+  patientName: string | null;
   /** Human-readable notes: fallbacks taken, records skipped for missing provenance. */
   warnings: string[];
 }
@@ -161,7 +163,7 @@ export function mapRecord(category: string, raw: unknown): VerbatimFact | string
  * @returns Facts in category then record order, plus a warning per record skipped for missing provenance.
  * @throws {FinchNodeError} When the body is not a records snapshot.
  */
-export function mapSnapshot(snapshot: unknown): { records: VerbatimFact[]; warnings: string[] } {
+export function mapSnapshot(snapshot: unknown): { records: VerbatimFact[]; warnings: string[]; patientName: string | null } {
   const parsed = SnapshotSchema.safeParse(snapshot);
   if (!parsed.success) throw new FinchNodeError("FinchNode returned an unexpected records format.");
   const records: VerbatimFact[] = [];
@@ -174,7 +176,9 @@ export function mapSnapshot(snapshot: unknown): { records: VerbatimFact[]; warni
       else records.push(out);
     }
   }
-  return { records, warnings };
+  const demographics = parsed.data.data.demographics as { name?: unknown } | undefined;
+  const patientName = typeof demographics?.name === "string" && demographics.name.trim() ? demographics.name.trim() : null;
+  return { records, warnings, patientName };
 }
 
 /**
@@ -256,7 +260,7 @@ export async function loadLiveRecords(opts: { key?: string; subject?: string; ex
   const finish = (snapshot: unknown, origin: RecordsOrigin, subject: string): RecordsResult => {
     const mapped = mapSnapshot(snapshot);
     const providers = [...new Set(mapped.records.map((r) => r.provider))];
-    return { records: mapped.records, providers, origin, subject, warnings: [...warnings, ...mapped.warnings] };
+    return { records: mapped.records, providers, origin, subject, patientName: mapped.patientName, warnings: [...warnings, ...mapped.warnings] };
   };
 
   const known = opts.subject ?? process.env.FINCHNODE_SUBJECT ?? cache.__finchnodeSubject;

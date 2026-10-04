@@ -25,7 +25,19 @@ export interface CallRecord {
   /** How the call ended, as ElevenLabs reports it (e.g. "end_call tool was called."). */
   endedBy: string | null;
   transcript: CallTurn[];
+  /**
+   * What ElevenLabs' post-call analysis extracted (field → value), e.g. `call_result`, `duplicate_tsh`,
+   * `reference_number`. A proposal from an AI reading the call: shown to the patient to confirm,
+   * never applied to the case on its own.
+   */
+  extracted?: Record<string, string>;
 }
+
+/** Plain descriptions of the agent's call actions (shown in place of tool calls). */
+const ACTIONS: Record<string, string> = {
+  transfer_to_number: "(Transferred the call to the patient)",
+  end_call: "(Ended the call)",
+};
 
 /** ElevenLabs conversation, as far as we read it. */
 const ConversationSchema = z.object({
@@ -36,8 +48,21 @@ const ConversationSchema = z.object({
     .passthrough()
     .default({}),
   transcript: z
-    .array(z.object({ role: z.string(), message: z.string().nullish(), time_in_call_secs: z.number().nullish() }).passthrough())
+    .array(
+      z
+        .object({
+          role: z.string(),
+          message: z.string().nullish(),
+          time_in_call_secs: z.number().nullish(),
+          tool_calls: z.array(z.object({ tool_name: z.string().nullish() }).passthrough()).nullish(),
+        })
+        .passthrough(),
+    )
     .default([]),
+  analysis: z
+    .object({ data_collection_results: z.record(z.string(), z.object({ value: z.unknown() }).passthrough()).nullish() })
+    .passthrough()
+    .nullish(),
 });
 
 /** Conversation list item. */
@@ -89,9 +114,19 @@ export async function fetchCall(conversationId: string): Promise<CallRecord> {
     startedAt: start ? new Date(start * 1000).toISOString() : new Date().toISOString(),
     durationSecs: c.metadata.call_duration_secs ?? 0,
     endedBy: c.metadata.termination_reason ?? null,
+    extracted: Object.fromEntries(
+      Object.entries(c.analysis?.data_collection_results ?? {})
+        .map(([k, v]) => [k, v.value === null || v.value === undefined ? "" : String(v.value).trim()])
+        .filter(([, v]) => v),
+    ),
     transcript: c.transcript
-      .filter((t) => (t.message ?? "").trim() && (t.role === "agent" || t.role === "user"))
-      .map((t) => ({ role: t.role as "agent" | "user", message: (t.message ?? "").trim(), atSecs: t.time_in_call_secs ?? 0 })),
+      .filter((t) => t.role === "agent" || t.role === "user")
+      .map((t) => {
+        const action = (t.tool_calls ?? []).map((tc) => ACTIONS[tc.tool_name ?? ""]).find(Boolean);
+        const text = (t.message ?? "").trim();
+        return { role: t.role as "agent" | "user", message: text || action || "", atSecs: t.time_in_call_secs ?? 0 };
+      })
+      .filter((t) => t.message),
   };
 }
 

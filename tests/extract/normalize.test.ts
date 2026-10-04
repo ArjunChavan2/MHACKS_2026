@@ -69,3 +69,14 @@ describe("labels", () => {
     expect(inferCodeType("0450")).toBeNull();
   });
 });
+
+describe("billing entity", () => {
+  /** Proves a header block read as the entity keeps only the organization's name (first line). */
+  it("keeps only the first line of a multi-line entity", async () => {
+    const { buildBill } = await import("@/lib/extract/build");
+    const { fixtureReply } = await import("../helpers");
+    const raw = structuredClone(fixtureReply("sample-bill")) as Parameters<typeof buildBill>[0];
+    raw.header.billingEntity.raw = "Quillhaven Medical Group\nProfessional charges\n2400 Quillhaven Way (fictional)";
+    expect(buildBill(raw, null).header.billingEntity.value).toBe("Quillhaven Medical Group");
+  });
+});

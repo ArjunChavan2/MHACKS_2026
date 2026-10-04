@@ -2,7 +2,7 @@
  * @file How findings change over a case (SPEC.md §3.5, §3.6, §4.6). Pure; never uses an LLM.
  *
  * Findings change status only here, in reaction to (a) a recorded counterparty response, or (b) a
- * patient-confirmed revised statement. Every change gets a template `statusNote` written by code and
+ * patient-confirmed revised statement. Patient exclusions are separate preferences and survive re-audits. Every change gets a template `statusNote` written by code and
  * `statusSources` citing the response or document. Free text from the counterparty is copied into
  * the source verbatim and never interpreted.
  */
@@ -45,8 +45,9 @@ export function mergeFindings(previous: Finding[], fresh: Finding[]): Finding[] 
   const old = new Map(previous.map((f) => [f.id, f]));
   const merged = fresh.map((f) => {
     const p = old.get(f.id);
-    if (!p || p.status === "potential") return f;
-    return { ...f, status: p.status, statusNote: p.statusNote, statusSources: p.statusSources, verified: p.verified };
+    if (!p) return f;
+    if (p.status === "potential") return { ...f, patientExcluded: p.patientExcluded };
+    return { ...f, status: p.status, statusNote: p.statusNote, statusSources: p.statusSources, verified: p.verified, patientExcluded: p.patientExcluded };
   });
   const freshIds = new Set(fresh.map((f) => f.id));
   const kept = previous.filter((f) => !freshIds.has(f.id) && f.status !== "potential");
@@ -120,6 +121,18 @@ export function applyResponse(
       nextTasks = nextTasks.map((t) =>
         t.findingId === f.id && t.status === "open" ? { ...t, status: "done", fulfilledBy: response.documentId } : t,
       );
+    } else if (r.kind === "refused") {
+      // A denied claim moves to the appeal stage (secondary call); denied again on appeal escalates.
+      const onAppeal = f.stage === "appeal";
+      updated.set(f.id, {
+        ...f,
+        status: "pending",
+        stage: onAppeal ? "escalated" : "appeal",
+        statusNote: onAppeal
+          ? `${response.from} denied this again on appeal on ${on}. Next: a written appeal or complaint; a human advocate can help.`
+          : `${response.from} denied this claim on ${on} (said the charge is valid, without documentation). Next: appeal the denial on a second call.`,
+        statusSources: [...(f.statusSources ?? []), responseSource],
+      });
     } else if (r.kind === "needs_more_info") {
       updated.set(f.id, {
         ...f,
@@ -207,7 +220,7 @@ export interface Savings {
  * @returns The savings trio; text for display is formatted by the caller with `usd`.
  */
 export function computeSavings(bill: ConfirmedBill, findings: Finding[], cmp: RevisedComparison | null): Savings {
-  const open = findings.filter((f) => f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified));
+  const open = findings.filter((f) => !f.patientExcluded && f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified));
   const offered = open.filter((f) => f.status === "confirmed");
   return {
     questionedCents: computeVerdict(bill, open).questionedCents,
