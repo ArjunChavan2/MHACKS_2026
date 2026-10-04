@@ -34,11 +34,13 @@ const STATUS: Record<CallSession["status"], string> = {
 export default function CallWorkspace({
   caseId,
   consent,
+  imessageLinked,
   disabled,
   onChange,
 }: {
   caseId: string;
   consent: ConsentState;
+  imessageLinked: boolean;
   disabled: boolean;
   onChange: () => Promise<void>;
 }) {
@@ -64,8 +66,6 @@ export default function CallWorkspace({
   const [busy, setBusy] = useState(false);
   /** Safe visible failure; never substitutes a completed provider state. */
   const [error, setError] = useState<string | null>(null);
-  /** Patient-entered phrase for the separate representation request. */
-  const [consentText, setConsentText] = useState("");
   /** Timer-driven display clock for deadlines, never used to infer patient consent. */
   const [now, setNow] = useState(() => Date.now());
   /** Stops background polling after three provider failures; explicit controls remain available. */
@@ -222,31 +222,6 @@ export default function CallWorkspace({
   function edit(next: CallReview) {
     setReview(next);
     setApproved(false);
-  }
-
-  /** Sends the exact consent phrase to the existing bounded consent workflow; it authorizes no payment. */
-  async function giveConsent() {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/cases/${caseId}/consent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: consentText }),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.message ?? "Consent was not recorded.");
-      setConsentText("");
-      await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Consent could not be saved.");
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
   }
 
   /** Display-only countdown; server-side request expiry determines whether consent is valid. */
@@ -471,20 +446,14 @@ export default function CallWorkspace({
                   ? `${remaining}s remaining. Silence means no consent.`
                   : "The consent window expired. No consent was granted by the timeout; take over or arrange a callback."}
               </p>
-              <label className="call-field">
-                Type: I consent to Billy representing me
-                <input
-                  value={consentText}
-                  onChange={(e) => setConsentText(e.target.value)}
-                />
-              </label>
-              <button
-                disabled={busy || disabled || remaining === 0}
-                className="paper-primary"
-                onClick={giveConsent}
-              >
-                Record consent
-              </button>
+              <p className="font-semibold">
+                Reply exactly in iMessage: I consent to Billy representing me
+              </p>
+              <p className="paper-copy">
+                {imessageLinked
+                  ? "Check the text from Billy and reply there."
+                  : "Link your phone in the case’s iMessage panel first. If time runs out, take over or arrange a callback."}
+              </p>
               <p className="paper-copy text-sm">
                 Consent is for representation only. It does not authorize a
                 payment, an agreement or further disclosure.

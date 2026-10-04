@@ -53,6 +53,7 @@ export async function POST(req: Request): Promise<Response> {
       ? await approvedCallVariables(
           params.case_id ?? "",
           params.call_session_id,
+          { sid: form.CallSid ?? "", to: form.To ?? "" },
         )
       : params;
     return xml(await registerAgentCall(cfg, form.To ?? "", vars));

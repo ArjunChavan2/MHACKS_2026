@@ -5,10 +5,17 @@ import { useEffect, useState } from "react";
 /**
  * Shows the filename, elapsed wait and confirmation reminder during one upload request.
  * @param props.filename - Patient-selected file name; mount once per active request.
+ * @param props.inline - Uses the upload action’s existing layout rather than a separate card.
  * @returns Accessible status and a visual timer that does not announce every tick.
  * Side effects: runs a timer only while mounted; never predicts server processing stages.
  */
-export default function ProcessingStatus({ filename }: { filename: string }) {
+export default function ProcessingStatus({
+  filename,
+  inline = false,
+}: {
+  filename: string;
+  inline?: boolean;
+}) {
   /** Seconds since this processing panel mounted, not an estimated completion time. */
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -20,7 +27,13 @@ export default function ProcessingStatus({ filename }: { filename: string }) {
     return () => clearInterval(timer);
   }, []);
   return (
-    <aside className="paper-flow billless-processing-panel">
+    <aside
+      className={
+        inline
+          ? "billless-inline-processing"
+          : "paper-flow billless-processing-panel"
+      }
+    >
       <p role="status">
         Reading and checking <strong>{filename}</strong>. You’ll confirm the
         details next.

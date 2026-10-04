@@ -307,6 +307,7 @@ export async function startCall(
 export async function approvedCallVariables(
   caseId: string,
   sessionId: string,
+  callback?: { sid: string; to: string },
 ): Promise<Record<string, string>> {
   const c = await requireCase(caseId);
   const session = requireSession(c, sessionId);
@@ -319,6 +320,18 @@ export async function approvedCallVariables(
     !availability().available
   )
     throw new BadRequestError("Call approval is not active.");
+  if (callback) {
+    if (
+      !/^CA[a-fA-F0-9]{32}$/.test(callback.sid) ||
+      callback.to !== session.review.phone ||
+      (session.sid && session.sid !== callback.sid)
+    )
+      throw new BadRequestError(
+        "Call callback does not match the approved recipient.",
+      );
+    session.sid = callback.sid;
+    await save(caseId, session);
+  }
   return {
     case_id: caseId,
     call_session_id: session.id,

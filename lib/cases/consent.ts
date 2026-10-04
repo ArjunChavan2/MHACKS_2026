@@ -1,8 +1,8 @@
 /**
  * @file Patient consent for Billy to represent them on a live call (demo stand-in for identity
  * verification; SPEC.md §4.7). When the billing office asks to verify the patient, Billy asks our
- * app for consent; the patient is texted (iMessage via Photon when linked) and the case screen shows
- * a consent box. Consent counts only when the patient types the exact phrase. Stored as case events.
+ * app for consent; the patient is texted by iMessage (Photon) and must reply there; the website
+ * cannot record consent. Consent counts only when the patient types the exact phrase. Stored as case events.
  *
  * DEMO ONLY: typed consent is not identity verification; real offices may still require the patient
  * on the line or a signed authorization form.
@@ -49,7 +49,7 @@ export interface ConsentState {
   pendingRequest: { requestId: string; at: string; expired: boolean } | null;
   /** When consent was last given, or null. */
   givenAt: string | null;
-  via: "imessage" | "web" | null;
+  via: "imessage" | null;
 }
 
 /**
@@ -60,7 +60,11 @@ export interface ConsentState {
  */
 export function consentStateOf(c: StoredCase): ConsentState {
   const requests = c.events.filter((e) => e.type === "consent_requested");
-  const given = c.events.filter((e) => e.type === "consent_given");
+  const given = c.events.filter(
+    (e) =>
+      e.type === "consent_given" &&
+      (e.data as { via?: string }).via === "imessage",
+  );
   const lastReq = requests.at(-1);
   const lastGiven = given.at(-1);
   const matchingGiven =
@@ -84,9 +88,7 @@ export function consentStateOf(c: StoredCase): ConsentState {
   return {
     pendingRequest: pending,
     givenAt: lastGiven?.createdAt ?? null,
-    via:
-      (lastGiven?.data as { via?: "imessage" | "web" } | undefined)?.via ??
-      null,
+    via: (lastGiven?.data as { via?: "imessage" } | undefined)?.via ?? null,
   };
 }
 
@@ -128,9 +130,9 @@ export async function requestConsent(
 export async function recordConsent(
   caseId: string,
   text: string,
-  via: "imessage" | "web",
+  via: "imessage",
 ): Promise<boolean> {
-  if (!isConsentPhrase(text)) return false;
+  if (via !== "imessage" || !isConsentPhrase(text)) return false;
   const store = getStore();
   const c = await store.getCase(caseId);
   const pending = c ? consentStateOf(c).pendingRequest : null;
@@ -191,22 +193,12 @@ export async function waitForConsent(
 }
 
 /**
- * Picks the case a live call is about: `DEMO_CASE_ID` if set, otherwise the case whose iMessage link
- * or screen was opened most recently. Inbound calls carry no case ID, so this is a demo rule.
+ * Picks the case a live call is about: `DEMO_CASE_ID` if set, otherwise the case with the most recent
+ * activity (inbound calls carry no case ID, so this is a demo rule).
  *
  * @returns Case ID, or null when there is no candidate.
  */
 export async function caseForLiveCall(): Promise<string | null> {
   if (process.env.DEMO_CASE_ID) return process.env.DEMO_CASE_ID;
-  const store = getStore();
-  let best: { id: string; at: string } | null = null;
-  for (const type of ["imessage_linked", "imessage_link_code"]) {
-    for (const id of await store.findCasesByEvent(type, {})) {
-      const c = await store.getCase(id);
-      const at =
-        c?.events.filter((e) => e.type === type).at(-1)?.createdAt ?? "";
-      if (!best || at > best.at) best = { id, at };
-    }
-  }
-  return best?.id ?? null;
+  return getStore().latestCaseId();
 }

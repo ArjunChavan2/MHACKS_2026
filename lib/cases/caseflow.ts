@@ -232,6 +232,7 @@ export function snapshotOf(c: StoredCase): {
 /** Bookkeeping events kept off the timeline (task snapshots and iMessage delivery state). */
 const HIDDEN_EVENTS: ReadonlySet<string> = new Set([
   "call_session_updated",
+  "call_briefed",
   "tasks_updated",
   "imessage_link_code",
   "imessage_prompt",
@@ -316,7 +317,7 @@ function summarize(type: string, data: Record<string, unknown>): string {
     case "consent_requested":
       return `Billy asked for your consent on a call with ${String(data.counterparty ?? "the billing office")}`;
     case "consent_given":
-      return `You consented to Billy representing you (${data.via === "imessage" ? "by iMessage" : "on the web"})`;
+      return `You consented to Billy representing you (by iMessage)`;
     default:
       return type.replaceAll("_", " ");
   }

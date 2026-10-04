@@ -1,6 +1,6 @@
 /**
  * @file Proves live-call consent (demo stand-in for identity verification): only the exact phrase
- * counts, a request waits for it, consent can arrive from the case screen or an iMessage reply, the
+ * counts, a request waits for it, consent arrives only as an iMessage reply, the
  * request is texted once as a direct message, and Billy's tool route requires the shared secret.
  */
 import { beforeEach, describe, expect, it } from "vitest";
@@ -42,8 +42,8 @@ describe("consent phrase", () => {
 });
 
 describe("consent flow", () => {
-  /** Proves a request is pending until the patient types the phrase on the web, and the wait sees it. */
-  it("waits for consent typed on the case screen", async () => {
+  /** Proves a request is pending until the patient replies with the phrase by iMessage, and the wait sees it. */
+  it("waits for the consent reply", async () => {
     const { caseId } = await ingestSample(null, "sample-bill");
     const requestId = await requestConsent(
       caseId,
@@ -53,11 +53,14 @@ describe("consent flow", () => {
       consentStateOf((await getStore().getCase(caseId))!).pendingRequest
         ?.requestId,
     ).toBe(requestId);
-    expect(await recordConsent(caseId, "no thanks", "web")).toBe(false);
-    setTimeout(() => void recordConsent(caseId, CONSENT_PHRASE, "web"), 50);
+    expect(await recordConsent(caseId, "no thanks", "imessage")).toBe(false);
+    setTimeout(
+      () => void recordConsent(caseId, CONSENT_PHRASE, "imessage"),
+      50,
+    );
     expect(await waitForConsent(caseId, requestId, 3000)).toBe(true);
     const state = consentStateOf((await getStore().getCase(caseId))!);
-    expect(state).toMatchObject({ pendingRequest: null, via: "web" });
+    expect(state).toMatchObject({ pendingRequest: null, via: "imessage" });
   });
   /** Proves the wait gives up when nobody replies. */
   it("times out without consent", async () => {
@@ -83,7 +86,7 @@ describe("consent flow", () => {
     ).toBe(false);
     expect(
       await handleInbound(phone, "I consent to Billy representing me", BASE),
-    ).toMatch(/Billy will tell the billing office/);
+    ).toMatch(/Billy will tell the billing office you consent/);
     expect(consentStateOf((await getStore().getCase(caseId))!)).toMatchObject({
       pendingRequest: null,
       via: "imessage",
@@ -110,7 +113,7 @@ describe("bounded consent", () => {
   /** Rejects unsolicited and expired typed phrases, including late iMessage replies. */
   it("rejects consent without a current request or after forty seconds", async () => {
     const { caseId } = await ingestSample(null, "sample-bill");
-    expect(await recordConsent(caseId, CONSENT_PHRASE, "web")).toBe(false);
+    expect(await recordConsent(caseId, CONSENT_PHRASE, "imessage")).toBe(false);
     await getStore().addEvent(caseId, "consent_requested", {
       requestId: "expired",
     });
@@ -119,7 +122,9 @@ describe("bounded consent", () => {
     const originalNow = Date.now;
     Date.now = () => Date.parse(request.createdAt) + 41000;
     try {
-      expect(await recordConsent(caseId, CONSENT_PHRASE, "web")).toBe(false);
+      expect(await recordConsent(caseId, CONSENT_PHRASE, "imessage")).toBe(
+        false,
+      );
     } finally {
       Date.now = originalNow;
     }

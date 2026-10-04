@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* The live filename and elapsed timer replace upload readiness beside Continue. */
+.billless-inline-processing { min-width: 0; overflow-wrap: anywhere; }
+.billless-inline-processing .paper-copy { font-size: 13px; font-weight: 400; line-height: 20px; }
+
+/* Back navigation stays in the shared content column and clears the workflow heading. */
+.billless-back-navigation { padding: 24px 0 0; }
+.billless-back-navigation .paper-secondary { display: inline-flex; align-items: center; min-height: 44px; }
+
 /* Readiness and confirmation progress sit beside their primary action, stacking on phones. */
 .billless-confirm-action { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px; border-radius: 16px; background: var(--paper-surface); }
 .billless-action-progress { flex: 1; min-width: 0; max-width: 420px; }
