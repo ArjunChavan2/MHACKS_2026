@@ -75,6 +75,16 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
+/** Fetches a saved case; unavailable cases and network failures reach the visible retry state.
+ * @param caseId - Saved case identifier, encoded as one URL segment.
+ * @returns Server-computed case view; never derives clinical facts or workflow transitions.
+ */
+async function readCase(caseId: string): Promise<CaseView> {
+  const res = await fetch(`/api/cases/${encodeURIComponent(caseId)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(res.status === 404 ? "This case couldn’t be found. Check the case link and try again." : "Your case couldn’t be loaded. Please try again.");
+  return await res.json() as CaseView;
+}
+
 /**
  * The case screen.
  *
@@ -85,27 +95,29 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [view, setView] = useState<CaseView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
 
   /** Reloads the case after an action. */
   async function refresh() {
-    const res = await fetch(`/api/cases/${caseId}`, { cache: "no-store" });
-    if (res.ok) setView((await res.json()) as CaseView);
+    setView(await readCase(caseId));
+    setLoadError(null);
   }
 
   // Load now and every few seconds, so operator responses appear without a reload.
   useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetch(`/api/cases/${caseId}`, { cache: "no-store" })
-        .then((r) => (r.ok ? (r.json() as Promise<CaseView>) : null))
+      readCase(caseId)
         .then((v) => {
-          if (!cancelled && v) setView(v);
+          if (!cancelled) { setView(v); setLoadError(null); }
         })
-        .catch(() => undefined);
+        .catch((e: unknown) => {
+          if (!cancelled) setLoadError(e instanceof Error ? e.message : "Your case couldn’t be loaded. Please try again.");
+        });
     const loadImessage = () =>
-      fetch(`/api/cases/${caseId}/imessage`, { cache: "no-store" })
+      fetch(`/api/cases/${encodeURIComponent(caseId)}/imessage`, { cache: "no-store" })
         .then((r) => (r.ok ? (r.json() as Promise<ImessageStatus>) : null))
         .then((m) => {
           if (!cancelled && m) setImessage(m);
@@ -163,7 +175,22 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     }
   }
 
-  if (!view) return <p className="paper-copy">Loading your case…</p>;
+  /** Retries a failed lookup without discarding an already loaded case. */
+  async function retry() {
+    setBusy(true);
+    try { await refresh(); }
+    catch (e) { setLoadError(e instanceof Error ? e.message : "Your case couldn’t be loaded. Please try again."); }
+    finally { setBusy(false); }
+  }
+
+  if (!view) return (
+    <section className="paper-flow billless-load-state" aria-busy={!loadError || busy}>
+      <p className="paper-eyebrow">YOUR CASE</p>
+      <h2>{loadError ? "Let’s find your case" : "Opening your case…"}</h2>
+      <p className="paper-copy" role={loadError ? "alert" : "status"}>{loadError ?? "Loading your next step, documents and recorded updates."}</p>
+      {loadError && <button className="paper-primary" disabled={busy} onClick={retry}>{busy ? "Trying again…" : "Try again"}</button>}
+    </section>
+  );
   const s = view.state;
   const findings = view.audit?.findings ?? [];
   const next = s.next;
@@ -172,7 +199,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const extraActions = s.allowed.filter((a) => RUNNABLE.has(a.id) && a.id !== "patient_takes_over" && !(a.id === next.actionId && a.target === next.target));
 
   return (
-    <section className="paper-flow space-y-6">
+    <section className="paper-flow billless-case-screen space-y-6">
       <div className="paper-case-heading">
         <div className="paper-page-heading">
           <p className="paper-eyebrow">YOUR CASE</p>
@@ -181,6 +208,8 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </div>
         <span className={`paper-badge ${s.phase === "resolved" ? "" : "paper-review-badge"}`}>{PHASE_LABEL[s.phase]}</span>
       </div>
+
+      {loadError && <div className="billless-refresh-warning" role="alert"><p>{loadError} The last loaded update is shown below.</p><button className="paper-source-button" disabled={busy} onClick={retry}>Retry</button></div>}
 
       {error && (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-red-200">
@@ -242,11 +271,13 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             </button>
           </div>
         )}
+        {extraActions.length > 0 && <details className="billless-other-actions"><summary>Other options</summary>
         {extraActions.map((a) => (
           <button key={`${a.id}-${a.target ?? ""}`} className="paper-secondary mt-2" disabled={busy} onClick={() => act(a.id, a.target, a.needsApproval)}>
             {a.needsApproval ? `Approve: ${a.label}` : a.label}
           </button>
         ))}
+        </details>}
       </aside>
 
       {imessage && (
@@ -347,9 +378,9 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
 
       <div className="paper-findings">
         <h3>Timeline</h3>
-        <ol className="space-y-1 text-sm">
+        <ol className="billless-timeline">
           {[...s.timeline].reverse().map((e, i) => (
-            <li key={i} className="flex gap-3">
+            <li key={i} className="billless-timeline-event">
               <time className="shrink-0 font-mono text-xs text-[var(--paper-muted)]" dateTime={e.at}>
                 {new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
               </time>

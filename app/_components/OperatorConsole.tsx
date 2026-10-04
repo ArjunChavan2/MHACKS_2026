@@ -122,6 +122,7 @@ export default function OperatorConsole() {
   const [view, setView] = useState<CaseView | null>(null);
   const [note, setNote] = useState("");
   const [log, setLog] = useState<string[]>([]);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   /**
@@ -131,16 +132,19 @@ export default function OperatorConsole() {
    */
   async function load(id: string) {
     if (!id) return;
-    const res = await fetch(`/api/cases/${id}`, { cache: "no-store" });
-    if (!res.ok) {
+    setBusy(true);
+    setLookupError(null);
+    try {
+      const res = await fetch(`/api/cases/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("This case couldn’t be loaded. Check the ID and try again.");
+      setView((await res.json()) as CaseView);
+      const url = new URL(window.location.href);
+      url.searchParams.set("case", id);
+      window.history.replaceState(null, "", url);
+    } catch (e) {
       setView(null);
-      setLog((l) => [`Case ${id} not found.`, ...l]);
-      return;
-    }
-    setView((await res.json()) as CaseView);
-    const url = new URL(window.location.href);
-    url.searchParams.set("case", id);
-    window.history.replaceState(null, "", url);
+      setLookupError(e instanceof Error ? e.message : "Case lookup failed. Please try again.");
+    } finally { setBusy(false); }
   }
 
   // Prefill from ?case= on first load.
@@ -154,8 +158,9 @@ export default function OperatorConsole() {
         if (cancelled) return;
         setCaseId(id);
         setView(v);
+        if (!v) setLookupError("This case couldn’t be loaded. Check the ID and try again.");
       })
-      .catch(() => undefined);
+      .catch(() => { if (!cancelled) setLookupError("Case lookup failed. Enter the case ID to try again."); });
     return () => {
       cancelled = true;
     };
@@ -184,8 +189,8 @@ export default function OperatorConsole() {
   const findings = view?.audit?.findings ?? [];
 
   return (
-    <main className="paper-app">
-      <header className="paper-header">
+    <main className="paper-app billless-operator">
+      <header className="paper-header billless-site-header">
         <span className="paper-wordmark">
           Bill<span>Less</span>
           <span className="billless-brand-dot">.</span> operator
@@ -198,13 +203,16 @@ export default function OperatorConsole() {
       </p>
 
       <section className="paper-flow space-y-4">
+        <div className="paper-page-heading"><p className="paper-eyebrow">TEAM DEMO TOOL</p><h1>Billing office simulator</h1><p>Load a patient case, then record a sample response.</p></div>
+        {lookupError && <p className="billless-refresh-warning" role="alert">{lookupError}</p>}
         <form
-          className="flex gap-2"
+          className="billless-case-lookup"
           onSubmit={(e) => {
             e.preventDefault();
             void load(caseId.trim());
           }}
         >
+          <label className="billless-case-id-field">Case ID
           <input
             value={caseId}
             onChange={(e) => setCaseId(e.target.value)}
@@ -212,8 +220,9 @@ export default function OperatorConsole() {
             className="flex-1 rounded-md px-3 py-2 ring-1 ring-[var(--paper-border)]"
             aria-label="Case ID"
           />
-          <button className="paper-secondary" type="submit">
-            Load
+          </label>
+          <button className="paper-secondary" type="submit" disabled={busy}>
+            {busy ? "Loading…" : "Load case"}
           </button>
         </form>
 
@@ -239,7 +248,7 @@ export default function OperatorConsole() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-md p-2 ring-1 ring-[var(--paper-border)]" rows={2} />
             </label>
 
-            <div className="space-y-2">
+            <div className="billless-response-grid">
               {PRESETS.map((p) => {
                 const body = p.build(findings);
                 return (

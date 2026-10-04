@@ -434,7 +434,7 @@ export default function BillAuditApp() {
           <button
             disabled={busy}
             onClick={confirmAndAudit}
-            className="w-full rounded-lg bg-[var(--paper-primary)] py-3 font-semibold text-white disabled:opacity-50"
+            className="paper-primary w-full"
           >
             {busy ? "Checking…" : "Confirm and check my bill"}
           </button>
@@ -464,7 +464,7 @@ export default function BillAuditApp() {
           <button
             disabled={busy}
             onClick={makeRequest}
-            className="w-full rounded-lg bg-[var(--paper-primary)] py-3 font-semibold text-white disabled:opacity-50"
+            className="paper-primary w-full"
           >
             Draft my itemized-bill request
           </button>
@@ -719,7 +719,7 @@ function ConfirmPanel({
   }
 
   return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
+    <div className="billless-document-card">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{title}</h2>
         {doc.confirmed && (
@@ -793,7 +793,7 @@ function ConfirmPanel({
                 “{f.snippet}”
               </p>
             )}
-            <div className="mt-2 flex items-center gap-2">
+            <div className="billless-correction-row">
               <input
                 className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
                 aria-label={`Correct ${fieldLabel(path)}`}
@@ -815,7 +815,8 @@ function ConfirmPanel({
       </ul>
 
       <button
-        className="mt-4 text-sm text-[var(--paper-muted)] underline"
+        className="paper-source-button mt-4"
+        aria-expanded={showVerified}
         onClick={() => setShowVerified((s) => !s)}
       >
         {showVerified ? "Hide" : "Review"} {verified.length} verified values
@@ -823,7 +824,7 @@ function ConfirmPanel({
       {showVerified && (
         <ul className="mt-2 divide-y divide-slate-100 text-sm">
           {verified.map(([path, f]) => (
-            <li key={path} className="flex justify-between py-1">
+            <li key={path} className="billless-verified-row">
               <span className="text-[var(--paper-muted)]">
                 {fieldLabel(path)}
               </span>
@@ -1204,8 +1205,8 @@ function LetterScreen({
   }
 
   return (
-    <section className="paper-flow space-y-4">
-      <div className="rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
+    <section className="paper-flow billless-letter-screen space-y-4">
+      <div className="billless-document-card">
         <p className="text-xs text-[var(--paper-muted)]">
           {draft.author === "llm"
             ? "Wording drafted by AI; every fact was filled in by code from your confirmed bill and findings."
@@ -1255,14 +1256,14 @@ function LetterScreen({
       <button
         disabled={busy}
         onClick={download}
-        className="w-full rounded-lg bg-[var(--paper-primary)] py-3 font-semibold text-white disabled:opacity-50"
+        className="paper-primary w-full"
       >
-        Download PDF
+        {busy ? "Preparing PDF…" : "Download PDF"}
       </button>
       {onTrack && (
         <button
           onClick={onTrack}
-          className="w-full rounded-lg py-3 font-semibold ring-1 ring-[var(--paper-border)]"
+          className="paper-secondary w-full"
         >
           Track this case →
         </button>

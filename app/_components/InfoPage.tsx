@@ -6,14 +6,17 @@ import type { ReactNode } from "react";
  * Presents placeholder information with a consistent home link and readable typography.
  * @param props.title - Page heading.
  * @param props.children - Sample informational content.
+ * @param props.action - Optional page-specific action opposite the home link.
  * @returns A server-rendered informational page with an explicit demo label.
  */
 export default function InfoPage({
   title,
   children,
+  action,
 }: {
   /** Visible page heading. */ title: string;
   /** Page-specific sample sections. */ children: ReactNode;
+  /** Optional trailing navigation action. */ action?: ReactNode;
 }) {
   return (
     <div className="billless-info-page">
@@ -31,9 +34,12 @@ export default function InfoPage({
           policy or an active support service.
         </p>
         {children}
-        <Link href="/" className="paper-text-button billless-info-back">
-          ← Back to home
-        </Link>
+        <div className="billless-info-actions">
+          <Link href="/" className="paper-text-button">
+            ← Back to home
+          </Link>
+          {action}
+        </div>
       </main>
       <nav className="billless-footer-links" aria-label="Footer navigation">
         <Link href="/privacy">Privacy</Link>

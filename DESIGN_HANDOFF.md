@@ -136,7 +136,12 @@ reduced motion. Do not imply the static goat asset has individually animated lim
 - Fixed mascot copy describes the task, never interprets a health fact. Empty audits do not
   guarantee the whole bill is correct. Original record-origin labels remain in the UI.
 - Sample policies and example emails must remain clearly labeled until real content and
-  contact channels are approved. Do not replace them with guessed security/retention promises.
+contact channels are approved. Do not replace them with guessed security/retention promises.
+
+Information-page navigation uses a shared `.billless-info-actions` row. Back to home is on
+the left; Help's Start a bill review action is on the right. At ≤480px they stack, keeping
+the forward action right-aligned and both targets at least 44px tall. `InfoPage` accepts an
+optional `action` slot so page-specific links share this placement.
 
 ## Design tools and prototype status
 
@@ -181,3 +186,11 @@ Next: replace sample policies
 and contacts before public use, finish or migrate the editable prototype when tools permit,
 and review the teammate's case/operator screens for further visual consistency. Keep changes
 in UI files scoped; API, types, database, and approval logic remain owned by the current MVP.
+
+## Current screen completion pass
+
+Plan: `agent-notes/frontend-screens/PLAN.md`. Case tracking has explicit unavailable/retry states and retains its last loaded data when polling fails. Secondary case actions are in an “Other options” disclosure. Its savings row uses three columns on desktop and stacks on phones; timeline entries stack their date and description on phones.
+
+Confirmation and letter cards share rounded document surfaces and phone spacing. Flagged correction controls stack on phones; verified values wrap, and the verified-value disclosure exposes its state to assistive technology. PDF preparation has a visible busy label. Letter text, evidence, approval gates and case calculations remain server-owned.
+
+The simulated operator console uses the shared header spacing, labeled case lookup, visible lookup errors and response cards that switch from two columns to one on phones. It remains available only through `/operator`, outside public navigation.

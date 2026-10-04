@@ -5,7 +5,14 @@ import Link from "next/link";
 /** Renders basic product guidance and clearly identifies the contact address as a placeholder. */
 export default function HelpPage() {
   return (
-    <InfoPage title="Help / Contact">
+    <InfoPage
+      title="Help / Contact"
+      action={
+        <Link href="/review" className="paper-text-button">
+          Start a bill review →
+        </Link>
+      }
+    >
       <section>
         <h2>What do I need to start?</h2>
         <p>
@@ -43,9 +50,6 @@ export default function HelpPage() {
           support messages.
         </p>
       </section>
-      <Link href="/review" className="paper-text-button">
-        Start a bill review →
-      </Link>
     </InfoPage>
   );
 }
