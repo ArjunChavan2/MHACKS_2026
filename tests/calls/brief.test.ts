@@ -79,6 +79,15 @@ describe("buildCallBrief", () => {
     expect(brief.prompt).toContain(bill.patientName!);
     expect(brief.prompt).toContain(bill.billingEntity);
   });
+  /** Proves the call rules: consent first, say so before texting the patient, plain digits. */
+  it("asks consent first, announces texts, and says digits plainly", async () => {
+    const bill = await confirmedSampleBill();
+    const brief = buildCallBrief(bill, null, findDuplicateCharges(bill))!;
+    expect(brief.prompt).toMatch(/CONSENT FIRST \(start of every call\)/);
+    expect(brief.prompt).toMatch(/Never use those tools silently/);
+    expect(brief.prompt).toMatch(/Never add "as in" to a digit/);
+    expect(brief.prompt.indexOf("CONSENT FIRST")).toBeLessThan(brief.prompt.indexOf("WHAT TO ASK FOR"));
+  });
   /** Proves an insurer-only case briefs an insurer call with that patient's name, never "billing office". */
   it("briefs the insurer when every issue is the insurer's", async () => {
     const { bill, eob } = await marcus();

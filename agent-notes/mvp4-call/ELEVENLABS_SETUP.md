@@ -31,4 +31,6 @@ npm run agent:test -- ask_patient_answered
 npm run agent:test -- ask_patient_skipped
 ```
 
-Not run yet: the implementation session had no ElevenLabs key. Record the results in `NOTES.md`.
+**Done 2026-10-04** with `npm run agent:sync` (creates/updates both webhook tools with forced pre-tool
+speech, attaches them to both agents, stores the Priya brief on the billing agent, pastes the insurer
+prompt). Rerun it after changing `lib/calls/brief.ts` or `insurer-prompt.txt`. Results in `NOTES.md`.

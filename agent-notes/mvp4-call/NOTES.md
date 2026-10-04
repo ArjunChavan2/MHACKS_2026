@@ -106,3 +106,15 @@ ask_patient_answered` and `-- ask_patient_skipped` (not run yet: no ElevenLabs k
 **Texts are structured now:** every message starts with "BillLess · <kind>", the card's details are
 bulleted, and approval prompts spell out the options ("A → Approve: Send the dispute letter",
 "B → Hold for now (nothing is sent)", "WHY → See the evidence"). Options are never trimmed away.
+
+## Consent first, announced texts, plain digits, 2026-10-04
+
+Rules (in `lib/calls/brief.ts` for live calls and `insurer-prompt.txt`): Billy asks for consent of
+representation right after the other side confirms who they are, before anything else; says out
+loud every time he texts the patient (consent or `ask_patient`) and reports the reply; spells letters
+phonetically but says digits plainly ("seven, seven, one", never "1 as in 1"). Both webhook tools use
+ElevenLabs' forced pre-tool speech. `npm run agent:sync` pushed tools and prompts to both agents.
+
+Simulations (`npm run agent:test`), all criteria passed: `ask_patient_answered`, `ask_patient_skipped`,
+`cooperative` (incl. `consent_first`), `consent_denied`, `spelling` (incl. `digits_plain`);
+`--insurer insurer_cooperative insurer_spelling`. Every scenario is also graded on `announces_texting`.

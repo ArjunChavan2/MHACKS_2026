@@ -17,6 +17,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:studio": "drizzle-kit studio",
+    "agent:sync": "tsx --env-file-if-exists=.env.local scripts/agent-sync.ts",
     "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts",
     "worker:photon": "tsx --env-file-if-exists=.env.local workers/photon/index.ts",
     "call:test": "tsx --env-file-if-exists=.env.local scripts/call-test.ts",

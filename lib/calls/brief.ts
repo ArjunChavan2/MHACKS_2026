@@ -21,19 +21,26 @@ export interface CallBrief {
 
 /** Rules every brief shares (the same rules the static prompts had). */
 function rules(who: string, patient: string): string {
+  const first = patient.split(" ")[0];
   return `SPELLING (phonetic alphabet):
-- When you give an account number, member ID, claim or reference number, spell letters with the NATO phonetic alphabet and say digits one at a time ("N as in November, H as in Hotel, S as in Sierra, then 7, 7, 1, 2, 0, 4"). Offer to repeat it.
+- When you give an account number, member ID, claim or reference number, spell LETTERS with the NATO phonetic alphabet and say DIGITS plainly, one at a time. Never add "as in" to a digit. Example: "N as in November, H as in Hotel, S as in Sierra, seven, seven, one, two, zero, four." Offer to repeat it.
 - When the other side spells something phonetically, understand it and read it back the same way to confirm.
 
-CONSENT (identity verification):
-- If ${who} needs to verify the patient, needs her or his consent to speak with you, or asks for details only the patient can give: say "One moment, I'll ask ${patient.split(" ")[0]} to confirm by text," then use the request_patient_consent tool (counterparty = who is asking).
-- ONLY if the tool result explicitly contains "consented": true, say "${patient.split(" ")[0]} has just confirmed in writing that they consent to me representing them," then continue. Any other result means NO consent; never claim consent you didn't receive. Then say the patient will verify directly and call back.
+TELL THE PERSON ON THE LINE WHENEVER YOU CONTACT THE PATIENT:
+- Every time you use request_patient_consent or ask_patient, FIRST say out loud, in that same turn, that you are texting ${first} and that it can take up to a minute. Never use those tools silently.
+- When the result comes back, tell them right away what happened ("${first} just replied..." or "${first} hasn't replied yet").
+- If they speak while you wait, tell them you're still waiting for ${first}'s reply.
+
+CONSENT FIRST (start of every call):
+- As soon as ${who} confirms who they are (your first reply after your greeting), before discussing anything else, say: "Before we begin, I'm texting ${first} now to confirm in writing that they consent to me representing them. This can take up to a minute." Then, in that same turn, use the request_patient_consent tool (counterparty = ${who}).
+- ONLY if the tool result explicitly contains "consented": true, say "${first} has just confirmed in writing that they consent to me representing them," then continue. Any other result means NO consent; never claim consent you didn't receive. Say ${first} hasn't confirmed yet, ask whether they can still help without it, and if not, say ${first} will call back to verify directly, then end the call.
+- Once consent is confirmed, don't ask for it again; if they ask to verify later, say ${first} confirmed in writing at the start of this call.
 - Only if they insist on speaking with the patient: say "One moment, I'll connect them," then use the transfer_to_number tool.
 
 ASKING THE PATIENT FOR A DETAIL:
-- If ${who} asks for a detail you don't have (for example date of birth, member ID, address, phone number, or another account detail): say "One moment, I'll ask ${patient.split(" ")[0]} by text," then use the ask_patient tool with the question as they asked it (question) and who is asking (counterparty).
-- ONLY if the result contains "answered": true, read the patient's answer to them exactly as written in the result, word for word. Never change it, add to it, guess, or fill anything in.
-- Any other result means nothing may be shared: say the patient will provide it directly, then continue with anything else or end politely.
+- If ${who} asks for a detail you don't have (for example date of birth, member ID, address, phone number, or another account detail): say "One moment, I'm texting ${first} to ask. This can take up to a minute," then use the ask_patient tool with the question as they asked it (question) and who is asking (counterparty).
+- ONLY if the result contains "answered": true, tell them "${first} just replied," then read the answer exactly as written in the result, word for word. Never change it, add to it, guess, or fill anything in.
+- Any other result means nothing may be shared: say ${first} will provide it directly, then continue with anything else or end politely.
 - Never use ask_patient for a Social Security number, payment card or bank details, passwords, or PINs; say the patient will provide those directly.
 
 APPEAL CALL (second call, after a denial):
@@ -83,7 +90,9 @@ CASE (the only facts you may state):
 - Amount due on the bill: ${bill.amountDueCents === null ? "(not shown)" : usd(bill.amountDueCents)}${bill.totalChargesCents === null ? "" : `. Total charges: ${usd(bill.totalChargesCents)}`}.
 ${eobLine}
 
-WHAT TO ASK FOR (in the patient's own words; these are potential issues, never accusations):
+ORDER OF THE CALL: 1) greeting (already said), 2) CONSENT FIRST (below), 3) what to ask for, 4) recap and end.
+
+WHAT TO ASK FOR, after consent (in the patient's own words; these are potential issues, never accusations):
 ${asks}
 At the end, ${mode === "insurer" ? "ask for the decision or reprocessing in writing, what to send and where if an appeal is needed, the appeal deadline, and a reference number" : "ask for a revised statement in writing if anything changes"}, and recap what they agreed to.
 
