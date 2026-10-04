@@ -13,8 +13,9 @@ cp .env.example .env.local   # add GEMINI_API_KEY to read your own uploads; opti
 npm run dev                  # http://localhost:3000
 ```
 
-To use the team's Neon database (data survives restarts), follow
-**[docs/NEON_SETUP.md](docs/NEON_SETUP.md)**; you can hand it to your coding agent.
+Teammates: run **`npm run setup`** first (or tell your coding agent to). It installs everything,
+connects the team's Neon database, and tells you the one thing it needs from you, if anything.
+Details: [docs/NEON_SETUP.md](docs/NEON_SETUP.md).
 
 Without a Gemini key, use **"Sample bill + EOB"** on the start screen: synthetic documents read from
 saved answers, labeled in the UI, with the same checks as a live upload.
