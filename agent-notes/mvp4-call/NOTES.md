@@ -89,7 +89,7 @@ withholds replies that look like an SSN or card number. While a question is open
 patient's next text is the answer (even "yes"); only STOP keeps its meaning. If no phone is linked
 to the live case, the tool answers at once ("can't be reached by text").
 
-**ElevenLabs setup (needs the ElevenLabs dashboard or API; not done from this repo):** add a webhook
+**ElevenLabs setup (checklist: `ELEVENLABS_SETUP.md`; needs the ElevenLabs dashboard or API):** add a webhook
 tool to both agents (billing and insurer):
 - Name `ask_patient`; method POST; URL `https://billless.tech/api/calls/ask`; header
   `x-billy-secret` = the Vercel `MESSAGING_SECRET`; response timeout 50–60 s.
