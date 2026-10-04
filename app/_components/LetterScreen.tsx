@@ -1,12 +1,13 @@
 "use client";
-/** @file Reviewed deterministic correspondence, citations, optional patient edits and PDF download; never sends a letter. */
+/** @file Reviewed deterministic correspondence, citations, optional patient edits and manual email composition; never sends a letter. */
 import { useState } from "react";
 import type { Draft } from "@/lib/types";
 import LetterEditor, { type LetterEdits } from "./LetterEditor";
+import { emailText, emailHref } from "@/lib/draft/email";
 import { describeSource } from "./sources";
 
 /**
- * Letter screen: click any paragraph to see its sources; edit wording (when `onSave` is given); download the PDF.
+ * Letter screen: click any paragraph to see its sources; edit wording (when `onSave` is given); copy an email or open a prefilled mail app.
  *
  * @param props.draft - The finished draft.
  * @param props.onSave - Saves patient wording; provided by each patient letter flow.
@@ -17,48 +18,64 @@ export default function LetterScreen({
   draft,
   onTrack,
   onSave,
+  onRecipientSave,
 }: {
   draft: Draft;
   /** Persists patient wording and refreshes the current saved letter; omit to hide editing. */
   onSave?: (edits: LetterEdits) => Promise<void>;
   onTrack?: () => void;
+  /** Saves a patient-entered recipient without sending the letter. */
+  onRecipientSave?: (email: string) => Promise<void>;
 }) {
-  /** Editing blocks downloads and case navigation until saved or canceled. */
+  /** Editing blocks email actions and case navigation until saved or canceled. */
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  /** Recipient and email action feedback are local until the case accepts the address. */
+  const [recipient, setRecipient] = useState(draft.recipientEmail ?? "");
   const [busy, setBusy] = useState(false);
-  /** Visible PDF failure; a failed request must never be downloaded as a document. */
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [manualCopy, setManualCopy] = useState(false);
+  /** Requires one complete address before opening a mail app; copying remains available without one. */
+  const validRecipient =
+    /^[^\s@<>?,;\r\n]+@[^\s@<>?,;\r\n]+\.[^\s@<>?,;\r\n]+$/.test(
+      recipient.trim(),
+    );
 
-  /**
-   * Downloads the reviewed draft as a PDF without submitting it (SPEC.md §4.5).
-   * Displays HTTP/network failures instead of saving an error response as a PDF.
-   * @returns Resolves after download or a visible failure; always releases busy state.
-   * Side effects: calls the PDF API and starts a browser download.
-   */
-  async function download() {
-    setBusy(true);
-    setDownloadError(null);
+  /** Saves a valid or cleared address, exposing errors without losing the typed value. */
+  async function saveRecipient() {
+    if (recipient.trim() && !validRecipient) {
+      setEmailError(
+        "Enter a complete email address, such as billing@example.com.",
+      );
+      return false;
+    }
     try {
-      const res = await fetch("/api/letters/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft }),
-      });
-      if (!res.ok)
-        throw new Error("The PDF could not be prepared. Please try again.");
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${draft.kind.replaceAll("_", "-")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      if (onRecipientSave && recipient.trim() !== (draft.recipientEmail ?? ""))
+        await onRecipientSave(recipient.trim());
+      setEmailError(null);
+      return true;
     } catch (error) {
-      setDownloadError(
+      setEmailError(
         error instanceof Error
           ? error.message
-          : "The PDF could not be prepared.",
+          : "The email address could not be saved.",
       );
+      return false;
+    }
+  }
+
+  /** Copies subject and the full saved letter; unavailable clipboard access opens a manual copy field. */
+  async function copyEmail() {
+    setBusy(true);
+    setCopied(false);
+    try {
+      if (!(await saveRecipient())) return;
+      await navigator.clipboard.writeText(emailText(draft, recipient.trim()));
+      setCopied(true);
+      setManualCopy(false);
+    } catch {
+      setManualCopy(true);
     } finally {
       setBusy(false);
     }
@@ -141,21 +158,83 @@ export default function LetterScreen({
           </div>
         )}
       </div>
-      {downloadError && (
-        <p
-          role="alert"
-          className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
-        >
-          {downloadError}
+      <div className="billless-email-compose">
+        <label htmlFor="letter-recipient-email">
+          {draft.kind === "appeal_letter" ? "Insurer email" : "Provider email"}
+        </label>
+        <input
+          id="letter-recipient-email"
+          type="email"
+          value={recipient}
+          maxLength={254}
+          placeholder="billing@example.com"
+          autoComplete="email"
+          aria-invalid={Boolean(recipient && !validRecipient)}
+          aria-describedby="letter-email-help"
+          onChange={(event) => {
+            setRecipient(event.target.value);
+            setCopied(false);
+          }}
+          onBlur={() => {
+            void saveRecipient();
+          }}
+        />
+        <p id="letter-email-help" className="paper-copy">
+          Use the address from your provider or insurer. You’ll review and send
+          the email yourself.
         </p>
-      )}
-      <button
-        disabled={busy}
-        onClick={download}
-        className="paper-primary w-full"
-      >
-        {busy ? "Preparing PDF…" : "Download PDF"}
-      </button>
+        {emailError && (
+          <p role="alert" className="text-red-800">
+            {emailError}
+          </p>
+        )}
+        <div className="billless-email-actions">
+          <button
+            disabled={busy}
+            onClick={copyEmail}
+            className="paper-secondary"
+          >
+            {copied ? "Email copied ✓" : "Copy email"}
+          </button>
+          <a
+            className="paper-primary"
+            aria-disabled={!validRecipient}
+            href={
+              validRecipient ? emailHref(draft, recipient.trim()) : undefined
+            }
+            onClick={(event) => {
+              if (!validRecipient) {
+                event.preventDefault();
+                setEmailError(
+                  "Add the recipient’s email address to open your email app.",
+                );
+              }
+            }}
+          >
+            Open in email app ↗
+          </a>
+        </div>
+        {copied && (
+          <p role="status" className="paper-copy">
+            Subject and letter copied{recipient.trim() ? ", along with the recipient" : ""}. Paste them into your email.
+          </p>
+        )}
+        {manualCopy && (
+          <label>
+            Copy email manually
+            <textarea
+              readOnly
+              value={emailText(draft, recipient.trim())}
+              rows={10}
+              onFocus={(event) => event.target.select()}
+            />
+          </label>
+        )}
+        <p className="paper-copy">
+          If your email app doesn’t open or the letter is cut short, use Copy
+          email.
+        </p>
+      </div>
       {onTrack && (
         <button onClick={onTrack} className="paper-secondary w-full">
           Track this case →
@@ -163,8 +242,8 @@ export default function LetterScreen({
       )}
       <p className="text-center text-xs text-[var(--paper-muted)]">
         {onTrack
-          ? "Sending happens from the case screen and only with your approval (simulated in this demo)."
-          : "Nothing is sent for you in this version. Review the letter, then send it yourself."}
+          ? "You can also track replies and follow-ups in your saved case."
+          : "Nothing is sent until you choose Send in your email app."}
       </p>
     </section>
   );

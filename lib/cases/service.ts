@@ -502,6 +502,25 @@ export async function editLetter(caseId: string, input: { expectedText: string[]
   return (await loadCase(caseId))!;
 }
 
+/**
+ * Saves the patient's recipient email on the current unsent letter; sends nothing.
+ * @param caseId - Case owning the correspondence.
+ * @param recipientEmail - Validated email address, or empty to clear it.
+ * @returns Updated saved case and draft.
+ */
+export async function saveLetterRecipient(caseId: string, recipientEmail: string): Promise<CaseView> {
+  const store = getStore();
+  const c = await store.getCase(caseId);
+  if (!c) throw new BadRequestError("Unknown case");
+  if (c.events.some((e) => ["approval_recorded", "dispute_sent", "consent_given", "call_recorded"].includes(e.type)))
+    throw new BadRequestError("This case has recorded approvals or correspondence. Its recipient cannot be changed here.");
+  const document = c.documents.filter((d) => d.direction === "outgoing" && d.status !== "superseded" && d.draft).at(-1);
+  if (!document) throw new BadRequestError("No current letter to address");
+  await store.saveDocument({ ...document, draft: { ...document.draft as Draft, recipientEmail } });
+  await store.addEvent(caseId, "letter_recipient_saved", { documentId: document.id });
+  return (await loadCase(caseId))!;
+}
+
 /** Reopens an unsent review for corrections, preserving documents and superseded drafts in its history.
  * Refuses cases with recorded approvals or correspondence so editing cannot rewrite an active dispute.
  * @param caseId - Existing case whose bill and EOB should be reconfirmed.

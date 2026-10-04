@@ -382,6 +382,8 @@ export interface Draft {
   subject: string;
   /** Body paragraphs in order. */
   paragraphs: DraftParagraph[];
+  /** Patient-entered recipient email for manually composing this letter. */
+  recipientEmail?: string;
   /** Original generated paragraphs retained for reset and server-side fact protection. */
   originalParagraphs?: DraftParagraph[];
   /** Patient-added explanation, stored separately from sourced facts. */

@@ -419,6 +419,23 @@ export default function BillAuditApp() {
     });
   }
 
+  /** Persists the email recipient for this saved letter without changing workflow or sending it. */
+  async function saveRecipientEmail(email: string) {
+    if (!caseId) throw new Error("No case is available for this letter.");
+    const response = await fetch(
+      `/api/cases/${encodeURIComponent(caseId)}/letter`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientEmail: email }),
+      },
+    );
+    const view = await response.json();
+    if (!response.ok)
+      throw new Error(view.message ?? "The email address could not be saved.");
+    setDraft(view.draft);
+  }
+
   /** Saves patient wording as a new unsent letter document; old approvals cannot cover it. */
   async function saveLetterEdits(edits: LetterEdits) {
     if (!caseId) throw new Error("No case is available for this letter.");
@@ -450,7 +467,10 @@ export default function BillAuditApp() {
       if (!bill) return;
       const { draft } = await postJson<{ draft: Draft }>(
         "/api/requests/itemized",
-        { documentId: bill.ingest.documentId, acknowledgeDocType: bill.ackType },
+        {
+          documentId: bill.ingest.documentId,
+          acknowledgeDocType: bill.ackType,
+        },
       );
       setDraft(draft);
       setStep("letter");
@@ -666,9 +686,16 @@ export default function BillAuditApp() {
           <p className="text-sm text-[var(--paper-muted)]">
             You can also download your EOB from your insurer’s website or app.
           </p>
-          <TypeDoubts doc={bill} kind="a medical balance statement" onChange={setBill} />
+          <TypeDoubts
+            doc={bill}
+            kind="a medical balance statement"
+            onChange={setBill}
+          />
           <button
-            disabled={busy || (typeIssuesOf(bill.ingest.result).length > 0 && !bill.ackType)}
+            disabled={
+              busy ||
+              (typeIssuesOf(bill.ingest.result).length > 0 && !bill.ackType)
+            }
             onClick={makeRequest}
             className="paper-primary w-full"
           >
@@ -680,6 +707,7 @@ export default function BillAuditApp() {
         <LetterScreen
           draft={draft}
           onSave={saveLetterEdits}
+          onRecipientSave={saveRecipientEmail}
           onTrack={
             draft.kind === "dispute_letter" || draft.kind === "appeal_letter"
               ? () => setStep("case")

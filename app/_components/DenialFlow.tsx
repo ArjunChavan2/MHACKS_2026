@@ -9,7 +9,7 @@ import type { LetterEdits } from "./LetterEditor";
 /**
  * Displays one denial on its existing case; reload reads saved evaluation rather than rechecking records.
  * @param props - Document state, correction setter and navigation to the persistent case.
- * @returns Confirmation, evidence review and PDF review. Nothing is submitted to an insurer.
+ * @returns Confirmation, evidence review and email preparation. Nothing is submitted to an insurer.
  */
 export default function DenialFlow({
   doc,
@@ -50,6 +50,21 @@ export default function DenialFlow({
     };
   }, [doc.ingest.caseId, doc.ingest.documentId]);
 
+  /** Saves a manually supplied recipient for the denial correspondence without contacting anyone. */
+  async function saveRecipientEmail(email: string) {
+    const response = await fetch(`/api/cases/${doc.ingest.caseId}/letter`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipientEmail: email }),
+    });
+    const view = await response.json();
+    if (!response.ok)
+      throw new Error(view.message ?? "The email address could not be saved.");
+    setResult((current) =>
+      current ? { ...current, draft: view.draft } : current,
+    );
+  }
+
   /** Saves appeal wording to the same case and refreshes the visible draft without rerunning policy checks. */
   async function saveLetterEdits(edits: LetterEdits) {
     const response = await fetch(`/api/cases/${doc.ingest.caseId}/letter`, {
@@ -58,9 +73,13 @@ export default function DenialFlow({
       body: JSON.stringify(edits),
     });
     const view = await response.json();
-    if (!response.ok) throw new Error(view.message ?? "Your letter could not be saved.");
-    if (!view.draft) throw new Error("The saved letter is unavailable. Reopen this case.");
-    setResult((current) => current ? { ...current, draft: view.draft } : current);
+    if (!response.ok)
+      throw new Error(view.message ?? "Your letter could not be saved.");
+    if (!view.draft)
+      throw new Error("The saved letter is unavailable. Reopen this case.");
+    setResult((current) =>
+      current ? { ...current, draft: view.draft } : current,
+    );
   }
 
   /** Locks patient-confirmed values before evaluating fixed rules; failed confirmation stays editable. */
@@ -238,14 +257,18 @@ export default function DenialFlow({
           >
             Back to policy evidence
           </button>
-          <LetterScreen draft={result.draft} onSave={saveLetterEdits} />
+          <LetterScreen
+            draft={result.draft}
+            onSave={saveLetterEdits}
+            onRecipientSave={saveRecipientEmail}
+          />
         </>
       )}
       <button className="paper-secondary" onClick={onTrack}>
         Open saved case
       </button>
       <p className="text-sm paper-copy">
-        Preparing or downloading a letter does not send it. Your case keeps the
+        Preparing or copying a letter does not send it. Your case keeps the
         original notice, evidence and draft.
       </p>
     </section>

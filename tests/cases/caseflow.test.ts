@@ -32,6 +32,7 @@ import {
   reopenReview,
   setFindingExcluded,
   editLetter,
+  saveLetterRecipient,
 } from "@/lib/cases/service";
 import { memoryStore, pgStore, type CaseStore } from "@/lib/cases/store";
 import type { Finding } from "@/lib/types";
@@ -115,6 +116,21 @@ describe.each([
 ] as const)("adaptive case on the %s store", (_name, makeStore) => {
   beforeEach(() => {
     g.__mhStore = makeStore();
+  });
+
+  /** The email address persists with the unsent letter, survives edits, clears cleanly, and never sends mail. */
+  it("saves the recipient with the letter and refuses changes after sending", async () => {
+    const c = await drafted();
+    const before = (await loadCase(c.caseId))!;
+    const view = await saveLetterRecipient(c.caseId, "billing@example.test");
+    expect(view.draft!.recipientEmail).toBe("billing@example.test");
+    expect(view.state.next.target).toBe(before.state.next.target);
+    expect((await loadCase(c.caseId))!.draft!.recipientEmail).toBe("billing@example.test");
+    const edited = await editLetter(c.caseId, { expectedText: view.draft!.paragraphs.map((p) => p.text), edits: [], personalNote: "Please reply in writing.", reset: false });
+    expect(edited.draft!.recipientEmail).toBe("billing@example.test");
+    expect((await saveLetterRecipient(c.caseId, "")).draft!.recipientEmail).toBe("");
+    await send(c.caseId);
+    await expect(saveLetterRecipient(c.caseId, "another@example.test")).rejects.toThrow(/recorded approvals/);
   });
 
   /** Personalization preserves sourced facts, persists on both stores, and invalidates earlier draft targets. */

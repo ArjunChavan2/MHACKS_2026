@@ -1,6 +1,6 @@
 /** @file Saves patient wording while protecting server-held letter facts. */
 import { z } from "zod";
-import { editLetter } from "@/lib/cases/service";
+import { editLetter, saveLetterRecipient } from "@/lib/cases/service";
 import { errorResponse, parseBody } from "@/lib/http";
 
 /** Bounded patient edits; document evidence and originals are never accepted from the client. */
@@ -26,6 +26,27 @@ export async function POST(
   try {
     const { id } = await ctx.params;
     return Response.json(await editLetter(id, await parseBody(req, Body)), {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+/** Only a single patient-entered address is allowed, preventing mail header injection. */
+const Recipient = z.object({
+  recipientEmail: z.union([z.string().trim().email().max(254), z.literal("")]),
+});
+
+/** Persists the recipient for manual email composition without sending correspondence. */
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  try {
+    const { id } = await ctx.params;
+    const { recipientEmail } = await parseBody(req, Recipient);
+    return Response.json(await saveLetterRecipient(id, recipientEmail), {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
