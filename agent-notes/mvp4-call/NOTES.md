@@ -67,3 +67,8 @@ visit, with consent mocked false): all pass.
 
 **Demo:** `npm run call:mode -- insurer` → teammate calls +1 734-977-0915 playing Wolverine Mutual
 Health → Billy makes the case with the records → switch back with `npm run call:mode -- billing`.
+
+## Phonetic alphabet, 2026-10-04
+
+Both agents spell IDs with the NATO alphabet ("Q as in Quebec...") and digits one at a time, and
+understand and read back phonetically spelled references. Tests: `spelling` and `--insurer insurer_spelling` (pass).

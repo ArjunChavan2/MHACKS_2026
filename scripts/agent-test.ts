@@ -74,6 +74,14 @@ const SCENARIOS: Scenario[] = [
     criteria: [{ id: "reports_consent", name: "Reports consent and continues", conversation_goal_prompt: "After the tool reports consent, the agent tells the office the patient consented in writing and then continues with the billing questions." }],
   },
   {
+    id: "spelling",
+    billingOffice: "You are a billing office clerk at Quillhaven Medical Group. Ask the caller to spell the account number slowly. Then say: 'I've opened a review ticket for you, it's T as in Tango, K as in Kilo, 9, 2, 1.' Ask them to confirm they have it, then say goodbye.",
+    criteria: [
+      { id: "spells_phonetically", name: "Spells IDs with the phonetic alphabet", conversation_goal_prompt: "When spelling the account number, the agent uses the phonetic alphabet for the letters (Q as in Quebec, M as in Mike, G as in Golf, or similar) and says the digits individually." },
+      { id: "reads_back_ticket", name: "Reads back a phonetically spelled reference", conversation_goal_prompt: "The agent correctly reads back the ticket as TK-921 (letters T and K, digits 9 2 1), and does not get any character wrong." },
+    ],
+  },
+  {
     id: "wrong_number",
     billingOffice: "You work at a pizza restaurant, not a billing office. Answer 'Tony's Pizza, what can I get you?' and, when the caller explains, say they have the wrong number.",
     criteria: [{ id: "ends_wrong_number", name: "Ends a wrong-number call immediately", conversation_goal_prompt: "Once it's clear this is not the billing office, the agent ends the call (calls end_call) in its very next turn, at most after a brief apology, without asking questions, lingering, or repeating itself." }],
@@ -96,6 +104,15 @@ const INSURER_SCENARIOS: Scenario[] = [
       { id: "asks_next_steps", name: "Gets next steps", conversation_goal_prompt: "The agent asks what documents to send and where, or about reconsideration/expedited appeal, and confirms the deadline." },
       { id: "gets_reference", name: "Gets a reference number", conversation_goal_prompt: "The agent asks for or confirms a call reference number." },
       { id: "no_medical_opinion", name: "Gives no medical opinions", conversation_goal_prompt: "The agent never interprets the records or gives a medical opinion; it only states what the records are, with provider and date." },
+    ],
+  },
+  {
+    id: "insurer_spelling",
+    billingOffice: "You are a representative at Wolverine Mutual Health. Ask the caller to spell the member ID. Then say: 'Your call reference is C as in Charlie, R as in Romeo, 4, 4, 7, 1.' Ask them to read it back, then say goodbye.",
+    toolMocks: { request_patient_consent: '{"consented": true}' },
+    criteria: [
+      { id: "spells_phonetically", name: "Spells the member ID phonetically", conversation_goal_prompt: "The agent spells the member ID letters with the phonetic alphabet (W as in Whiskey, M as in Mike, H as in Hotel, or similar) and the digits individually." },
+      { id: "reads_back_reference", name: "Reads back the reference correctly", conversation_goal_prompt: "The agent reads back the call reference as CR-4471 (C, R, 4, 4, 7, 1) with no character wrong." },
     ],
   },
   {
