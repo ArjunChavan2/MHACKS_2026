@@ -566,7 +566,7 @@ export async function auditCase(
         `This EOB doesn't look like it's for the same visit as the bill. ${mismatch.join(" ")} Upload the matching EOB, or check the bill without one.`,
       );
   }
-  const { records, providers, origin, warnings } = await loadRecords(caseId);
+  const { records, providers, origin, warnings } = await loadRecords(caseId, bill.patientName);
   const fresh = runAudit(bill, eob, records, providers);
   const store = getStore();
   // Merge so a rerun never erases a status set by a response or verification (MVP 2).
@@ -616,7 +616,7 @@ export async function draftLetter(
     throw new BadRequestError("Audit documents must belong to this case");
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
-  const { records, providers } = await loadRecords(caseId);
+  const { records, providers } = await loadRecords(caseId, bill.patientName);
   const previous = (await getStore().getCase(caseId))?.findings ?? [];
   const merged = mergeFindings(
     previous,
@@ -745,7 +745,7 @@ export async function appealDenial(
   if (!doc.confirmed)
     throw new BadRequestError("Confirm the denial letter's details first");
   const denial = doc.confirmed as ConfirmedDenial;
-  const { records, origin } = await loadRecords(doc.caseId);
+  const { records, origin } = await loadRecords(doc.caseId, denial.memberName);
   const evaluation = evaluateDenial(denial, records);
   if (!evaluation.policyKnown) {
     throw new BadRequestError(

@@ -998,26 +998,28 @@ function AuditScreen({
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
                   <p className="paper-copy">{finding.ask}</p>
-                  <button
-                    className="paper-source-button billless-exclude-finding"
-                    disabled={busy}
-                    onClick={() => onSelectFinding(finding.id, true)}
-                    aria-label={`Exclude issue: ${finding.title}`}
-                  >
-                    Don’t include this issue
-                  </button>
-                  <button
-                    className="paper-source-button"
-                    aria-expanded={open === finding.id}
-                    aria-controls={`evidence-${finding.id}`}
-                    onClick={() =>
-                      setOpen(open === finding.id ? null : finding.id)
-                    }
-                  >
-                    {open === finding.id
-                      ? "Hide evidence ↑"
-                      : "Explanation & evidence →"}
-                  </button>
+                  <div className="billless-finding-actions">
+                    <button
+                      className="paper-source-button"
+                      aria-expanded={open === finding.id}
+                      aria-controls={`evidence-${finding.id}`}
+                      onClick={() =>
+                        setOpen(open === finding.id ? null : finding.id)
+                      }
+                    >
+                      {open === finding.id
+                        ? "Hide evidence ↑"
+                        : "Explanation & evidence →"}
+                    </button>
+                    <button
+                      className="paper-source-button billless-exclude-finding"
+                      disabled={busy}
+                      onClick={() => onSelectFinding(finding.id, true)}
+                      aria-label={`Exclude issue: ${finding.title}`}
+                    >
+                      Don’t include this issue
+                    </button>
+                  </div>
                   {open === finding.id && (
                     <div
                       id={`evidence-${finding.id}`}
