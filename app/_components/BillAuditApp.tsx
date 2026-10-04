@@ -452,7 +452,7 @@ export default function BillAuditApp() {
         />
       )}
       {step === "request" && bill && (
-        <section className="billless-request-screen space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
+        <section className="paper-flow space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
           <h2 className="text-lg font-semibold">
             Let’s get the itemized details
           </h2>
