@@ -571,7 +571,8 @@ export async function draftLetter(
   );
   await getStore().saveFindings(caseId, merged);
   // The letter covers only issues still in question (withdrawn ones stay out).
-  const findings = merged.filter((f) => f.status !== "withdrawn");
+  // The billing-office letter covers provider issues only; insurer issues go to the insurer.
+  const findings = merged.filter((f) => f.status !== "withdrawn" && f.contact !== "insurer");
   if (!findings.length)
     throw new BadRequestError(
       "No potential issues were found, so there is nothing to dispute.",

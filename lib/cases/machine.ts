@@ -199,7 +199,8 @@ export function allowedActions(
     );
   }
   const working = open(s.findings);
-  if (working.length && !s.dispute)
+  // Insurer issues aren't disputed with the billing office (SPEC.md §3.4 routing).
+  if (working.some((f) => f.contact !== "insurer") && !s.dispute)
     out.push(action(s, "draft_dispute", "Draft the dispute letter"));
   if (s.dispute && !s.dispute.sent)
     out.push(
@@ -372,6 +373,18 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       deadline: null,
       target: s.dispute.documentId,
       citedFindingIds: ids,
+    });
+  }
+  const forInsurer = working.filter((f) => f.contact === "insurer");
+  if (!s.dispute && forInsurer.length && forInsurer.length === working.length) {
+    return card({
+      actionId: "wait",
+      title: "Call your insurer about the unpaid charge",
+      why: `${describe(forInsurer)}. The provider billed what your EOB says, so only your insurer can reprocess it or start an appeal. Billy can make this call for you.`,
+      needed: "Ask the insurer why it paid nothing, whether it can reprocess the claim, and how to appeal",
+      responsibleParty: "Your insurer",
+      deadline: null,
+      citedFindingIds: forInsurer.map((f) => f.id),
     });
   }
   if (!s.dispute && s.responsesRecorded === 0) {

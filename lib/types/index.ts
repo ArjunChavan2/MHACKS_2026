@@ -278,7 +278,7 @@ export type Source =
 export type NonEmpty<T> = [T, ...T[]];
 
 /** Which deterministic rule produced a finding (SPEC.md §4.3). */
-export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap";
+export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap" | "insurer_denied_line";
 
 /**
  * Finding status. MVP 1 only produces `potential`; later rungs move findings to `confirmed`,
@@ -311,6 +311,8 @@ export interface Finding {
   statusSources?: Source[];
   /** True once a patient-confirmed revised statement shows the correction (SPEC.md §4.6). */
   verified?: boolean;
+  /** Who can fix it: the provider's billing office (default) or the insurer (SPEC.md §3.4 routing). */
+  contact?: "provider" | "insurer";
   /** Amount this finding questions, in cents (0 when not monetary). */
   amountQuestionedCents: Cents;
   /** Bill line numbers this finding covers, for de-duplicating the verdict total. */

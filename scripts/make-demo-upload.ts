@@ -7,7 +7,54 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { BILL_LINES, BILL_TOTALS, EOB, VISIT } from "./fixture-data";
+import { BILL_LINES, BILL_TOTALS, EOB, VISIT, type FixtureBillLine, type FixtureEobLine } from "./fixture-data";
+
+/** One patient's bill + EOB pair. */
+interface DemoPair {
+  file: string;
+  visit: { patient: string; account: string; encounter: string; entity: string; serviceStart: string; serviceEnd: string; statementDate: string };
+  orgLines: string[];
+  payBy: string;
+  lines: FixtureBillLine[];
+  totals: { totalCharges: string; totalAdjustments: string; totalPayments: string; amountDue: string };
+  eob: { insurer: string; claimNumber: string; provider: string; totalPatient: string; processed: string; lines: FixtureEobLine[]; remarks?: string[] };
+}
+
+/** Priya: billing-office issues (duplicate TSH, bill over EOB, free T4 documentation). */
+const PRIYA: DemoPair = {
+  file: "quillhaven",
+  visit: VISIT,
+  orgLines: ["Professional charges", "2400 Quillhaven Way, Ann Arbor, MI 48104 (fictional)", "Billing questions: 734-555-0142"],
+  payBy: "04/20/2026",
+  lines: BILL_LINES,
+  totals: BILL_TOTALS,
+  eob: { ...EOB, processed: "03/18/2026" },
+};
+
+/** Marcus Bell: the bill matches the EOB, but the insurer paid nothing for the MRI → call the insurer. */
+const MARCUS: DemoPair = {
+  file: "northstar-marcus",
+  visit: { patient: "Marcus Bell", account: "NHS-771204", encounter: "ENC-20260512-03", entity: "Northstar Health System", serviceStart: "05/12/2026", serviceEnd: "05/12/2026", statementDate: "05/28/2026" },
+  orgLines: ["Facility and professional charges", "800 Northstar Blvd, Ann Arbor, MI 48109 (fictional)", "Billing questions: 734-555-0177"],
+  payBy: "06/27/2026",
+  lines: [
+    { line: "1", date: "05/12/2026", code: "99213", codeType: "CPT", description: "Office visit, established, low", qty: "1", charge: "$180.00" },
+    { line: "2", date: "05/12/2026", code: "72148", codeType: "CPT", description: "MRI lumbar spine without contrast", qty: "1", charge: "$1,450.00" },
+  ],
+  totals: { totalCharges: "$1,630.00", totalAdjustments: "-$60.00", totalPayments: "$0.00", amountDue: "$1,570.00" },
+  eob: {
+    insurer: "Wolverine Mutual Health",
+    claimNumber: "CLM-2026-0512-2290",
+    provider: "Northstar Health System",
+    totalPatient: "$1,570.00",
+    processed: "05/22/2026",
+    lines: [
+      { date: "05/12/2026", code: "99213", billed: "$180.00", allowed: "$120.00", planPaid: "$0.00", patient: "$120.00" },
+      { date: "05/12/2026", code: "72148", billed: "$1,450.00", allowed: "$0.00", planPaid: "$0.00", patient: "$1,450.00" },
+    ],
+    remarks: ["Remark for 72148: Not covered - prior authorization not on file. You may appeal within 180 days."],
+  },
+};
 
 const OUT = join(process.cwd(), "fixtures", "demo-upload");
 const NAVY = rgb(0.12, 0.2, 0.36);
@@ -39,8 +86,11 @@ async function base(title: string, org: string, orgLines: string[]) {
 }
 
 /** The itemized bill. */
-async function bill(): Promise<Uint8Array> {
-  const { pdf, page, reg, bold } = await base("ITEMIZED STATEMENT", VISIT.entity, ["Professional charges", "2400 Quillhaven Way, Ann Arbor, MI 48104 (fictional)", "Billing questions: 734-555-0142"]);
+async function bill(d: DemoPair): Promise<Uint8Array> {
+  const VISIT = d.visit;
+  const BILL_LINES = d.lines;
+  const BILL_TOTALS = d.totals;
+  const { pdf, page, reg, bold } = await base("ITEMIZED STATEMENT", VISIT.entity, d.orgLines);
   const rows: Array<[string, string]> = [
     ["Patient", VISIT.patient], ["Account #", VISIT.account], ["Encounter", VISIT.encounter],
     ["Service dates", `${VISIT.serviceStart} - ${VISIT.serviceEnd}`], ["Statement date", VISIT.statementDate],
@@ -49,7 +99,7 @@ async function bill(): Promise<Uint8Array> {
   page.drawRectangle({ x: 380, y: 618, width: 192, height: 74, color: LIGHT });
   t(page, "AMOUNT DUE", 392, 674, bold, 9, NAVY);
   t(page, BILL_TOTALS.amountDue, 392, 646, bold, 22, NAVY);
-  t(page, "Please pay by 04/20/2026", 392, 628, reg, 8, GREY);
+  t(page, `Please pay by ${d.payBy}`, 392, 628, reg, 8, GREY);
   let y = 590;
   page.drawRectangle({ x: 40, y: y - 4, width: 532, height: 18, color: NAVY });
   const head = (s: string, x: number, right = false) => (right ? page.drawText(s, { x: x - bold.widthOfTextAtSize(s, 8), y: y + 1, size: 8, font: bold, color: rgb(1, 1, 1) }) : page.drawText(s, { x, y: y + 1, size: 8, font: bold, color: rgb(1, 1, 1) }));
@@ -67,9 +117,11 @@ async function bill(): Promise<Uint8Array> {
 }
 
 /** The EOB. */
-async function eob(): Promise<Uint8Array> {
+async function eob(d: DemoPair): Promise<Uint8Array> {
+  const EOB = d.eob;
+  const VISIT = d.visit;
   const { pdf, page, reg, bold } = await base("EXPLANATION OF BENEFITS", EOB.insurer, ["THIS IS NOT A BILL", "P.O. Box 4410, Ann Arbor, MI 48106 (fictional)", "Member services: 1-800-555-0199"]);
-  const rows: Array<[string, string]> = [["Member", VISIT.patient], ["Claim #", EOB.claimNumber], ["Provider", EOB.provider], ["Date processed", "03/18/2026"]];
+  const rows: Array<[string, string]> = [["Member", VISIT.patient], ["Claim #", EOB.claimNumber], ["Provider", EOB.provider], ["Date processed", EOB.processed]];
   rows.forEach(([k, v], i) => { t(page, `${k}:`, 40, 680 - i * 14, bold, 9); t(page, v, 130, 680 - i * 14, reg, 9); });
   page.drawRectangle({ x: 380, y: 624, width: 192, height: 68, color: LIGHT });
   t(page, "YOU MAY OWE", 392, 674, bold, 9, NAVY);
@@ -90,16 +142,19 @@ async function eob(): Promise<Uint8Array> {
   }
   y -= 34;
   tr(page, "Total you owe:", 480, y, bold, 10); tr(page, EOB.totalPatient, 566, y, bold, 10);
-  t(page, "Amounts apply to your deductible. Keep this statement for your records.", 40, y - 30, reg, 8, GREY);
+  (EOB.remarks ?? []).forEach((r, i) => t(page, r, 40, y - 30 - i * 13, bold, 9));
+  t(page, "Amounts apply to your deductible. Keep this statement for your records.", 40, y - 30 - (EOB.remarks?.length ?? 0) * 13 - 6, reg, 8, GREY);
   return pdf.save();
 }
 
 /** Writes both files. */
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(join(OUT, "quillhaven-bill.pdf"), await bill());
-  writeFileSync(join(OUT, "wolverine-eob.pdf"), await eob());
-  console.log(`Wrote ${OUT}/quillhaven-bill.pdf and wolverine-eob.pdf`);
+  for (const d of [PRIYA, MARCUS]) {
+    writeFileSync(join(OUT, `${d.file}-bill.pdf`), await bill(d));
+    writeFileSync(join(OUT, d.file === "quillhaven" ? "wolverine-eob.pdf" : `${d.file}-eob.pdf`), await eob(d));
+  }
+  console.log(`Wrote ${OUT}: quillhaven-bill.pdf, wolverine-eob.pdf, northstar-marcus-bill.pdf, northstar-marcus-eob.pdf`);
 }
 
 main().catch((err: unknown) => {
