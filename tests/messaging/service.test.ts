@@ -10,18 +10,43 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { describeSource } from "@/app/_components/sources";
-import { recordResponse, runCaseAction } from "@/lib/cases/caseflow";
-import { auditCase, confirmDocument, draftLetter, ingestSample, loadCase } from "@/lib/cases/service";
+import {
+  recordResponse,
+  runCaseAction,
+  saveCasePreferences,
+} from "@/lib/cases/caseflow";
+import {
+  auditCase,
+  confirmDocument,
+  draftLetter,
+  ingestSample,
+  loadCase,
+} from "@/lib/cases/service";
 import { memoryStore, pgStore, type CaseStore } from "@/lib/cases/store";
-import { ack, handleInbound, imessageStatus, pendingOutbox } from "@/lib/messaging/service";
+import {
+  ack,
+  handleInbound,
+  imessageStatus,
+  pendingOutbox,
+} from "@/lib/messaging/service";
 import { POST as inboundRoute } from "@/app/api/messaging/inbound/route";
 import { GET as outboxRoute } from "@/app/api/messaging/outbox/route";
 
 const g = globalThis as typeof globalThis & { __mhStore?: CaseStore };
-const AS_PRINTED = { corrections: {}, confirmedPaths: [], acknowledgeTotalsMismatch: false };
+const AS_PRINTED = {
+  corrections: {},
+  confirmedPaths: [],
+  acknowledgeTotalsMismatch: false,
+};
 const OFFICE = "Quillhaven Medical Group billing office";
 const BASE = "https://billless.tech";
-const saved = { gemini: process.env.GEMINI_API_KEY, xai: process.env.XAI_API_KEY, today: process.env.DEMO_TODAY, secret: process.env.MESSAGING_SECRET, app: process.env.APP_URL };
+const saved = {
+  gemini: process.env.GEMINI_API_KEY,
+  xai: process.env.XAI_API_KEY,
+  today: process.env.DEMO_TODAY,
+  secret: process.env.MESSAGING_SECRET,
+  app: process.env.APP_URL,
+};
 let client: PGlite;
 
 beforeAll(async () => {
@@ -36,7 +61,13 @@ beforeAll(async () => {
 afterAll(async () => {
   g.__mhStore = undefined;
   await client.close();
-  for (const [k, v] of [["GEMINI_API_KEY", saved.gemini], ["XAI_API_KEY", saved.xai], ["DEMO_TODAY", saved.today], ["MESSAGING_SECRET", saved.secret], ["APP_URL", saved.app]] as const) {
+  for (const [k, v] of [
+    ["GEMINI_API_KEY", saved.gemini],
+    ["XAI_API_KEY", saved.xai],
+    ["DEMO_TODAY", saved.today],
+    ["MESSAGING_SECRET", saved.secret],
+    ["APP_URL", saved.app],
+  ] as const) {
     if (v) process.env[k] = v;
     else delete process.env[k];
   }
@@ -55,7 +86,11 @@ async function draftedCase() {
   const audit = await auditCase(bill.caseId, bill.documentId, eob.documentId);
   await draftLetter(bill.caseId, bill.documentId, eob.documentId);
   const status = await imessageStatus(bill.caseId);
-  return { caseId: bill.caseId, code: status!.code, gap: audit.findings.find((f) => f.rule === "documentation_gap")!.id };
+  return {
+    caseId: bill.caseId,
+    code: status!.code,
+    gap: audit.findings.find((f) => f.rule === "documentation_gap")!.id,
+  };
 }
 
 /** A unique handle per test, so cases on the shared Postgres don't collide. */
@@ -76,15 +111,23 @@ describe.each([
     const me = nextHandle();
 
     expect(await handleInbound(me, "STATUS", BASE)).toMatch(/isn't linked/);
-    expect(await handleInbound(me, "LINK ZZZZZZ", BASE)).toMatch(/didn't match/);
+    expect(await handleInbound(me, "LINK ZZZZZZ", BASE)).toMatch(
+      /didn't match/,
+    );
 
-    const linked = await handleInbound(me, `link ${c.code.toLowerCase()}`, BASE);
+    const linked = await handleInbound(
+      me,
+      `link ${c.code.toLowerCase()}`,
+      BASE,
+    );
     expect(linked).toMatch(/^Linked\./);
     expect(linked).toContain("Approve sending the dispute letter");
     expect(linked).toContain(`${BASE}/?case=${c.caseId}`);
     expect((await imessageStatus(c.caseId))?.linked).toBe(true);
     // The link reply already delivered the card, so nothing is queued.
-    expect((await pendingOutbox(BASE)).filter((m) => m.handle === me)).toEqual([]);
+    expect((await pendingOutbox(BASE)).filter((m) => m.handle === me)).toEqual(
+      [],
+    );
 
     const status = await handleInbound(me, "status", BASE);
     expect(status).toContain("1. ");
@@ -94,15 +137,39 @@ describe.each([
     expect(approved).toMatch(/^Done: Send the dispute letter/);
     const afterSend = await loadCase(c.caseId);
     expect(afterSend?.state.phase).toBe("waiting_response");
-    expect(afterSend?.state.timeline.map((e) => e.type)).toEqual(expect.arrayContaining(["approval_recorded", "dispute_sent", "imessage_linked", "imessage_reply"]));
+    expect(afterSend?.state.timeline.map((e) => e.type)).toEqual(
+      expect.arrayContaining([
+        "approval_recorded",
+        "dispute_sent",
+        "imessage_linked",
+        "imessage_reply",
+      ]),
+    );
 
     // A second "A" must not send anything again.
     expect(await handleInbound(me, "A", BASE)).toMatch(/^Already done/);
-    expect(afterSend?.state.timeline.filter((e) => e.type === "dispute_sent")).toHaveLength(1);
-    expect((await loadCase(c.caseId))?.state.timeline.filter((e) => e.type === "dispute_sent")).toHaveLength(1);
+    expect(
+      afterSend?.state.timeline.filter((e) => e.type === "dispute_sent"),
+    ).toHaveLength(1);
+    expect(
+      (await loadCase(c.caseId))?.state.timeline.filter(
+        (e) => e.type === "dispute_sent",
+      ),
+    ).toHaveLength(1);
 
     // The office says the lab record will follow: exactly one update, reused until acknowledged.
-    await recordResponse(c.caseId, { from: OFFICE, perFinding: [{ findingId: c.gap, kind: "will_send_later", neededDocument: "free T4 lab record", responsibleParty: "Quillhaven laboratory", promisedBy: "2026-03-31" }] });
+    await recordResponse(c.caseId, {
+      from: OFFICE,
+      perFinding: [
+        {
+          findingId: c.gap,
+          kind: "will_send_later",
+          neededDocument: "free T4 lab record",
+          responsibleParty: "Quillhaven laboratory",
+          promisedBy: "2026-03-31",
+        },
+      ],
+    });
     const first = (await pendingOutbox(BASE)).filter((m) => m.handle === me);
     expect(first).toHaveLength(1);
     expect(first[0].text).toContain("Waiting for the free T4 lab record");
@@ -110,7 +177,9 @@ describe.each([
     expect(again.map((m) => m.messageId)).toEqual([first[0].messageId]);
     expect(await ack(first[0].messageId)).toBe(true);
     expect(await ack(first[0].messageId)).toBe(true);
-    expect((await pendingOutbox(BASE)).filter((m) => m.handle === me)).toEqual([]);
+    expect((await pendingOutbox(BASE)).filter((m) => m.handle === me)).toEqual(
+      [],
+    );
     expect(await ack("msg_unknown")).toBe(false);
 
     // WHY about the free T4 quotes Northstar's record verbatim.
@@ -122,7 +191,9 @@ describe.each([
     if (record) expect(why).toContain(describeSource(record));
 
     // "A" with nothing to approve is refused and changes nothing.
-    expect(await handleInbound(me, "yes", BASE)).toMatch(/^(Nothing is waiting|That choice is no longer available|Already done)/);
+    expect(await handleInbound(me, "yes", BASE)).toMatch(
+      /^(Nothing is waiting|That choice is no longer available|Already done)/,
+    );
 
     expect(await handleInbound(me, "STOP", BASE)).toContain(`LINK ${c.code}`);
     expect((await imessageStatus(c.caseId))?.linked).toBe(false);
@@ -135,9 +206,42 @@ describe.each([
     const me = nextHandle();
     await handleInbound(me, `LINK ${c.code}`, BASE);
     const v = await loadCase(c.caseId);
-    await runCaseAction(c.caseId, { actionId: "send_dispute", target: v?.state.next.target, approve: true });
-    expect(await handleInbound(me, "A", BASE)).toMatch(/^That choice is no longer available/);
-    expect((await loadCase(c.caseId))?.state.timeline.filter((e) => e.type === "approval_recorded")).toHaveLength(1);
+    await runCaseAction(c.caseId, {
+      actionId: "send_dispute",
+      target: v?.state.next.target,
+      approve: true,
+    });
+    expect(await handleInbound(me, "A", BASE)).toMatch(
+      /^That choice is no longer available/,
+    );
+    expect(
+      (await loadCase(c.caseId))?.state.timeline.filter(
+        (e) => e.type === "approval_recorded",
+      ),
+    ).toHaveLength(1);
+  });
+
+  /** Proves restrictions block text contact and an older prompt cannot revive after choices change. */
+  it("holds contact across channels and invalidates old text approvals", async () => {
+    const c = await draftedCase();
+    const me = nextHandle();
+    await handleInbound(me, `LINK ${c.code}`, BASE);
+    const choices = {
+      goal: "Question this bill",
+      noPayments: true,
+      pauseContact: true,
+    };
+    await saveCasePreferences(c.caseId, choices);
+    expect(await handleInbound(me, "A", BASE)).not.toMatch(/^Done:/);
+    expect(
+      (await loadCase(c.caseId))?.state.timeline.some(
+        (e) => e.type === "dispute_sent",
+      ),
+    ).toBe(false);
+    await saveCasePreferences(c.caseId, { ...choices, pauseContact: false });
+    expect(await handleInbound(me, "A", BASE)).not.toMatch(/^Done:/);
+    // The refusal carries a fresh prompt; only a subsequent explicit reply may run it.
+    expect(await handleInbound(me, "A", BASE)).toMatch(/^Done:/);
   });
 
   /** Proves B holds (nothing runs) and linking another case moves the handle. */
@@ -163,10 +267,24 @@ describe("worker routes", () => {
   /** Proves the routes are off without a secret and reject a wrong token. */
   it("requires the shared secret", async () => {
     delete process.env.MESSAGING_SECRET;
-    expect((await outboxRoute(new Request("http://x/api/messaging/outbox"))).status).toBe(503);
+    expect(
+      (await outboxRoute(new Request("http://x/api/messaging/outbox"))).status,
+    ).toBe(503);
     process.env.MESSAGING_SECRET = "s3cret-value";
-    expect((await outboxRoute(new Request("http://x/api/messaging/outbox", { headers: { Authorization: "Bearer nope" } }))).status).toBe(401);
-    const ok = await outboxRoute(new Request("http://x/api/messaging/outbox", { headers: { Authorization: "Bearer s3cret-value" } }));
+    expect(
+      (
+        await outboxRoute(
+          new Request("http://x/api/messaging/outbox", {
+            headers: { Authorization: "Bearer nope" },
+          }),
+        )
+      ).status,
+    ).toBe(401);
+    const ok = await outboxRoute(
+      new Request("http://x/api/messaging/outbox", {
+        headers: { Authorization: "Bearer s3cret-value" },
+      }),
+    );
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual([]);
   });
@@ -174,11 +292,26 @@ describe("worker routes", () => {
   /** Proves inbound always answers with a reply and validates its body. */
   it("answers inbound texts", async () => {
     process.env.MESSAGING_SECRET = "s3cret-value";
-    const headers = { Authorization: "Bearer s3cret-value", "Content-Type": "application/json" };
-    const res = await inboundRoute(new Request("http://x/api/messaging/inbound", { method: "POST", headers, body: JSON.stringify({ handle: "+15550009999", text: "hi" }) }));
+    const headers = {
+      Authorization: "Bearer s3cret-value",
+      "Content-Type": "application/json",
+    };
+    const res = await inboundRoute(
+      new Request("http://x/api/messaging/inbound", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ handle: "+15550009999", text: "hi" }),
+      }),
+    );
     expect(res.status).toBe(200);
     expect((await res.json()).reply).toMatch(/isn't linked/);
-    const bad = await inboundRoute(new Request("http://x/api/messaging/inbound", { method: "POST", headers, body: "{}" }));
+    const bad = await inboundRoute(
+      new Request("http://x/api/messaging/inbound", {
+        method: "POST",
+        headers,
+        body: "{}",
+      }),
+    );
     expect(bad.status).toBe(400);
   });
 });

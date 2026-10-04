@@ -130,8 +130,8 @@ describe.each([
       caseId: bill.caseId,
       status: "letter_drafted",
       documents: [
-        { ingest: bill, confirmed: true },
-        { ingest: eob, confirmed: true },
+        { ingest: bill, confirmed: true, fileName: "sample-bill.pdf (sample)" },
+        { ingest: eob, confirmed: true, fileName: "sample-eob.pdf (sample)" },
       ],
       audit,
       draft,

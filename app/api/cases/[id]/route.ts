@@ -7,7 +7,9 @@
  * ID is the only key, as for `/api/documents/[id]/file`.
  */
 import { loadCase } from "@/lib/cases/service";
-import { errorResponse } from "@/lib/http";
+import { CasePreferencesSchema } from "@/lib/cases/preferences";
+import { saveCasePreferences } from "@/lib/cases/caseflow";
+import { errorResponse, parseBody } from "@/lib/http";
 
 /**
  * Returns the case.
@@ -27,6 +29,30 @@ export async function GET(
     return Response.json(view, {
       headers: { "Cache-Control": "private, no-store" },
     });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+/**
+ * Records patient-authored goals and supported restrictions without sending anything.
+ * @param req - JSON preferences, validated at the boundary.
+ * @param ctx - Async case route parameters.
+ * @returns Refreshed case state or a visible validation error. Side effects: writes a case event.
+ */
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  try {
+    const { id } = await ctx.params;
+    return Response.json(
+      await saveCasePreferences(
+        id,
+        await parseBody(req, CasePreferencesSchema),
+      ),
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (err) {
     return errorResponse(err);
   }
