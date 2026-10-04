@@ -125,12 +125,23 @@ describe.each([
     const view = await saveLetterRecipient(c.caseId, "billing@example.test");
     expect(view.draft!.recipientEmail).toBe("billing@example.test");
     expect(view.state.next.target).toBe(before.state.next.target);
-    expect((await loadCase(c.caseId))!.draft!.recipientEmail).toBe("billing@example.test");
-    const edited = await editLetter(c.caseId, { expectedText: view.draft!.paragraphs.map((p) => p.text), edits: [], personalNote: "Please reply in writing.", reset: false });
+    expect((await loadCase(c.caseId))!.draft!.recipientEmail).toBe(
+      "billing@example.test",
+    );
+    const edited = await editLetter(c.caseId, {
+      expectedText: view.draft!.paragraphs.map((p) => p.text),
+      edits: [],
+      personalNote: "Please reply in writing.",
+      reset: false,
+    });
     expect(edited.draft!.recipientEmail).toBe("billing@example.test");
-    expect((await saveLetterRecipient(c.caseId, "")).draft!.recipientEmail).toBe("");
+    expect(
+      (await saveLetterRecipient(c.caseId, "")).draft!.recipientEmail,
+    ).toBe("");
     await send(c.caseId);
-    await expect(saveLetterRecipient(c.caseId, "another@example.test")).rejects.toThrow(/recorded approvals/);
+    await expect(
+      saveLetterRecipient(c.caseId, "another@example.test"),
+    ).rejects.toThrow(/recorded approvals/);
   });
 
   /** Personalization preserves sourced facts, persists on both stores, and invalidates earlier draft targets. */
@@ -312,14 +323,56 @@ describe.each([
     expect(await loadCase(c.caseId)).toEqual(before);
   });
 
+  /** Reporting a manual send validates dates and the current draft, records no approval, and persists waiting state. */
+  it("records the patient’s manual send without sending or approving a new message", async () => {
+    const c = await drafted();
+    const before = await state(c.caseId);
+    const input = {
+      actionId: "record_letter_sent" as const,
+      target: before.next.target,
+    };
+    for (const sentAt of [undefined, "2026-02-30", "2027-01-01"])
+      await expect(
+        runCaseAction(c.caseId, { ...input, sentAt }),
+      ).rejects.toThrow(/valid sent date/);
+    await expect(
+      runCaseAction(c.caseId, {
+        ...input,
+        target: "unknown",
+        sentAt: "2026-03-23",
+      }),
+    ).rejects.toThrow(/not allowed/);
+    const after = await runCaseAction(c.caseId, {
+      ...input,
+      sentAt: "2026-03-23",
+    });
+    expect(after.phase).toBe("waiting_response");
+    expect(after.next.why).toContain("March 23, 2026");
+    expect(after.timeline.some((e) => e.type === "approval_recorded")).toBe(
+      false,
+    );
+    const stored = (await g.__mhStore!.getCase(c.caseId))!;
+    expect(
+      stored.events.find((e) => e.type === "dispute_sent")!.data,
+    ).toMatchObject({
+      method: "email sent manually by patient",
+      reportedBy: "patient",
+      sentAt: "2026-03-23",
+    });
+    expect((await state(c.caseId)).phase).toBe("waiting_response");
+    await expect(
+      runCaseAction(c.caseId, { ...input, sentAt: "2026-03-23" }),
+    ).rejects.toThrow(/not allowed/);
+  });
+
   /** Proves nothing is sent without approval, and approval is recorded before the send. */
   it("needs approval to send the dispute", async () => {
     const c = await drafted();
     const s = await state(c.caseId);
-    expect(s.phase).toBe("awaiting_approval");
+    expect(s.phase).toBe("audited");
     expect(s.next).toMatchObject({
-      actionId: "send_dispute",
-      needsApproval: true,
+      actionId: "record_letter_sent",
+      needsApproval: false,
     });
     await expect(
       runCaseAction(c.caseId, {
@@ -499,7 +552,7 @@ describe.each([
     const held = await saveCasePreferences(c.caseId, choices);
     expect(held.preferences).toMatchObject(choices);
     expect((await state(c.caseId)).preferences).toEqual(held.preferences);
-    expect(held.next.title).toBe("Contact is on hold");
+    expect(held.next.title).toBe("I sent this letter");
     expect(held.allowed.some((a) => a.needsApproval)).toBe(false);
     await expect(
       runCaseAction(c.caseId, {

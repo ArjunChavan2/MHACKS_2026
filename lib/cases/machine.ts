@@ -26,6 +26,7 @@ export type ActionId =
   | "confirm_documents"
   | "run_audit"
   | "draft_dispute"
+  | "record_letter_sent"
   | "send_dispute"
   | "request_document"
   | "request_revised_statement"
@@ -131,7 +132,7 @@ export function derivePhase(s: CaseSnapshot): CasePhase {
     (f) => !f.patientExcluded && f.status === "confirmed" && !f.verified,
   );
   if (unverified) return "awaiting_approval";
-  if (s.dispute && !s.dispute.sent) return "awaiting_approval";
+  if (s.dispute && !s.dispute.sent) return "audited";
   if (s.dispute?.sent) return "waiting_response";
   return "audited";
 }
@@ -205,6 +206,8 @@ export function allowedActions(
   // Insurer issues aren't disputed with the billing office (SPEC.md §3.4 routing).
   if (working.some((f) => f.contact !== "insurer") && !s.dispute)
     out.push(action(s, "draft_dispute", "Draft the dispute letter"));
+  if (s.dispute && !s.dispute.sent)
+    out.push(action(s, "record_letter_sent", "I sent this letter", s.dispute.documentId));
   if (s.dispute && !s.dispute.sent)
     out.push(
       action(
@@ -359,6 +362,18 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       citedFindingIds: [],
     });
   }
+  if (s.dispute && !s.dispute.sent) {
+    return card({
+      actionId: "record_letter_sent",
+      title: "I sent this letter",
+      why: "Send the letter using your email app, then record the date here so your case can track the reply. This button does not send an email.",
+      needed: "The date you sent the letter",
+      responsibleParty: "You",
+      deadline: null,
+      target: s.dispute.documentId,
+      citedFindingIds: ids,
+    });
+  }
   if (s.preferences?.pauseContact) {
     return card({
       actionId: "wait",
@@ -367,18 +382,6 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       needed: "Your decision to resume contact",
       responsibleParty: "You",
       deadline: null,
-      citedFindingIds: ids,
-    });
-  }
-  if (s.dispute && !s.dispute.sent) {
-    return card({
-      actionId: "send_dispute",
-      title: "Approve sending the dispute letter",
-      why: `The letter asks ${office} to review ${describe(working)}. Nothing is sent without your approval.`,
-      needed: "Your approval",
-      responsibleParty: "You",
-      deadline: null,
-      target: s.dispute.documentId,
       citedFindingIds: ids,
     });
   }

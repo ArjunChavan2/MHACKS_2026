@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeSource } from "@/app/_components/sources";
-import { runCaseAction } from "@/lib/cases/caseflow";
+import { runCaseAction, recordResponse } from "@/lib/cases/caseflow";
 import { auditCase, confirmDocument, draftLetter, ingestSample, loadCase, type CaseView } from "@/lib/cases/service";
 import { memoryStore, type CaseStore } from "@/lib/cases/store";
 import {
@@ -28,9 +28,9 @@ const AS_PRINTED = { corrections: {}, confirmedPaths: [], acknowledgeTotalsMisma
 const LINK = "https://billless.tech/?case=case_x";
 const saved = { gemini: process.env.GEMINI_API_KEY, xai: process.env.XAI_API_KEY, today: process.env.DEMO_TODAY };
 
-/** The demo case with the dispute drafted (card: approve sending). */
+/** The demo case after a manual send and a document request (card: approve the request). */
 let drafted: CaseView;
-/** The same case after the dispute was sent (card: waiting for a response). */
+/** The same case after the document request was approved (card: waiting for documentation). */
 let sent: CaseView;
 
 beforeAll(async () => {
@@ -44,8 +44,12 @@ beforeAll(async () => {
   await confirmDocument(eob.documentId, AS_PRINTED);
   await auditCase(bill.caseId, bill.documentId, eob.documentId);
   await draftLetter(bill.caseId, bill.documentId, eob.documentId);
+  const manual = (await loadCase(bill.caseId)) as CaseView;
+  await runCaseAction(bill.caseId, { actionId: "record_letter_sent", target: manual.state.next.target, sentAt: "2026-03-23" });
+  const gap = manual.audit!.findings.find((f) => f.rule === "documentation_gap")!;
+  await recordResponse(bill.caseId, { from: "Quillhaven billing office", perFinding: [{ findingId: gap.id, kind: "needs_more_info", neededDocument: "free T4 lab record", responsibleParty: "Quillhaven laboratory" }] });
   drafted = (await loadCase(bill.caseId)) as CaseView;
-  await runCaseAction(bill.caseId, { actionId: "send_dispute", target: drafted.state.next.target, approve: true });
+  await runCaseAction(bill.caseId, { actionId: "request_document", target: drafted.state.next.target, approve: true });
   sent = (await loadCase(bill.caseId)) as CaseView;
 });
 
@@ -99,7 +103,7 @@ it("fits text without cutting lines", () => {
 /** Proves reply options are never trimmed away, even when the body overflows. */
 it("always keeps the reply options", () => {
   const lines = ["Title", ...Array.from({ length: 40 }, (_, i) => `Line ${i} ${"x".repeat(40)}`)];
-  const footer = ["Reply with:", "A → Approve: Send the dispute letter", "B → Hold for now (nothing is sent)"];
+  const footer = ["Reply with:", "A → Approve: Request: free T4 lab record", "B → Hold for now (nothing is sent)"];
   const text = fit(lines, LINK, footer);
   for (const l of footer) expect(text).toContain(l);
   expect(text.indexOf("Reply with:")).toBeLessThan(text.indexOf("Open your case"));
@@ -111,9 +115,9 @@ describe("composers", () => {
     const u = composeUpdate(drafted, LINK);
     expect(u.text).toContain(drafted.state.next.title);
     expect(u.text).toContain("Reply with:");
-    expect(u.text).toContain("A → Approve: Send the dispute letter");
+    expect(u.text).toContain("A → Approve: Request: free T4 lab record");
     expect(u.text).toContain("B → Hold for now");
-    expect(u.prompt).toEqual({ actionId: "send_dispute", target: drafted.state.next.target });
+    expect(u.prompt).toEqual({ actionId: "request_document", target: drafted.state.next.target });
     const w = composeUpdate(sent, LINK);
     expect(w.prompt).toBeUndefined();
     expect(w.text).not.toContain("A → Approve");
@@ -132,7 +136,7 @@ describe("composers", () => {
   it("builds why answers only from the finding's strings and sources", () => {
     for (const f of drafted.audit?.findings ?? []) {
       const text = composeWhy(drafted, f.id, LINK);
-      const allowed = new Set(["", f.title, "Status: potential issue", f.explanation, f.statusNote, ...[...(f.statusSources ?? []), ...f.sources].map((src) => `• ${describeSource(src)}`), "Evidence:", `Open your case: ${LINK}`]);
+      const allowed = new Set(["", f.title, `Status: ${f.status === "pending" ? "pending" : "potential issue"}`, f.explanation, f.statusNote, ...[...(f.statusSources ?? []), ...f.sources].map((src) => `• ${describeSource(src)}`), "Evidence:", `Open your case: ${LINK}`]);
       const [head, ...rest] = text.split("\n");
       expect(head).toBe("BillLess · Why this was flagged");
       for (const line of rest) expect(allowed.has(line) || /^\(\d+ more in the app\)$/.test(line)).toBe(true);
@@ -172,7 +176,7 @@ describe("decideNotify", () => {
 describe("resolvePrompt", () => {
   const now = new Date("2026-03-24T12:00:00Z");
   /** Builds a prompt for the drafted card. */
-  const prompt = (over: Partial<ImessagePrompt> = {}): ImessagePrompt => ({ promptId: "prm_1", actionId: "send_dispute", target: drafted.state.next.target, expiresAt: "2026-03-25T12:00:00Z", done: false, ...over });
+  const prompt = (over: Partial<ImessagePrompt> = {}): ImessagePrompt => ({ promptId: "prm_1", actionId: "request_document", target: drafted.state.next.target, expiresAt: "2026-03-25T12:00:00Z", done: false, ...over });
 
   /** Proves none / done / expired / stale / ok. */
   it("approves only the latest, open, current prompt", () => {

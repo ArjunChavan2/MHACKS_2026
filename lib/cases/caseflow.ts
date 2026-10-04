@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { usd } from "@/lib/format";
+import { longDate, usd } from "@/lib/format";
 import type {
   CaseTask,
   ConfirmedBill,
@@ -287,6 +287,7 @@ function summarize(type: string, data: Record<string, unknown>): string {
     case "approval_recorded":
       return `You approved: ${String(data.label ?? data.action)}`;
     case "dispute_sent":
+      if (data.reportedBy === "patient") return `You reported sending the letter on ${longDate(String(data.sentAt))}`;
       return `Dispute letter sent via ${String(data.method)}`;
     case "response_recorded":
       return `Response from ${String(data.from)}`;
@@ -464,13 +465,13 @@ async function syncPhase(caseId: string): Promise<CaseState> {
  * the approval, recorded as an event before the action runs). Refused if not allowed right now.
  *
  * @param caseId - Case ID.
- * @param input - Action, optional target (task or document ID), and approval.
+ * @param input - Action, optional target and approval; manual send reports include the patient’s sent date.
  * @returns The new case state.
  * @throws {ActionRefusedError} When the action is not allowed or not approved.
  */
 export async function runCaseAction(
   caseId: string,
-  input: { actionId: ActionId; target?: string; approve?: boolean },
+  input: { actionId: ActionId; target?: string; approve?: boolean; sentAt?: string },
 ): Promise<CaseState> {
   const store = getStore();
   const c = await load(caseId);
@@ -505,6 +506,16 @@ export async function runCaseAction(
 
   const task = tasks.find((t) => t.id === target);
   switch (actionId) {
+    case "record_letter_sent": {
+      const sentAt = input.sentAt;
+      if (!sentAt || !/^\d{4}-\d{2}-\d{2}$/.test(sentAt) || !Number.isFinite(Date.parse(sentAt)) || new Date(sentAt).toISOString().slice(0, 10) !== sentAt || sentAt > d)
+        throw new ActionRefusedError("Enter a valid sent date that is not in the future.");
+      const doc = c.documents.find((x) => x.id === target && x.direction === "outgoing" && x.status !== "superseded");
+      if (!doc) throw new ActionRefusedError("Unknown current letter");
+      await store.saveDocument({ ...doc, status: "sent" });
+      await store.addEvent(caseId, "dispute_sent", { documentId: doc.id, method: "email sent manually by patient", sentAt, reportedBy: "patient", reportedAt: d });
+      break;
+    }
     case "send_dispute": {
       const doc = c.documents.find((x) => x.id === target);
       if (!doc) throw new ActionRefusedError("Unknown letter");

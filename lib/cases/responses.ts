@@ -46,7 +46,7 @@ export function mergeFindings(previous: Finding[], fresh: Finding[]): Finding[] 
   const merged = fresh.map((f) => {
     const p = old.get(f.id);
     if (!p) return f;
-    if (p.status === "potential") return { ...f, patientExcluded: p.patientExcluded };
+    if (p.status === "potential") return p.patientExcluded === undefined ? f : { ...f, patientExcluded: p.patientExcluded };
     return { ...f, status: p.status, statusNote: p.statusNote, statusSources: p.statusSources, verified: p.verified, patientExcluded: p.patientExcluded };
   });
   const freshIds = new Set(fresh.map((f) => f.id));

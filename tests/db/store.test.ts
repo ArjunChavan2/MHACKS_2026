@@ -150,8 +150,8 @@ describe.each([
       draft,
       appeal: null,
       state: expect.objectContaining({
-        phase: "awaiting_approval",
-        next: expect.objectContaining({ actionId: "send_dispute" }),
+        phase: "audited",
+        next: expect.objectContaining({ actionId: "record_letter_sent" }),
       }),
     });
 

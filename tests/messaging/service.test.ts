@@ -74,7 +74,7 @@ afterAll(async () => {
 });
 
 /**
- * Sets up the demo case through the drafted dispute and returns its IDs and link code.
+ * Sets up a manually sent dispute and a document request requiring approval, with its IDs and link code.
  *
  * @returns Case ID, link code, and the documentation-gap finding ID.
  */
@@ -85,6 +85,9 @@ async function draftedCase() {
   await confirmDocument(eob.documentId, AS_PRINTED);
   const audit = await auditCase(bill.caseId, bill.documentId, eob.documentId);
   await draftLetter(bill.caseId, bill.documentId, eob.documentId);
+  const view = (await loadCase(bill.caseId))!;
+  await runCaseAction(bill.caseId, { actionId: "record_letter_sent", target: view.state.next.target, sentAt: "2026-03-23" });
+  await recordResponse(bill.caseId, { from: OFFICE, perFinding: [{ findingId: audit.findings.find((f) => f.rule === "documentation_gap")!.id, kind: "needs_more_info", neededDocument: "free T4 lab record", responsibleParty: "Quillhaven laboratory" }] });
   const status = await imessageStatus(bill.caseId);
   return {
     caseId: bill.caseId,
@@ -121,7 +124,7 @@ describe.each([
       BASE,
     );
     expect(linked).toMatch(/^Linked\./);
-    expect(linked).toContain("Approve sending the dispute letter");
+    expect(linked).toContain("Approve: Request: free T4 lab record");
     expect(linked).toContain(`${BASE}/?case=${c.caseId}`);
     expect((await imessageStatus(c.caseId))?.linked).toBe(true);
     // The link reply already delivered the card, so nothing is queued.
@@ -135,9 +138,9 @@ describe.each([
     expect(status).toContain("Issues:");
 
     const approved = await handleInbound(me, "A", BASE);
-    expect(approved).toMatch(/^Done: Send the dispute letter/);
+    expect(approved).toMatch(/^Done: Request:/);
     const afterSend = await loadCase(c.caseId);
-    expect(afterSend?.state.phase).toBe("waiting_response");
+    expect(afterSend?.state.phase).toBe("waiting_document");
     expect(afterSend?.state.timeline.map((e) => e.type)).toEqual(
       expect.arrayContaining([
         "approval_recorded",
@@ -208,7 +211,7 @@ describe.each([
     await handleInbound(me, `LINK ${c.code}`, BASE);
     const v = await loadCase(c.caseId);
     await runCaseAction(c.caseId, {
-      actionId: "send_dispute",
+      actionId: "request_document",
       target: v?.state.next.target,
       approve: true,
     });
@@ -236,7 +239,7 @@ describe.each([
     expect(await handleInbound(me, "A", BASE)).not.toMatch(/^Done:/);
     expect(
       (await loadCase(c.caseId))?.state.timeline.some(
-        (e) => e.type === "dispute_sent",
+        (e) => e.type === "document_requested",
       ),
     ).toBe(false);
     await saveCasePreferences(c.caseId, { ...choices, pauseContact: false });

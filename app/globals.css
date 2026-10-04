@@ -1689,3 +1689,11 @@ h4 {
 .billless-email-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .billless-email-actions > * { flex: 1; text-align: center; }
 .billless-email-actions [aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+
+/* A manual send report records a date without authorizing another message. */
+.billless-sent-date { display: grid; gap: 8px; margin-block: 20px; max-width: 280px; }
+.billless-sent-date label { font-weight: 600; }
+.billless-sent-date input { min-height: 44px; padding: 10px 12px; border: 1px solid var(--paper-border); border-radius: 10px; background: white; color: var(--paper-ink); }
+
+/* Upload is a compact action beside the saved case documents heading. */
+.billless-case-documents-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }

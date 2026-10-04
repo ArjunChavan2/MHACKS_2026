@@ -1,6 +1,6 @@
 "use client";
 /** @file Patient attachment, confirmation and retry within an active case (SPEC.md §3.6, §4.2). */
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { CaseView, IngestResponse } from "@/lib/cases/service";
 import type { CaseTask } from "@/lib/types";
 import ConfirmPanel, { type DocState } from "./DocumentConfirmation";
@@ -45,7 +45,10 @@ export default function CaseDocumentFlow({
   onUpdated,
   onBusyChange,
   onDenial,
+  children,
 }: {
+  /** Saved document list shown below the compact upload action. */
+  children: ReactNode;
   /** Current saved case and resumable incoming documents. */
   view: CaseView;
   /** Reloads server state after a document operation. */
@@ -66,6 +69,8 @@ export default function CaseDocumentFlow({
   const [retryFile, setRetryFile] = useState<File | null>(null);
   /** Immediate lock prevents rapid duplicate submissions. */
   const lock = useRef(false);
+  /** Native file picker opened by the Case documents upload button. */
+  const fileInput = useRef<HTMLInputElement>(null);
   /** Latest case view, including pending uploads available to reopen after refresh. */
   const pending = view.documents.filter(
     (d) =>
@@ -254,42 +259,51 @@ export default function CaseDocumentFlow({
   return (
     <section
       className="billless-document-card space-y-4"
-      aria-label="Add a document to your case"
+      id="case-document-flow"
+      aria-label="Case documents"
     >
-      <h3 className="text-lg font-semibold">Add a document to your case</h3>
-      <p className="paper-copy">
-        Add an arrived itemized bill, EOB, revised statement or denial notice.
-        You’ll confirm the details before we check it. Lab reports and other
-        supporting records need human handling.
-      </p>
-      <label className="billless-goal-label">
-        Which request is this for?
-        <select
-          value={taskId}
+      <div className="billless-case-documents-heading">
+        <h3 className="text-lg font-semibold">Case documents</h3>
+        <button
+          type="button"
+          className="paper-secondary"
           disabled={busy}
-          onChange={(e) => setTaskId(e.target.value)}
+          onClick={() => fileInput.current?.click()}
         >
-          <option value="">Additional document (no specific request)</option>
-          {tasks.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.documentNeeded} — {t.responsibleParty}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="billless-goal-label">
-        Choose a synthetic document
-        <input
-          type="file"
-          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-          disabled={busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void upload(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
+          Upload document
+        </button>
+      </div>
+      <input
+        ref={fileInput}
+        type="file"
+        className="sr-only"
+        aria-label="Upload case document"
+        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+        disabled={busy}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void upload(file);
+          event.target.value = "";
+        }}
+      />
+      {children}
+      {doc && tasks.length > 0 && (
+        <label className="billless-goal-label">
+          Which request is this for?
+          <select
+            value={taskId}
+            disabled={busy}
+            onChange={(e) => setTaskId(e.target.value)}
+          >
+            <option value="">Additional document (no specific request)</option>
+            {tasks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.documentNeeded} — {t.responsibleParty}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {filename && <ProcessingStatus filename={filename} />}
       {error && (
         <p role="alert" className="billless-refresh-warning">

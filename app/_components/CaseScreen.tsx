@@ -14,7 +14,6 @@ import type { CaseView } from "@/lib/cases/service";
 import type { ImessageStatus } from "@/lib/messaging/service";
 import { longDate, usd } from "@/lib/format";
 import type { ExtractedBill, Finding } from "@/lib/types";
-import CallWorkspace from "./CallWorkspace";
 import DenialFlow from "./DenialFlow";
 import type { DocState } from "./DocumentConfirmation";
 import CaseDocumentFlow from "./CaseDocumentFlow";
@@ -25,7 +24,7 @@ const REFRESH_MS = 3000;
 
 /** Actions this screen can run through `/api/cases/[id]/actions`. */
 const RUNNABLE = new Set([
-  "send_dispute",
+  "record_letter_sent",
   "request_document",
   "request_revised_statement",
   "follow_up",
@@ -131,6 +130,10 @@ async function readCase(caseId: string): Promise<CaseView> {
  */
 export default function CaseScreen({ caseId }: { caseId: string }) {
   const [view, setView] = useState<CaseView | null>(null);
+  /** Patient-reported date of the email they sent themselves. */
+  const [sentDate, setSentDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -261,7 +264,12 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await post(`/api/cases/${caseId}/actions`, { actionId, target, approve });
+      await post(`/api/cases/${caseId}/actions`, {
+        actionId,
+        target,
+        approve,
+        ...(actionId === "record_letter_sent" ? { sentAt: sentDate } : {}),
+      });
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -433,10 +441,25 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             </div>
           )}
         </dl>
+        {next.actionId === "record_letter_sent" && (
+          <div className="billless-sent-date">
+            <label htmlFor="letter-sent-date">Date sent</label>
+            <input
+              id="letter-sent-date"
+              type="date"
+              value={sentDate}
+              max={new Date().toISOString().slice(0, 10)}
+              disabled={busy}
+              onChange={(event) => setSentDate(event.target.value)}
+            />
+          </div>
+        )}
         {RUNNABLE.has(next.actionId) && (
           <button
             className="paper-primary"
-            disabled={busy}
+            disabled={
+              busy || (next.actionId === "record_letter_sent" && !sentDate)
+            }
             onClick={() => act(next.actionId, next.target, next.needsApproval)}
           >
             {busy
@@ -655,19 +678,12 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </div>
       )}
 
-      <div id="case-document-flow">
-        <CaseDocumentFlow
-          view={view}
-          onUpdated={refresh}
-          onBusyChange={setBusy}
-          onDenial={setDenialReview}
-        />
-      </div>
-      <section
-        className="billless-document-card space-y-3"
-        aria-label="Case documents"
+      <CaseDocumentFlow
+        view={view}
+        onUpdated={refresh}
+        onBusyChange={setBusy}
+        onDenial={setDenialReview}
       >
-        <h3 className="text-lg font-semibold">Case documents</h3>
         <ul className="space-y-3">
           {view.documents.map((d) => (
             <li
@@ -692,7 +708,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             </li>
           ))}
         </ul>
-      </section>
+      </CaseDocumentFlow>
 
       {view.documents
         .filter((d) => d.ingest.result.kind === "denial")
@@ -725,13 +741,6 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           }}
         />
       )}
-      <CallWorkspace
-        caseId={caseId}
-        consent={s.consent}
-        imessageLinked={Boolean(imessage?.linked)}
-        disabled={busy}
-        onChange={refresh}
-      />
       <div className="paper-findings">
         <h3>Calls</h3>
         <p className="paper-copy text-sm">

@@ -63,8 +63,9 @@ describe("approval gate", () => {
   it("refuses to send the dispute without approval", async () => {
     const { findings } = await demo();
     const s: CaseSnapshot = { ...sent(findings), dispute: { documentId: "doc_letter", sent: false }, responsesRecorded: 0, approvals: [] };
-    expect(derivePhase(s)).toBe("awaiting_approval");
-    expect(recommendAction(s, TODAY)).toMatchObject({ actionId: "send_dispute", needsApproval: true });
+    expect(derivePhase(s)).toBe("audited");
+    expect(recommendAction(s, TODAY)).toMatchObject({ actionId: "record_letter_sent", needsApproval: false });
+    expect(canRun(s, "record_letter_sent", TODAY, "doc_letter")).toEqual({ ok: true });
     expect(canRun(s, "send_dispute", TODAY, "doc_letter")).toEqual({ ok: false, reason: '"Send the dispute letter" needs your approval first.' });
     const approved = { ...s, approvals: [{ action: "send_dispute" as const, target: "doc_letter" }] };
     expect(canRun(approved, "send_dispute", TODAY, "doc_letter")).toEqual({ ok: true });
