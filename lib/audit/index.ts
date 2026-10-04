@@ -19,7 +19,7 @@ export function computeVerdict(bill: ConfirmedBill, findings: Finding[]): Verdic
   const perLine = new Map<number, number>();
   let unlinked = 0;
   for (const f of findings) {
-    if (f.status === "withdrawn") continue;
+    if (f.patientExcluded || f.status === "withdrawn") continue;
     if (!f.lineNumbers.length) {
       unlinked += f.amountQuestionedCents;
       continue;

@@ -58,7 +58,7 @@ export function compareRevised(original: ConfirmedBill, revised: ConfirmedBill, 
   const resolvedFindingIds: string[] = [];
   const notReflectedFindingIds: string[] = [];
   for (const f of findings) {
-    if (f.status === "withdrawn" || !f.lineNumbers.length) continue;
+    if (f.patientExcluded || f.status === "withdrawn" || !f.lineNumbers.length) continue;
     if (f.lineNumbers.every((n) => gone.has(n))) resolvedFindingIds.push(f.id);
     else if (f.status === "confirmed") notReflectedFindingIds.push(f.id);
   }

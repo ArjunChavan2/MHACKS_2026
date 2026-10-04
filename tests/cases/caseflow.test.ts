@@ -30,6 +30,7 @@ import {
   ingestUpload,
   loadCase,
   reopenReview,
+  setFindingExcluded,
 } from "@/lib/cases/service";
 import { memoryStore, pgStore, type CaseStore } from "@/lib/cases/store";
 import type { Finding } from "@/lib/types";
@@ -113,6 +114,60 @@ describe.each([
 ] as const)("adaptive case on the %s store", (_name, makeStore) => {
   beforeEach(() => {
     g.__mhStore = makeStore();
+  });
+
+  /** Patient exclusions persist on either store, survive re-auditing, and never enter a new letter. */
+  it("excludes and restores issues without treating exclusion as a verified resolution", async () => {
+    const c = await drafted();
+    const before = (await loadCase(c.caseId))!;
+    const finding = before.audit!.findings.find((f) => f.id === c.dup)!;
+    const selected = await setFindingExcluded(c.caseId, c.dup, true);
+    expect(selected.draft).toBeNull();
+    expect(selected.audit!.findings.find((f) => f.id === c.dup)).toEqual({
+      ...finding,
+      patientExcluded: true,
+    });
+    expect(
+      (await loadCase(c.caseId))!.audit!.findings.find((f) => f.id === c.dup)!
+        .patientExcluded,
+    ).toBe(true);
+    const rerun = await auditCase(c.caseId, c.billId, c.eobId);
+    expect(rerun.findings.find((f) => f.id === c.dup)!.patientExcluded).toBe(
+      true,
+    );
+    await draftLetter(c.caseId, c.billId, c.eobId);
+    const stored = await g.__mhStore!.getCase(c.caseId);
+    const lastLetter = stored!.events
+      .filter((e) => e.type === "letter_drafted")
+      .at(-1)!;
+    expect((lastLetter.data as { findings: string[] }).findings).not.toContain(
+      c.dup,
+    );
+    for (const f of rerun.findings)
+      await setFindingExcluded(c.caseId, f.id, true);
+    const none = (await loadCase(c.caseId))!;
+    expect(none.audit!.verdict.questionedCents).toBe(0);
+    expect(none.state.phase).toBe("audited");
+    await expect(draftLetter(c.caseId, c.billId, c.eobId)).rejects.toThrow(
+      /nothing to dispute/,
+    );
+    const restored = await setFindingExcluded(c.caseId, c.dup, false);
+    expect(
+      restored.audit!.findings.find((f) => f.id === c.dup)!.patientExcluded,
+    ).toBe(false);
+    expect(restored.audit!.verdict.questionedCents).toBeGreaterThan(0);
+    await expect(
+      setFindingExcluded(c.caseId, "unknown-finding", true),
+    ).rejects.toThrow(/Unknown finding/);
+  });
+
+  /** Exclusion cannot invalidate a letter whose action the patient has already approved. */
+  it("refuses to change selected issues after sending", async () => {
+    const c = await drafted();
+    await send(c.caseId);
+    await expect(setFindingExcluded(c.caseId, c.dup, true)).rejects.toThrow(
+      /recorded approvals/,
+    );
   });
 
   /** Reopening preserves corrections, requires confirmation, and makes an earlier draft unavailable across reloads. */

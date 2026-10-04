@@ -51,7 +51,7 @@ export function proposeOutcome(call: CallRecord, findings: Finding[], office: st
   const perFinding: CounterpartyResponse["perFinding"] = [];
   const summary: string[] = [];
   for (const f of findings) {
-    if (f.status === "withdrawn" || (f.status === "confirmed" && f.verified)) continue;
+    if (f.patientExcluded || f.status === "withdrawn" || (f.status === "confirmed" && f.verified)) continue;
     const field = FIELD_FOR_RULE[f.rule];
     const value = field ? x[field] : undefined;
     const kind = value ? KIND_FOR_VALUE[value] : undefined;

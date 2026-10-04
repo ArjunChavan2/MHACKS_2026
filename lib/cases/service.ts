@@ -414,6 +414,58 @@ function correctedExtraction(
   );
 }
 
+/**
+ * Saves the patient's choice to exclude or restore a finding, retaining its evidence unchanged.
+ * Supersedes unsent drafts so a prior letter cannot carry an excluded issue forward.
+ * @param caseId - Existing audited case.
+ * @param findingId - Server-produced finding identifier.
+ * @param excluded - Whether the patient does not want to pursue the issue.
+ * @returns Refreshed case with the persisted choice and recomputed review amount.
+ */
+export async function setFindingExcluded(
+  caseId: string,
+  findingId: string,
+  excluded: boolean,
+): Promise<CaseView> {
+  const store = getStore();
+  const c = await store.getCase(caseId);
+  if (!c) throw new BadRequestError("Unknown case");
+  if (
+    c.events.some((e) =>
+      [
+        "approval_recorded",
+        "dispute_sent",
+        "response_recorded",
+        "consent_given",
+        "call_recorded",
+        "document_requested",
+        "follow_up_sent",
+      ].includes(e.type),
+    )
+  )
+    throw new BadRequestError(
+      "This case already has recorded approvals or correspondence. Contact support to change the issues being pursued.",
+    );
+  if (!c.findings.some((f) => f.id === findingId))
+    throw new BadRequestError("Unknown finding for this case");
+  for (const d of c.documents.filter(
+    (d) => d.direction === "outgoing" && d.draft && d.status !== "superseded",
+  ))
+    await store.saveDocument({ ...d, status: "superseded" });
+  await store.saveFindings(
+    caseId,
+    c.findings.map((f) =>
+      f.id === findingId ? { ...f, patientExcluded: excluded } : f,
+    ),
+  );
+  await store.addEvent(caseId, "finding_selection_changed", {
+    findingId,
+    excluded,
+  });
+  await store.setCaseStatus(caseId, "audited");
+  return (await loadCase(caseId))!;
+}
+
 /** Reopens an unsent review for corrections, preserving documents and superseded drafts in its history.
  * Refuses cases with recorded approvals or correspondence so editing cannot rewrite an active dispute.
  * @param caseId - Existing case whose bill and EOB should be reconfirmed.
@@ -573,14 +625,21 @@ export async function draftLetter(
   await getStore().saveFindings(caseId, merged);
   // The letter covers only issues still in question (withdrawn ones stay out).
   // The billing-office letter covers provider issues only; insurer issues go to the insurer.
-  const active = merged.filter((f) => f.status !== "withdrawn");
+  const active = merged.filter(
+    (f) => !f.patientExcluded && f.status !== "withdrawn",
+  );
   const findings = active.filter((f) => f.contact !== "insurer");
   // Only insurer issues: the letter goes to the insurer instead of the billing office.
   const forInsurer = active.filter((f) => f.contact === "insurer");
   if (!findings.length && forInsurer.length && eob) {
     const draft = draftInsurerLetter(bill, eob, forInsurer);
     const documentId = await saveDraft(caseId, draft);
-    await getStore().addEvent(caseId, "letter_drafted", { kind: draft.kind, author: draft.author, documentId, findings: forInsurer.map((f) => f.id) });
+    await getStore().addEvent(caseId, "letter_drafted", {
+      kind: draft.kind,
+      author: draft.author,
+      documentId,
+      findings: forInsurer.map((f) => f.id),
+    });
     return draft;
   }
   if (!findings.length)
@@ -775,6 +834,7 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
   const lastAudit = currentEvents.filter((e) => e.type === "audit_run").at(-1)
     ?.data as
     | {
+        billId?: string;
         findings: string[];
         verdict: Verdict;
         providers?: string[];
@@ -788,7 +848,9 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     const ordered = lastAudit.findings.flatMap((id) => byId.get(id) ?? []);
     audit = {
       findings: ordered,
-      verdict: lastAudit.verdict,
+      verdict: lastAudit.billId
+        ? computeVerdict(await loadConfirmed(lastAudit.billId, "bill"), ordered)
+        : lastAudit.verdict,
       providers: lastAudit.providers ?? [],
       recordsOrigin: lastAudit.recordsOrigin,
       recordWarnings: lastAudit.recordWarnings,

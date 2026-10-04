@@ -7,7 +7,7 @@
  * consent arrived. Authenticated with `x-billy-secret` = `MESSAGING_SECRET` (set on the tool).
  */
 import { timingSafeEqual } from "node:crypto";
-import { caseForLiveCall, requestConsent, waitForConsent } from "@/lib/cases/consent";
+import { caseForActiveCall, requestConsent, waitForConsent } from "@/lib/cases/consent";
 
 /** Long enough to wait for the patient's reply. */
 export const maxDuration = 60;
@@ -35,14 +35,14 @@ function authorized(given: string | null): boolean {
 export async function POST(req: Request): Promise<Response> {
   if (!authorized(req.headers.get("x-billy-secret"))) return Response.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { counterparty?: string };
-  const caseId = await caseForLiveCall();
+  const caseId = await caseForActiveCall();
   if (!caseId) return Response.json({ consented: false, message: "No active case found. Tell the office the patient will call back to verify." });
   const counterparty = (body.counterparty ?? "the billing office").slice(0, 120);
   const requestId = await requestConsent(caseId, counterparty);
   const consented = await waitForConsent(caseId, requestId);
   return Response.json(
     consented
-      ? { consented: true, message: "The patient just confirmed in writing (by text) that she consents to Billy representing her on this account." }
+      ? { consented: true, message: "The patient just confirmed in writing (by text) that they consent to Billy representing them on this account." }
       : { consented: false, message: "The patient has not replied yet. Tell the office the patient will verify directly and call back." },
   );
 }

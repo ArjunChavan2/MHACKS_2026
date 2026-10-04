@@ -2,7 +2,7 @@
  * @file POST /api/calls/brief: ElevenLabs' "conversation initiation" webhook for inbound calls.
  *
  * At the start of each call, returns Billy's instructions and first line built from the live case
- * (`caseForLiveCall`), so Billy speaks about the right patient and calls the right counterparty
+ * (`caseForLiveCall`: the case whose screen last pressed "Get Billy ready"), so Billy speaks about the right patient and calls the right counterparty
  * (billing office vs insurer). The insurer-denial agent keeps its own fixed brief. Authenticated with
  * the `x-billy-secret` header (= MESSAGING_SECRET), set in ElevenLabs' workspace webhook settings.
  */

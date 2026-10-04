@@ -61,6 +61,19 @@ describe("pgStore", () => {
     expect(Buffer.from(file!.bytes).equals(Buffer.from(pdf))).toBe(true);
   });
 
+  /** Proves the latest event of a type is found across cases, ignoring other event types. */
+  it("finds the latest event of a type", async () => {
+    expect(await pg.latestEventOf("call_armed_none")).toBeNull();
+    const a = await pg.createCase(null);
+    const b = await pg.createCase(null);
+    await pg.addEvent(a, "call_armed", {});
+    await new Promise((r) => setTimeout(r, 5));
+    await pg.addEvent(b, "audit_run", {});
+    const hit = await pg.latestEventOf("call_armed");
+    expect(hit?.caseId).toBe(a);
+    expect(Number.isNaN(Date.parse(hit!.createdAt))).toBe(false);
+  });
+
   it("returns null for unknown cases, documents, and files", async () => {
     expect(await pg.getCase("case_missing")).toBeNull();
     expect(await pg.getDocument("doc_missing")).toBeNull();

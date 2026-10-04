@@ -103,6 +103,8 @@ export interface CaseState {
   callProposals: Record<string, CallOutcome>;
   /** The patient's decision per call outcome. */
   callDecisions: Record<string, "confirmed" | "rejected">;
+  /** When this case last pressed "Get Billy ready for a call", or null. */
+  callArmedAt: string | null;
 }
 
 /**
@@ -257,6 +259,8 @@ const IMESSAGE_REPLY_LABEL: Record<string, string> = {
  */
 function summarize(type: string, data: Record<string, unknown>): string {
   switch (type) {
+    case "finding_selection_changed":
+      return data.excluded ? "You excluded an issue from your dispute; its evidence is preserved" : "You restored an issue to your dispute";
     case "review_reopened":
       return "You reopened the document details; previous findings and drafts need a new review";
     case "document_received":
@@ -308,6 +312,8 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return `Billy asked you by text, for ${String(data.counterparty ?? "the office")}: “${String(data.question ?? "")}”`;
     case "patient_question_answered":
       return data.outcome === "answered" ? "You answered Billy's question by text (shared on the call)" : data.outcome === "skipped" ? "You chose not to share that" : data.outcome === "withheld" ? "Your reply wasn't shared (it looked like an SSN or card number)" : "Your reply came after the call moved on (not shared)";
+    case "call_armed":
+      return "You got Billy ready to call about this case";
     case "consent_given":
       return `You consented to Billy representing you (by iMessage)`;
     default:
@@ -338,6 +344,7 @@ export function caseStateOf(c: StoredCase): CaseState {
     verification,
     calls: eventsOf<CallRecord>(c, "call_recorded"),
     consent: consentStateOf(c),
+    callArmedAt: c.events.filter((e) => e.type === "call_armed").at(-1)?.createdAt ?? null,
     callDecisions: Object.fromEntries(eventsOf<{ conversationId: string; decision: "confirmed" | "rejected" }>(c, "call_outcome_decided").map((d) => [d.conversationId, d.decision])),
     callProposals: Object.fromEntries(
       eventsOf<CallRecord>(c, "call_recorded")
