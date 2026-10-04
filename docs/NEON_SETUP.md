@@ -6,6 +6,20 @@ marked **You**: signing in through a browser and anything that needs your passwo
 
 Background: SPEC.md §4.6 (data), §5.1 (stack). What was built: `agent-notes/neon-setup/IMPLEMENTATION.md`.
 
+## Quick path (agents: start here)
+
+Run **`npm run setup`** from the repo root. It checks Node, installs dependencies, links the Neon
+project if the Neon CLI is signed in, creates `.env.local`, and verifies the database. Re-run it
+after any human step; it's safe to repeat.
+
+- Exit `0`: ready, start with `npm run dev`.
+- Exit `2`: a person must do one thing. Show them the text under `ACTION NEEDED` word for word
+  (usually: sign in once with `npx neon@latest auth` in a normal terminal, or paste the connection
+  string into `.env.local`), wait for them, then run `npm run setup` again.
+- Exit `1`: a step failed; the message says which.
+
+The steps below are what the script does, for doing it by hand or debugging.
+
 ## Facts
 
 | Thing                 | Value                                                                                          |
