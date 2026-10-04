@@ -28,9 +28,9 @@ const GUIDE_COPY: Record<
   }
 > = {
   start: {
-    title: "Let’s review your bill.",
+    title: "Let’s review your bill or denial.",
     message:
-      "Let’s take this one step at a time. Add your bill below, and we’ll help you work out what to ask next.",
+      "Let’s take this one step at a time. Add your bill or denial notice below, and we’ll help you work out what to ask next.",
   },
   confirm: {
     title: "Let’s get the details right.",

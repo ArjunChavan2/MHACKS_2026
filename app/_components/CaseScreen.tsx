@@ -14,6 +14,9 @@ import type { CaseView } from "@/lib/cases/service";
 import type { ImessageStatus } from "@/lib/messaging/service";
 import { longDate, usd } from "@/lib/format";
 import type { ExtractedBill, Finding } from "@/lib/types";
+import CallWorkspace from "./CallWorkspace";
+import DenialFlow from "./DenialFlow";
+import type { DocState } from "./DocumentConfirmation";
 import CaseDocumentFlow from "./CaseDocumentFlow";
 import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
@@ -138,6 +141,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [denialReview, setDenialReview] = useState<DocState | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
   /** Patient confirmed the revised statement's type despite the type checks' doubts. */
@@ -201,11 +205,17 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
    * @param conversationId - The saved call.
    * @param decision - "confirm" or "reject".
    */
-  async function decideCall(conversationId: string, decision: "confirm" | "reject") {
+  async function decideCall(
+    conversationId: string,
+    decision: "confirm" | "reject",
+  ) {
     setBusy(true);
     setError(null);
     try {
-      await post(`/api/cases/${caseId}/calls/outcome`, { conversationId, decision });
+      await post(`/api/cases/${caseId}/calls/outcome`, {
+        conversationId,
+        decision,
+      });
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -454,25 +464,38 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           aria-live="assertive"
         >
           <p className="paper-eyebrow">BILLY NEEDS YOU ON A LIVE CALL</p>
-          <h3 className="mt-1 text-lg font-semibold">Reply in iMessage to give consent</h3>
+          <h3 className="mt-1 text-lg font-semibold">
+            Reply in iMessage to give consent
+          </h3>
           {imessage?.linked ? (
             <p className="paper-copy text-sm">
-              Billy is on the phone and needs your consent. Check iMessage and reply exactly:{" "}
-              <strong className="font-mono">I consent to Billy representing me</strong>
+              Billy is on the phone and needs your consent. Check iMessage and
+              reply exactly:{" "}
+              <strong className="font-mono">
+                I consent to Billy representing me
+              </strong>
             </p>
           ) : (
             <p className="paper-copy text-sm">
-              Billy is on the phone and needs your consent by iMessage, but no phone is linked yet. Link your phone in the
-              iMessage panel below, then reply to Billy&apos;s text.
+              Billy is on the phone and needs your consent by iMessage, but no
+              phone is linked yet. Link your phone in the iMessage panel below,
+              then reply to Billy&apos;s text.
             </p>
           )}
-          <p className="mt-2 text-xs text-[var(--paper-muted)]">Demo only: typed consent stands in for identity verification.</p>
+          <p className="mt-2 text-xs text-[var(--paper-muted)]">
+            Demo only: typed consent stands in for identity verification.
+          </p>
+          {s.consent.pendingRequest.expired && (
+            <p role="status">
+              The consent window expired. Nothing was approved. Arrange direct
+              patient verification or a callback.
+            </p>
+          )}
         </section>
       )}
       {!s.consent?.pendingRequest && s.consent?.givenAt && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">
-          You consented to Billy representing you (
-          by iMessage).
+          You consented to Billy representing you ( by iMessage).
         </p>
       )}
 
@@ -733,6 +756,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             view={view}
             onUpdated={refresh}
             onBusyChange={setBusy}
+            onDenial={setDenialReview}
           />
         </div>
       )}
@@ -767,6 +791,44 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </ul>
       </section>
 
+      {view.documents
+        .filter((d) => d.ingest.result.kind === "denial")
+        .map((d) => (
+          <button
+            key={d.ingest.documentId}
+            className="paper-secondary"
+            onClick={() =>
+              setDenialReview({
+                ingest: d.ingest,
+                confirmed: d.confirmed,
+                corrections: d.confirmedValues ?? {},
+                confirmedPaths: [],
+                ackType: false,
+                ackTotals: false,
+                blocking: [],
+              })
+            }
+          >
+            Review denial notice
+          </button>
+        ))}
+      {denialReview && (
+        <DenialFlow
+          doc={denialReview}
+          onChange={setDenialReview}
+          onTrack={() => {
+            setDenialReview(null);
+            void refresh();
+          }}
+        />
+      )}
+      <CallWorkspace
+        caseId={caseId}
+        consent={s.consent}
+        imessageLinked={Boolean(imessage?.linked)}
+        disabled={busy || Boolean(preferences)}
+        onChange={refresh}
+      />
       <div className="paper-findings">
         <h3>Calls</h3>
         <p className="paper-copy text-sm">
@@ -810,11 +872,15 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
               )}
               {s.callProposals?.[call.conversationId] && (
                 <div className="mt-2 rounded-md bg-sky-50 p-3 text-sm ring-1 ring-sky-200">
-                  <p className="font-semibold">Billy heard this on the call. Is it right?</p>
+                  <p className="font-semibold">
+                    Billy heard this on the call. Is it right?
+                  </p>
                   <ul className="mt-1 list-disc pl-5">
-                    {s.callProposals[call.conversationId].summary.map((line, i) => (
-                      <li key={i}>{line}</li>
-                    ))}
+                    {s.callProposals[call.conversationId].summary.map(
+                      (line, i) => (
+                        <li key={i}>{line}</li>
+                      ),
+                    )}
                   </ul>
                   <p className="mt-1 text-xs text-[var(--paper-muted)]">
                     {s.callProposals[call.conversationId].kind === "response"
@@ -822,10 +888,18 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
                       : "Confirming adds a follow-up so the case doesn't wait silently."}
                   </p>
                   <div className="mt-2 flex gap-2">
-                    <button className="paper-primary" disabled={busy} onClick={() => decideCall(call.conversationId, "confirm")}>
+                    <button
+                      className="paper-primary"
+                      disabled={busy}
+                      onClick={() => decideCall(call.conversationId, "confirm")}
+                    >
                       Yes, that&apos;s right
                     </button>
-                    <button className="paper-secondary" disabled={busy} onClick={() => decideCall(call.conversationId, "reject")}>
+                    <button
+                      className="paper-secondary"
+                      disabled={busy}
+                      onClick={() => decideCall(call.conversationId, "reject")}
+                    >
                       That&apos;s not right
                     </button>
                   </div>
@@ -833,7 +907,9 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
               )}
               {s.callDecisions?.[call.conversationId] && (
                 <p className="paper-copy text-xs">
-                  {s.callDecisions[call.conversationId] === "confirmed" ? "You confirmed this call's outcome." : "You marked this call's summary as not right."}
+                  {s.callDecisions[call.conversationId] === "confirmed"
+                    ? "You confirmed this call's outcome."
+                    : "You marked this call's summary as not right."}
                 </p>
               )}
               <button

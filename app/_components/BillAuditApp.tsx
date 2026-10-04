@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import LetterEditor, { type LetterEdits } from "./LetterEditor";
+import type { LetterEdits } from "./LetterEditor";
 import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
 import type {
@@ -18,6 +18,8 @@ import type {
   IngestResponse,
 } from "@/lib/cases/service";
 import { usd } from "@/lib/format";
+import LetterScreen from "./LetterScreen";
+import DenialFlow from "./DenialFlow";
 import CaseScreen from "./CaseScreen";
 import ConfirmPanel, {
   confirmationProgress,
@@ -26,12 +28,13 @@ import ConfirmPanel, {
   type DocState,
 } from "./DocumentConfirmation";
 import ProcessingStatus from "./ProcessingStatus";
+import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
 import { describeSource } from "./sources";
 import type { Draft, ExtractedBill, Finding } from "@/lib/types";
 
 /** Which screen is showing, including the saved-case tracking screen. */
-type Step = ReviewStep | "case";
+type Step = ReviewStep | "case" | "denial";
 
 /**
  * Sends JSON to an API route and returns the parsed reply or throws with the server's message.
@@ -91,6 +94,7 @@ export default function BillAuditApp() {
   const running = useRef(false);
   const [step, setStep] = useState<Step>("start");
   const [bill, setBill] = useState<DocState | null>(null);
+  const [denial, setDenial] = useState<DocState | null>(null);
   const [eob, setEob] = useState<DocState | null>(null);
   const [audit, setAudit] = useState<AuditResponse | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -111,9 +115,10 @@ export default function BillAuditApp() {
     { total: 0, reviewed: 0, remaining: 0 },
   );
 
-  const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
+  const caseId =
+    bill?.ingest.caseId ?? eob?.ingest.caseId ?? denial?.ingest.caseId ?? null;
 
-  const usedSample = [bill, eob].some(
+  const usedSample = [bill, eob, denial].some(
     (d) => d?.ingest.result.meta.source === "saved-fixture",
   );
 
@@ -153,10 +158,11 @@ export default function BillAuditApp() {
       ackType: false,
     };
     const r = ingest.result;
-    if (r.kind === "denial")
-      throw new Error(
-        "Denial letters need the appeal review flow. Add a bill or EOB here.",
-      );
+    if (r.kind === "denial") {
+      setDenial(state);
+      setStep("denial");
+      return;
+    }
     if (r.kind === "unsupported") throw new Error(r.reason);
     if (r.kind === "eob") setEob(state);
     else setBill(state);
@@ -179,21 +185,21 @@ export default function BillAuditApp() {
       const r = d.ingest.result;
       // Revised statements belong to case tracking, not the original bill slot.
       if (
-        r.kind === "denial" ||
         r.kind === "unsupported" ||
         (r.kind === "bill" && r.bill.docType === "revised_statement")
       )
         continue;
       const state: DocState = {
         ingest: d.ingest,
-        corrections: {},
+        corrections: d.confirmedValues ?? {},
         confirmedPaths: [],
         ackTotals: false,
         confirmed: d.confirmed,
         blocking: [],
         ackType: false,
       };
-      if (r.kind === "eob") setEob(state);
+      if (r.kind === "denial") setDenial(state);
+      else if (r.kind === "eob") setEob(state);
       else setBill(state);
     }
     setAudit(view.audit);
@@ -204,20 +210,26 @@ export default function BillAuditApp() {
       view.state.phase !== "audited" &&
       view.state.phase !== "intake";
     setStep(
-      tracking
-        ? "case"
-        : view.draft
-          ? "letter"
-          : view.audit
-            ? "audit"
-            : view.documents.some(
-                  (d) =>
-                    !d.confirmed &&
-                    d.ingest.result.kind === "bill" &&
-                    d.ingest.result.bill.docType === "itemized_bill",
-                )
-              ? "confirm"
-              : "start",
+      view.documents.some((d) => d.ingest.result.kind === "denial") &&
+        !view.documents.some((d) => d.ingest.result.kind === "bill")
+        ? "denial"
+        : view.documents.some((d) => d.ingest.result.kind === "denial") &&
+            view.documents.some((d) => d.ingest.result.kind === "bill")
+          ? "case"
+          : tracking
+            ? "case"
+            : view.draft
+              ? "letter"
+              : view.audit
+                ? "audit"
+                : view.documents.some(
+                      (d) =>
+                        !d.confirmed &&
+                        d.ingest.result.kind === "bill" &&
+                        d.ingest.result.bill.docType === "itemized_bill",
+                    )
+                  ? "confirm"
+                  : "start",
     );
   }
 
@@ -454,7 +466,16 @@ export default function BillAuditApp() {
       await run(async () => {
         const view = await fetchCase(caseId);
         applyCase(view);
-        setStep(view.draft ? "letter" : view.audit ? "audit" : "start");
+        setStep(
+          view.documents.some((d) => d.ingest.result.kind === "denial") &&
+            !view.documents.some((d) => d.ingest.result.kind === "bill")
+            ? "denial"
+            : view.draft
+              ? "letter"
+              : view.audit
+                ? "audit"
+                : "start",
+        );
       });
       return;
     }
@@ -472,7 +493,7 @@ export default function BillAuditApp() {
 
   /** Destination labels make each backward action clear without implying a reset. */
   const backLabel =
-    step === "confirm" || step === "request"
+    step === "confirm" || step === "request" || step === "denial"
       ? "Back to upload"
       : step === "audit"
         ? "Back to details"
@@ -495,6 +516,7 @@ export default function BillAuditApp() {
       pauseContact: false,
     });
     setStep("start");
+    setDenial(null);
     setBill(null);
     setEob(null);
     setAudit(null);
@@ -521,9 +543,8 @@ export default function BillAuditApp() {
           </button>
         )}
       </header>
-
-      {step !== "case" && <ReviewProgress step={step} />}
-      {step !== "case" && (
+      {step !== "case" && step !== "denial" && <ReviewProgress step={step} />}
+      {step !== "case" && step !== "denial" && (
         <BillyGuide
           key={step}
           step={step}
@@ -559,6 +580,11 @@ export default function BillAuditApp() {
             after upload.
           </p>
         </div>
+      )}
+      {step === "start" && denial && (
+        <button className="paper-secondary" onClick={() => setStep("denial")}>
+          Return to saved denial review
+        </button>
       )}
       {step === "start" && (
         <StartScreen
@@ -661,6 +687,29 @@ export default function BillAuditApp() {
           }
         />
       )}
+      {step === "denial" && caseId && !preferencesSaved && (
+        <section className="paper-flow">
+          <CasePreferencesPanel
+            value={preferences}
+            disabled={busy}
+            onChange={setPreferences}
+          />
+          <button
+            className="paper-secondary"
+            disabled={busy}
+            onClick={() => run(() => savePreferences(caseId))}
+          >
+            Save my case goal and restrictions
+          </button>
+        </section>
+      )}
+      {step === "denial" && denial && (
+        <DenialFlow
+          doc={denial}
+          onChange={setDenial}
+          onTrack={() => setStep("case")}
+        />
+      )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
       {step !== "start" && (
         <nav
@@ -725,6 +774,14 @@ function StartScreen(props: {
           optional
           onUpload={props.onUpload}
         />
+        <UploadSlot
+          title="Insurance denial notice"
+          label="Add a denial letter"
+          description="Start a denial review instead of a bill review. Confirm the notice, inspect policy evidence and prepare an appeal or doctor request."
+          ready={false}
+          busy={busy}
+          onUpload={props.onUpload}
+        />
       </div>
       <div className="billless-continue-row">
         <Link href="/" className="paper-secondary billless-upload-back">
@@ -766,6 +823,13 @@ function StartScreen(props: {
             className="paper-secondary"
           >
             Sample bill + EOB
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => props.onSample("denial-letter")}
+            className="paper-secondary"
+          >
+            Sample denial letter
           </button>
           <button
             disabled={busy}
@@ -1219,168 +1283,6 @@ function AuditScreen({
       <p className="paper-footer">
         Plain-language help, not legal or financial advice. Rules vary by state
         and plan.
-      </p>
-    </section>
-  );
-}
-
-/**
- * Letter screen: click any paragraph to see its sources; download the PDF.
- *
- * @param props.draft - The finished draft.
- * @param props.onTrack - Opens the case screen (dispute letters only).
- * @returns The letter screen.
- */
-function LetterScreen({
-  draft,
-  onTrack,
-  onSave,
-}: {
-  draft: Draft;
-  /** Persists patient wording and refreshes the current saved letter. */
-  onSave: (edits: LetterEdits) => Promise<void>;
-  onTrack?: () => void;
-}) {
-  /** Editing blocks downloads and case navigation until saved or canceled. */
-  const [editing, setEditing] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  /** Visible PDF failure; a failed request must never be downloaded as a document. */
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-
-  /**
-   * Downloads the reviewed draft as a PDF without submitting it (SPEC.md §4.5).
-   * Displays HTTP/network failures instead of saving an error response as a PDF.
-   * @returns Resolves after download or a visible failure; always releases busy state.
-   * Side effects: calls the PDF API and starts a browser download.
-   */
-  async function download() {
-    setBusy(true);
-    setDownloadError(null);
-    try {
-      const res = await fetch("/api/letters/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft }),
-      });
-      if (!res.ok)
-        throw new Error("The PDF could not be prepared. Please try again.");
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${draft.kind.replaceAll("_", "-")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (error) {
-      setDownloadError(
-        error instanceof Error
-          ? error.message
-          : "The PDF could not be prepared.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (editing)
-    return (
-      <section className="paper-flow billless-letter-screen">
-        <LetterEditor
-          draft={draft}
-          onCancel={() => setEditing(false)}
-          onSave={async (edits) => {
-            await onSave(edits);
-            setSelected(null);
-            setEditing(false);
-          }}
-        />
-      </section>
-    );
-
-  return (
-    <section className="paper-flow billless-letter-screen space-y-4">
-      <button className="paper-secondary" onClick={() => setEditing(true)}>
-        Edit letter
-      </button>
-      {draft.patientEdited && (
-        <p role="status" className="paper-copy">
-          Your edits are saved. Review the final letter before sending.
-        </p>
-      )}
-      <div className="billless-document-card">
-        <p className="text-xs text-[var(--paper-muted)]">
-          {draft.patientEdited
-            ? "Document-backed facts are preserved. Your added wording is labeled separately."
-            : draft.author === "llm"
-              ? "Wording drafted by AI; every fact was filled in by code from your confirmed bill and findings."
-              : "Written from our standard template; every fact was filled in by code."}{" "}
-          Tap a paragraph to see where its facts came from.
-        </p>
-        <h2 className="mt-3 font-semibold">Re: {draft.subject}</h2>
-        <div className="mt-3 space-y-3 text-sm leading-relaxed">
-          {draft.paragraphs.map((p, i) => (
-            <button
-              type="button"
-              key={i}
-              aria-expanded={selected === i}
-              aria-controls="letter-evidence"
-              onClick={() => setSelected(selected === i ? null : i)}
-              className={`block w-full text-left cursor-pointer whitespace-pre-line rounded p-2 ${selected === i ? "bg-[var(--paper-surface)] ring-1 ring-[var(--paper-border)]" : "hover:bg-[var(--paper-surface)]"} ${i === draft.paragraphs.length - 1 ? "text-sm text-[var(--paper-muted)]" : ""}`}
-            >
-              {p.patientProvided && (
-                <span className="block text-xs text-[var(--paper-muted)]">
-                  Your wording
-                </span>
-              )}
-              {p.text}
-            </button>
-          ))}
-        </div>
-        {selected !== null && (
-          <div
-            id="letter-evidence"
-            className="mt-3 rounded-md bg-[var(--paper-surface)] p-3 text-sm ring-1 ring-[var(--paper-border)]"
-          >
-            {draft.paragraphs[selected].sources.length ? (
-              <ul className="space-y-1 font-mono">
-                {draft.paragraphs[selected].sources.map((s, i) => (
-                  <li key={i}>{describeSource(s)}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                {draft.paragraphs[selected].patientProvided
-                  ? "This wording was added by you; it is not verified document evidence."
-                  : "No facts from your documents in this paragraph."}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-      {downloadError && (
-        <p
-          role="alert"
-          className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
-        >
-          {downloadError}
-        </p>
-      )}
-      <button
-        disabled={busy}
-        onClick={download}
-        className="paper-primary w-full"
-      >
-        {busy ? "Preparing PDF…" : "Download PDF"}
-      </button>
-      {onTrack && (
-        <button onClick={onTrack} className="paper-secondary w-full">
-          Track this case →
-        </button>
-      )}
-      <p className="text-center text-xs text-[var(--paper-muted)]">
-        {onTrack
-          ? "Sending happens from the case screen and only with your approval (simulated in this demo)."
-          : "Nothing is sent for you in this version. Review the letter, then send it yourself."}
       </p>
     </section>
   );

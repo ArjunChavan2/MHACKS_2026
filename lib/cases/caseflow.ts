@@ -15,6 +15,7 @@ import { usd } from "@/lib/format";
 import type {
   CaseTask,
   ConfirmedBill,
+  ConfirmedDenial,
   CounterpartyResponse,
   Draft,
   Finding,
@@ -231,7 +232,9 @@ export function snapshotOf(c: StoredCase): {
 }
 
 /** Bookkeeping events kept off the timeline (task snapshots and iMessage delivery state). */
-const HIDDEN_EVENTS: ReadonlySet<string> = new Set(["call_briefed", 
+const HIDDEN_EVENTS: ReadonlySet<string> = new Set([
+  "call_session_updated",
+  "call_briefed",
   "tasks_updated",
   "imessage_link_code",
   "imessage_prompt",
@@ -305,7 +308,16 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return "Update sent by iMessage";
     case "imessage_reply":
       return `You texted ${IMESSAGE_REPLY_LABEL[String(data.intent)] ?? String(data.intent)}${data.result === "approved" ? " (approved)" : data.result === "declined" ? " (holding)" : ""}`;
-    case "call_outcome_decided": return data.decision === "confirmed" ? "You confirmed what Billy heard on the call" : "You marked Billy's summary of a call as not right";
+    case "call_review_approved":
+      return `You approved a ${data.mode === "rehearsal" ? "synthetic rehearsal" : "call"} plan for ${String(data.recipient)}`;
+    case "call_outcome_reviewed":
+      return `You reviewed the call outcome: ${String(data.nextStep).replaceAll("_", " ")}${data.dueDate ? `, follow-up proposed for ${String(data.dueDate)}` : ""}`;
+    case "appeal_evaluated":
+      return "Denial criteria checked; correspondence prepared for your review";
+    case "call_outcome_decided":
+      return data.decision === "confirmed"
+        ? "You confirmed what Billy heard on the call"
+        : "You marked Billy's summary of a call as not right";
     case "call_recorded":
       return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
     case "consent_requested":
@@ -333,11 +345,44 @@ export function caseStateOf(c: StoredCase): CaseState {
   const { snapshot, tasks, verification } = snapshotOf(c);
   const d = today();
   const orig = originalBill(c);
+  /** Denial-only cases have correspondence review steps, rather than billing intake actions. */
+  const denialDoc = !c.documents.some(
+    (doc) => doc.direction === "incoming" && doc.docType !== "denial_letter",
+  )
+    ? c.documents.find(
+        (doc) =>
+          doc.direction === "incoming" && doc.docType === "denial_letter",
+      )
+    : undefined;
+  const denial = denialDoc?.confirmed as ConfirmedDenial | undefined;
+  const evaluated = c.events.some((event) => event.type === "appeal_evaluated");
+  const denialNext: NextAction | null = denialDoc
+    ? {
+        actionId: "wait",
+        title: evaluated
+          ? "Review your denial correspondence"
+          : denial
+            ? "Check the named policy criteria"
+            : "Confirm your denial notice",
+        why: evaluated
+          ? "Your notice and original records support a prepared appeal or documentation request. Review it before using it; nothing has been sent."
+          : "The confirmed notice is needed before the fixed policy rules can be checked. Unsupported policies require human review.",
+        needed: evaluated
+          ? "Your review of the saved draft and its citations"
+          : "Confirmed notice and supported policy",
+        responsibleParty: "You",
+        deadline: denial?.appealDeadline ?? "unconfirmed",
+        overdue: Boolean(denial?.appealDeadline && denial.appealDeadline < d),
+        needsApproval: false,
+        citedFindingIds: [],
+      }
+    : null;
   return {
     preferences: preferencesOf(c),
-    phase: derivePhase(snapshot),
-    next: recommendAction(snapshot, d),
-    allowed: allowedActions(snapshot, d),
+    phase:
+      denialNext && evaluated ? "awaiting_approval" : derivePhase(snapshot),
+    next: denialNext ?? recommendAction(snapshot, d),
+    allowed: denialNext ? [] : allowedActions(snapshot, d),
     tasks,
     savings:
       orig && snapshot.audited
@@ -346,13 +391,29 @@ export function caseStateOf(c: StoredCase): CaseState {
     verification,
     calls: eventsOf<CallRecord>(c, "call_recorded"),
     consent: consentStateOf(c),
-    callArmedAt: c.events.filter((e) => e.type === "call_armed").at(-1)?.createdAt ?? null,
-    callDecisions: Object.fromEntries(eventsOf<{ conversationId: string; decision: "confirmed" | "rejected" }>(c, "call_outcome_decided").map((d) => [d.conversationId, d.decision])),
+    callArmedAt:
+      c.events.filter((e) => e.type === "call_armed").at(-1)?.createdAt ?? null,
+    callDecisions: Object.fromEntries(
+      eventsOf<{ conversationId: string; decision: "confirmed" | "rejected" }>(
+        c,
+        "call_outcome_decided",
+      ).map((d) => [d.conversationId, d.decision]),
+    ),
     callProposals: Object.fromEntries(
       eventsOf<CallRecord>(c, "call_recorded")
-        .filter((call) => !eventsOf<{ conversationId: string }>(c, "call_outcome_decided").some((d) => d.conversationId === call.conversationId))
+        .filter(
+          (call) =>
+            !eventsOf<{ conversationId: string }>(
+              c,
+              "call_outcome_decided",
+            ).some((d) => d.conversationId === call.conversationId),
+        )
         .flatMap((call) => {
-          const p = proposeOutcome(call, c.findings, orig?.bill.billingEntity ?? "the billing office");
+          const p = proposeOutcome(
+            call,
+            c.findings,
+            orig?.bill.billingEntity ?? "the billing office",
+          );
           return p ? [[call.conversationId, p] as const] : [];
         }),
     ),
@@ -766,14 +827,22 @@ export async function addCallToCase(
  * @returns The new case state.
  * @throws {CaseRuleError} When the call isn't saved, has no proposal, or was already decided.
  */
-export async function decideCallOutcome(caseId: string, conversationId: string, decision: "confirm" | "reject"): Promise<CaseState> {
+export async function decideCallOutcome(
+  caseId: string,
+  conversationId: string,
+  decision: "confirm" | "reject",
+): Promise<CaseState> {
   const c = await load(caseId);
   const state = caseStateOf(c);
   const proposal = state.callProposals[conversationId];
-  if (!proposal) throw new CaseRuleError("There's no pending summary for that call.");
+  if (!proposal)
+    throw new CaseRuleError("There's no pending summary for that call.");
   const store = getStore();
   if (decision === "reject") {
-    await store.addEvent(caseId, "call_outcome_decided", { conversationId, decision: "rejected" });
+    await store.addEvent(caseId, "call_outcome_decided", {
+      conversationId,
+      decision: "rejected",
+    });
     return caseStateOf(await load(caseId));
   }
   if (proposal.kind === "response") {
@@ -781,9 +850,26 @@ export async function decideCallOutcome(caseId: string, conversationId: string, 
   } else {
     const { tasks } = snapshotOf(await load(caseId));
     const office = originalBill(c)?.bill.billingEntity ?? "the billing office";
-    const what = proposal.reason === "consent_not_given" ? "a call back once the patient has verified" : "a response to the dispute (follow up by phone or in writing)";
-    await saveTasks(caseId, [...tasks, { id: newId("task"), kind: "request_document", documentNeeded: what, responsibleParty: office, followUpDate: null, status: "open" }]);
+    const what =
+      proposal.reason === "consent_not_given"
+        ? "a call back once the patient has verified"
+        : "a response to the dispute (follow up by phone or in writing)";
+    await saveTasks(caseId, [
+      ...tasks,
+      {
+        id: newId("task"),
+        kind: "request_document",
+        documentNeeded: what,
+        responsibleParty: office,
+        followUpDate: null,
+        status: "open",
+      },
+    ]);
   }
-  await store.addEvent(caseId, "call_outcome_decided", { conversationId, decision: "confirmed", outcome: proposal.kind === "response" ? "response" : proposal.reason });
+  await store.addEvent(caseId, "call_outcome_decided", {
+    conversationId,
+    decision: "confirmed",
+    outcome: proposal.kind === "response" ? "response" : proposal.reason,
+  });
   return syncPhase(caseId);
 }

@@ -94,6 +94,11 @@ function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
       ),
     );
   }
+  if (r.kind === "denial")
+    return Object.entries(r.denial.fields).map(([key, field]) => [
+      `fields.${key}`,
+      field,
+    ]);
   return out;
 }
 
@@ -450,7 +455,7 @@ export default function ConfirmPanel({
       {doc.blocking.length > 0 && (
         <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
           <p className="font-medium">
-            Still needs fixing before we can check the bill:
+            Still needs fixing before we can check the document:
           </p>
           {doc.blocking.map((m) => (
             <p key={m}>• {m}</p>

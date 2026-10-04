@@ -6,7 +6,11 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as briefRoute } from "@/app/api/calls/brief/route";
-import { findBillExceedsEob, findDuplicateCharges, findInsurerDenials } from "@/lib/audit/rules";
+import {
+  findBillExceedsEob,
+  findDuplicateCharges,
+  findInsurerDenials,
+} from "@/lib/audit/rules";
 import { buildCallBrief } from "@/lib/calls/brief";
 import { ACTIVE_CALL_MS, caseForActiveCall, caseForLiveCall } from "@/lib/cases/consent";
 import { memoryStore, type CaseStore } from "@/lib/cases/store";
@@ -20,21 +24,45 @@ beforeEach(() => {
   g.__mhStore = memoryStore();
   process.env.MESSAGING_SECRET = SECRET;
   delete process.env.DEMO_CASE_ID;
+  delete process.env.CALL_WORKSPACE_ENABLED;
 });
 
 /** A second synthetic patient whose only issue is an insurer denial. */
 async function marcus(): Promise<{ bill: ConfirmedBill; eob: ConfirmedEob }> {
-  const bill = { ...(await confirmedSampleBill()), patientName: "Marcus Reyes Test" };
+  const bill = {
+    ...(await confirmedSampleBill()),
+    patientName: "Marcus Reyes Test",
+  };
   const eob = await confirmedSampleEob();
-  const denied: ConfirmedEob = { ...eob, lines: eob.lines.map((l, i) => (i === 3 ? { ...l, allowedCents: 0, planPaidCents: 0, patientResponsibilityCents: l.billedCents } : l)) };
+  const denied: ConfirmedEob = {
+    ...eob,
+    lines: eob.lines.map((l, i) =>
+      i === 3
+        ? {
+            ...l,
+            allowedCents: 0,
+            planPaidCents: 0,
+            patientResponsibilityCents: l.billedCents,
+          }
+        : l,
+    ),
+  };
   return { bill, eob: denied };
 }
 
 /** Calls the brief route like ElevenLabs does. */
 function call(secret: string | null, body: object = {}): Promise<Response> {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
   if (secret) headers["x-billy-secret"] = secret;
-  return briefRoute(new Request("https://example.test/api/calls/brief", { method: "POST", headers, body: JSON.stringify(body) }));
+  return briefRoute(
+    new Request("https://example.test/api/calls/brief", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 describe("buildCallBrief", () => {
@@ -42,7 +70,10 @@ describe("buildCallBrief", () => {
   it("briefs the billing office for billing errors", async () => {
     const bill = await confirmedSampleBill();
     const eob = await confirmedSampleEob();
-    const brief = buildCallBrief(bill, eob, [...findDuplicateCharges(bill), ...findBillExceedsEob(bill, eob)])!;
+    const brief = buildCallBrief(bill, eob, [
+      ...findDuplicateCharges(bill),
+      ...findBillExceedsEob(bill, eob),
+    ])!;
     expect(brief.mode).toBe("billing");
     expect(brief.firstMessage).toMatch(/billing office/);
     expect(brief.prompt).toContain(bill.patientName!);
@@ -87,23 +118,62 @@ describe("brief route", () => {
   /** Proves with no case Billy gets a no-details brief that forbids inventing anything. */
   it("gives a no-details brief without a case", async () => {
     const res = await call(SECRET, { agent_id: "agent_x" });
-    const body = (await res.json()) as { type: string; conversation_config_override: { agent: { prompt: { prompt: string } } } };
+    const body = (await res.json()) as {
+      type: string;
+      conversation_config_override: { agent: { prompt: { prompt: string } } };
+    };
     expect(body.type).toBe("conversation_initiation_client_data");
-    expect(body.conversation_config_override.agent.prompt.prompt).toMatch(/Never make up/);
+    expect(body.conversation_config_override.agent.prompt.prompt).toMatch(
+      /Never make up/,
+    );
   });
   /** Proves the brief comes from the most recently active case. */
   it("briefs the latest case", async () => {
     const store = g.__mhStore!;
     const { bill, eob } = await marcus();
     const caseId = await store.createCase(null);
-    for (const [docType, confirmed] of [["itemized_bill", bill], ["eob", eob]] as const) {
-      await store.saveDocument({ id: `doc_${docType}`, caseId, docType, direction: "incoming", status: "confirmed", fileName: null, storageKey: null, extraction: null, extractionMeta: null, confirmed, draft: null });
+    for (const [docType, confirmed] of [
+      ["itemized_bill", bill],
+      ["eob", eob],
+    ] as const) {
+      await store.saveDocument({
+        id: `doc_${docType}`,
+        caseId,
+        docType,
+        direction: "incoming",
+        status: "confirmed",
+        fileName: null,
+        storageKey: null,
+        extraction: null,
+        extractionMeta: null,
+        confirmed,
+        draft: null,
+      });
     }
     await store.saveFindings(caseId, findInsurerDenials(bill, eob));
     await store.addEvent(caseId, "audited", {});
-    const body = (await (await call(SECRET, { agent_id: "agent_x" })).json()) as { conversation_config_override: { agent: { first_message: string } } };
-    expect(body.conversation_config_override.agent.first_message).toContain("Marcus Reyes Test");
-    expect(body.conversation_config_override.agent.first_message).not.toMatch(/billing office/);
+    const body = (await (
+      await call(SECRET, { agent_id: "agent_x" })
+    ).json()) as {
+      conversation_config_override: { agent: { first_message: string } };
+    };
+    expect(body.conversation_config_override.agent.first_message).toContain(
+      "Marcus Reyes Test",
+    );
+    expect(body.conversation_config_override.agent.first_message).not.toMatch(
+      /billing office/,
+    );
+  });
+  /** Proves an enabled workspace cannot disclose the latest case for an unrecognized call. */
+  it("fails closed for an unknown workspace call", async () => {
+    process.env.CALL_WORKSPACE_ENABLED = "true";
+    const body = await (
+      await call(SECRET, { call_sid: `CA${"a".repeat(32)}` })
+    ).json();
+    expect(body.dynamic_variables).toEqual({});
+    expect(body.conversation_config_override.agent.prompt.prompt).toContain(
+      "Never make up",
+    );
   });
 });
 

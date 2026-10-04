@@ -37,6 +37,17 @@ const LABELS: Record<string, string> = {
   charge: "Charge",
   adjustment: "Adjustment",
   patientResponsibility: "Patient responsibility",
+  memberName: "Member name",
+  memberId: "Member ID",
+  referenceNumber: "Reference number",
+  letterDate: "Letter date",
+  deniedService: "Denied service",
+  serviceCode: "Service code",
+  plannedDate: "Planned service date",
+  denialReason: "Denial reason",
+  policyId: "Policy",
+  appealDeadline: "Appeal deadline",
+  appealAddress: "Where to send the appeal",
   insurer: "Insurer",
   claimNumber: "Claim number",
   provider: "Provider",
@@ -69,5 +80,10 @@ export function fieldLabel(path: string): string {
 export function longDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
