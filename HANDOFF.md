@@ -57,7 +57,7 @@ Progress per rung is the Status column in SPEC.md §6.
   **https://billless.tech** once its DNS propagates (Namify registered it 2026-10-04 with Vercel
   nameservers; or add an A record `76.76.21.21` at Namify). Per-deployment `*-bill-less1.vercel.app`
   URLs require a Vercel login. Env vars set in Vercel: XAI_API_KEY, GEMINI_API_KEY, GEMINI_MODEL,
-  DATABASE_URL(_UNPOOLED), NEON_BRANCH, FINCHNODE_API_KEY, USE_MOCK, FINCHNODE_CONNECT=off. Deploy:
+  DATABASE_URL(_UNPOOLED), NEON_BRANCH, FINCHNODE_API_KEY, USE_MOCK=false (live FinchNode demo API records), FINCHNODE_CONNECT=off. Deploy:
   `npx vercel deploy --prod`. Live checks passed: full case flow on Neon, Grok upload 56/56 fields.
 - **MVP 2 backend done** (`agent-notes/mvp2-adaptive-case/`): case state machine, approvals,
   three outcome branches, wait/resume, revised-statement verification, savings trio, timeline, and
