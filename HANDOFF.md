@@ -39,10 +39,8 @@ Progress per rung is the Status column in SPEC.md §6.
   `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 56 tests pass; build, lint, and types are clean.
 - **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
-  `gemini-3.5-flash` (including the prompt-injection bill). The `gemini-flash-latest` default
-  repeatedly failed with 503/429 during the eval; set `GEMINI_MODEL=gemini-3.5-flash` in
-  `.env.local` until the team decides whether to change the default (`lib/llm/index.ts`).
-  `gemini-2.5-flash` returns 404 for new keys.
+  `gemini-3.5-flash` (including the prompt-injection bill), now the pinned default; the
+  `gemini-flash-latest` alias kept failing with 503/429. `gemini-2.5-flash` returns 404 for new keys.
 - **Fixed tonight** (`23b4728`): Gemini calls now time out (60 s) and retry overload, rate limits,
   dropped connections, and timeouts, then return API 503 `ai_busy`; the classifier no longer
   rejects EOBs by counting the insurer as a billing entity; code type is inferred from code format.

@@ -486,7 +486,7 @@ external review filing, Fetch.ai agent, Capital One Nessie payment view, native 
 | Database | Neon Postgres + Drizzle ORM | Typed schema, serverless | Neon |
 | Login | Neon Auth if time allows, else one demo user | Strengthens Neon entry | Neon |
 | Records | FinchNode API, server-side, `USE_MOCK` switch | Evidence | FinchNode |
-| AI | Google Gemini API, only in `lib/llm/` (model: `gemini-flash-latest` alias, set in one constant `GEMINI_MODEL`; decided 2026-10-03; an alias can move to a newer model, so rerun the extraction eval if results change) | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini |
+| AI | Google Gemini API, only in `lib/llm/` (model: `gemini-3.5-flash`, pinned in one constant `GEMINI_MODEL`; decided 2026-10-03 after the live extraction eval: 334/334 fields, while the `gemini-flash-latest` alias kept returning 503/429 and can move without notice; rerun the extraction eval after any model change) | Document reading (PDF/photo), drafting, action choice among allowed actions | MLH Gemini |
 | Rules | Pure TypeScript in `lib/audit/`, `lib/evidence/`, Vitest | Deterministic, cited findings | — |
 | PDF | `@react-pdf/renderer` | Letters | — |
 | Voice | ElevenLabs Conversational AI + Twilio; `ask_patient` server tool | Calls with patient control | ElevenLabs, MLH ElevenLabs |
@@ -1030,7 +1030,7 @@ Verified from finchnode.com on 2026-10-02 plus workshop notes.
     actual start time and the Devpost submission deadline here and shift §6 targets accordingly.
 13. **Owners (unconfirmed):** assign real names to Dev 1–4 in §6.
 14. **Repo access:** add every teammate as a collaborator on the private GitHub repo.
-15. ~~**Gemini model**~~ Decided: `gemini-flash-latest` (§5.1).
+15. ~~**Gemini model**~~ Decided: `gemini-3.5-flash`, pinned (§5.1). Switched from the `gemini-flash-latest` alias after it failed the live eval with 503/429.
 16. **Archived Google Doc tabs:** keep "Demo Flow (archived)" and "Stack (archived)" for reference
     or delete them to prevent edits to the old copy.
 

@@ -11,10 +11,11 @@ import type { z } from "zod";
 
 /**
  * Gemini model used everywhere. Override with `GEMINI_MODEL`. Pinned in one place so the team can
- * change it without touching callers. Uses the `gemini-flash-latest` alias (decided 2026-10-03,
- * SPEC.md §5.1); an alias can move to a newer model, so rerun `npm run eval:extraction` if results change.
+ * change it without touching callers. Pinned to `gemini-3.5-flash` (decided 2026-10-03, SPEC.md §5.1):
+ * it passed the live extraction eval 334/334, while the `gemini-flash-latest` alias kept returning
+ * 503/429 and can move to a different model without notice. Rerun `npm run eval:extraction` after any change.
  */
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 /** Version tag for prompts, stored with every extraction for traceability (SPEC.md §4.2 step 9). */
 export const PROMPT_VERSION = "extract-v1";

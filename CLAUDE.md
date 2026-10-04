@@ -36,5 +36,5 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
 - **EOB rejected as "several billing entities".** The classifier counted the insurer. Fix: the
   classify prompt says an insurer is never a billing entity (`lib/extract/pipeline.ts`).
 - **`gemini-flash-latest` alias kept failing with 503/429** during the live eval while
-  `gemini-3.5-flash` passed 334/334 fields. Set `GEMINI_MODEL=gemini-3.5-flash` if the alias is busy.
+  `gemini-3.5-flash` passed 334/334 fields. Fix: default pinned to `gemini-3.5-flash` in `lib/llm/index.ts`.
   `gemini-2.5-flash` returns 404 for new keys.
