@@ -544,13 +544,6 @@ function StartScreen(props: {
           {busy ? "Reading your document…" : "Continue to confirm →"}
         </button>
       </div>
-      <div className="billless-trust-note">
-        <span aria-hidden="true">✓</span>
-        <p>
-          You review the details first. Nothing is sent or agreed to without
-          your approval.
-        </p>
-      </div>
       <details className="billless-demo">
         <summary>Just exploring? Try a synthetic demo</summary>
         <div className="billless-demo-actions">
