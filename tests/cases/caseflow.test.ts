@@ -404,12 +404,12 @@ describe.each([
     const c = await drafted();
     const revision = await ingestSample(c.caseId, "revised-statement");
     await attachCaseDocument(c.caseId, revision.documentId);
-    await expect(
-      confirmDocument(revision.documentId, {
-        ...AS_PRINTED,
-        corrections: { "header.accountNumber": "ANOTHER-ACCOUNT" },
-      }),
-    ).rejects.toThrow(/does not match/);
+    const result = await confirmDocument(revision.documentId, {
+      ...AS_PRINTED,
+      corrections: { "header.accountNumber": "ANOTHER-ACCOUNT" },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.blocking.join(" ")).toMatch(/account|match/);
     expect(
       (await g.__mhStore!.getDocument(revision.documentId))?.confirmed,
     ).toBeNull();

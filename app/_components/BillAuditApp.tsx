@@ -502,7 +502,7 @@ export default function BillAuditApp() {
         />
       )}
       {step === "request" && bill && (
-        <section className="billless-request-screen space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
+        <section className="paper-flow space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
           <h2 className="text-lg font-semibold">
             Let’s get the itemized details
           </h2>
@@ -580,13 +580,6 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
-        <p className="paper-copy">
-          PDF or a clear photo.
-          <br />
-          <span className="text-sm">
-            Use synthetic documents for this demo.
-          </span>
-        </p>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}
@@ -682,9 +675,7 @@ function UploadSlot({
           {busy ? "Reading document…" : ready ? "Document added" : label}
         </strong>
         <span>
-          {ready
-            ? "Choose another file to replace it"
-            : "Choose a PDF or photo"}
+          {ready ? "Choose another file to replace it" : "PDF or a clear photo"}
         </span>
         <input
           type="file"
@@ -762,14 +753,12 @@ function AuditScreen({
   }
 
   return (
-    <section className="space-y-8">
-      <div className="paper-case-heading">
-        <span
-          className={`paper-badge ${findings.length ? "paper-review-badge" : ""}`}
-        >
-          {findings.length ? "◷ Review ready" : "✓ Review complete"}
-        </span>
-      </div>
+    <section className="paper-flow space-y-8">
+      {findings.length === 0 && (
+        <div className="paper-case-heading">
+          <span className="paper-badge">✓ Review complete</span>
+        </div>
+      )}
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
@@ -833,14 +822,6 @@ function AuditScreen({
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
                   <p className="paper-copy">{finding.ask}</p>
-                  <div className="paper-evidence">
-                    Bill{" "}
-                    {finding.lineNumbers.length
-                      ? `line${finding.lineNumbers.length === 1 ? "" : "s"} ${finding.lineNumbers.join(", ")}`
-                      : "total"}{" "}
-                    · {finding.status.replaceAll("_", " ")} ·{" "}
-                    {finding.rule.replaceAll("_", " ")}
-                  </div>
                   <button
                     className="paper-source-button"
                     aria-expanded={open === finding.id}

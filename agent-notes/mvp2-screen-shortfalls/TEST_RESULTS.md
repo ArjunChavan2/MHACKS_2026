@@ -6,7 +6,7 @@ October 4, 2026, isolated worktree `feat/mvp2-case-journey`.
 | --- | --- |
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm test` | 146 tests pass, 17 files |
+| `npm test` | 153 tests pass, 19 files |
 | `npm run build -- --webpack` | Pass, including new case-document route |
 | Chrome synthetic patient journey | Pass at 1440px, 390px and 320px; no runtime errors or horizontal overflow |
 

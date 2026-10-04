@@ -734,7 +734,7 @@ h4 {
 }
 .billless-continue-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 24px;
 }

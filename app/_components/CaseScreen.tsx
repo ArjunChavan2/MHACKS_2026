@@ -138,6 +138,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [openCall, setOpenCall] = useState<string | null>(null);
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
 
   /** Reloads the case after an action. */
@@ -186,12 +187,26 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     };
   }, [caseId]);
 
+  /** Saves the agent's latest finished call (transcript as recorded) to this case. */
+  async function addLatestCall() {
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/cases/${caseId}/calls`, {});
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /**
-   * Runs a case action. `approve` is true only for the patient's explicit approve button.
-   *
-   * @param actionId - Action.
+   * Runs a server-allowed case action with explicit patient approval where required.
+   * @param actionId - Action ID.
    * @param target - Task or document ID.
-   * @param approve - Whether this press is the approval.
+   * @param approve - True only for the patient's explicit approval button.
+   * Side effects: invokes the guarded action and refreshes the case; errors remain visible.
    */
   async function act(
     actionId: string,
@@ -683,6 +698,82 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           ))}
         </ul>
       </section>
+
+      <div className="paper-findings">
+        <h3>Calls</h3>
+        <p className="paper-copy text-sm">
+          Transcripts exactly as the voice assistant recorded them. Synthetic
+          demo calls.
+        </p>
+        {(s.calls ?? []).length === 0 && (
+          <p className="paper-copy text-sm">No calls saved to this case yet.</p>
+        )}
+        <ul className="space-y-2">
+          {[...(s.calls ?? [])].reverse().map((call) => (
+            <li key={call.conversationId} className="paper-finding">
+              <div className="paper-finding-title">
+                <strong>
+                  {new Date(call.startedAt).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}{" "}
+                  · {Math.floor(call.durationSecs / 60)}:
+                  {String(call.durationSecs % 60).padStart(2, "0")}
+                </strong>
+                <span className="text-xs">{call.transcript.length} turns</span>
+              </div>
+              {call.endedBy && (
+                <p className="paper-copy text-xs">Ended: {call.endedBy}</p>
+              )}
+              <button
+                type="button"
+                className="paper-source-button"
+                aria-expanded={openCall === call.conversationId}
+                onClick={() =>
+                  setOpenCall(
+                    openCall === call.conversationId
+                      ? null
+                      : call.conversationId,
+                  )
+                }
+              >
+                {openCall === call.conversationId
+                  ? "Hide transcript"
+                  : "Show transcript"}
+              </button>
+              {openCall === call.conversationId && (
+                <ol className="mt-2 space-y-1 text-sm">
+                  {call.transcript.map((turn, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="shrink-0 font-mono text-xs text-[var(--paper-muted)]">
+                        {turn.atSecs}s
+                      </span>
+                      <span>
+                        <strong>
+                          {turn.role === "agent"
+                            ? "Assistant"
+                            : "Billing office"}
+                          :
+                        </strong>{" "}
+                        {turn.message}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </li>
+          ))}
+        </ul>
+        <button
+          className="paper-secondary mt-2"
+          disabled={busy || Boolean(preferences)}
+          onClick={addLatestCall}
+        >
+          Add the latest call to this case
+        </button>
+      </div>
 
       <div className="paper-findings">
         <h3>Timeline</h3>

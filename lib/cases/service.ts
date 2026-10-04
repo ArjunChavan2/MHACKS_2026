@@ -37,7 +37,8 @@ import {
   type CaseState,
 } from "./caseflow";
 import { validateCaseDocument, resumeCaseDocument } from "./attachments";
-import { mergeFindings } from "./responses";
+import { billEobMismatches, revisedMismatches } from "./consistency";
+import { mergeFindings, CaseRuleError } from "./responses";
 import type {
   AuditResult,
   ConfirmedBill,
@@ -291,6 +292,30 @@ export async function confirmDocument(
         ? confirmDenial(doc.extraction as ExtractedDenial, full)
         : confirmBill(doc.extraction as ExtractedBill, full);
   if (!r.ok) return r;
+  // A revised statement can only verify savings for the same account as the original bill.
+  if (doc.docType === "revised_statement") {
+    const c = await store.getCase(doc.caseId);
+    const original = c?.documents.find(
+      (d) =>
+        d.direction === "incoming" &&
+        d.docType === "itemized_bill" &&
+        d.confirmed,
+    );
+    const mismatch = original
+      ? revisedMismatches(
+          original.confirmed as ConfirmedBill,
+          r.value as ConfirmedBill,
+        )
+      : [];
+    if (mismatch.length)
+      return {
+        ok: false,
+        blocking: [
+          ...mismatch,
+          "This doesn't look like a revised statement for the same bill, so it can't be used to verify savings.",
+        ],
+      };
+  }
   const c = await store.getCase(doc.caseId);
   if (!c) throw new BadRequestError("Unknown case");
   const attached = c.events.some(
@@ -298,8 +323,14 @@ export async function confirmDocument(
       e.type === "case_document_attached" &&
       (e.data as { documentId: string }).documentId === documentId,
   );
-  if (attached || doc.docType === "revised_statement")
-    validateCaseDocument(c, { ...doc, confirmed: r.value });
+  if (attached || doc.docType === "revised_statement") {
+    try {
+      validateCaseDocument(c, { ...doc, confirmed: r.value });
+    } catch (err) {
+      if (!(err instanceof CaseRuleError)) throw err;
+      return { ok: false, blocking: [err.message] };
+    }
+  }
   await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
   await store.addEvent(doc.caseId, "fields_confirmed", {
     documentId,
@@ -359,6 +390,14 @@ export async function auditCase(
     throw new BadRequestError("Audit documents must belong to this case");
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+  // Comparing a bill with an EOB from a different visit would produce false findings.
+  if (eob) {
+    const mismatch = billEobMismatches(bill, eob);
+    if (mismatch.length)
+      throw new BadRequestError(
+        `This EOB doesn't look like it's for the same visit as the bill. ${mismatch.join(" ")} Upload the matching EOB, or check the bill without one.`,
+      );
+  }
   const { records, providers, origin, warnings } = await loadRecords(caseId);
   const fresh = runAudit(bill, eob, records, providers);
   const store = getStore();

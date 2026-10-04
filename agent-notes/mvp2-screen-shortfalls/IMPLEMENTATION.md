@@ -31,4 +31,8 @@ The existing exact case-view storage test now expects stored filenames, an inten
 
 ## Validation
 
-146 tests pass across 17 files, including memory and PGlite case/messaging scenarios, API input refusals, cross-case documents, restriction changes, document wait/resume and identical-upload retry. Lint, TypeScript and webpack production build pass. Synthetic Chrome walkthroughs cover 1440px, 390px and 320px widths with no horizontal overflow or runtime errors. Browser API traffic is intercepted with service-generated synthetic fixtures; no real patient data or live model calls were used. The preview runs at http://localhost:3002/review.
+153 tests pass across 19 files, including memory and PGlite case/messaging scenarios, API input refusals, cross-case documents, restriction changes, document wait/resume and identical-upload retry. Lint, TypeScript and webpack production build pass. Synthetic Chrome walkthroughs cover 1440px, 390px and 320px widths with no horizontal overflow or runtime errors. Browser API traffic is intercepted with service-generated synthetic fixtures; no real patient data or live model calls were used. The preview runs at http://localhost:3002/review.
+
+## Main integration
+
+Resolved conflicts with current main before merging PR #8. Retained upstream call history and transcript controls, voice-agent code/tests, bill/EOB consistency checks and review layout/copy changes. Revision confirmation combines upstream mismatch descriptions with the attachment guard and returns blocking messages before locking mismatched values. Updated the new account-mismatch test to assert this existing confirmation response contract while retaining the unconfirmed/no-savings assertions. Combined suite: 153 tests in 19 files.
