@@ -59,3 +59,7 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
 - **PGlite suites fail at random with "Hook timed out in 10000ms"** when all test files run in
   parallel (migrations in `beforeAll`). Fix: `hookTimeout: 30_000` in `vitest.config.mts`.
 - **New Gemini keys start with `AQ.`**, not `AIza`; that's Google's new format, not a wrong key.
+- **Vercel "Resource is limited - try again in 24 hours" / "Deployment rate limited".** The Hobby
+  plan allows 100 deployments a day, and every push to any branch was auto-deploying. Fix: git
+  auto-deploys are off (`vercel.json` `git.deploymentEnabled: false`); deploy on purpose with
+  `npx --cache "$HOME/.npm-cache-alt" -y vercel@latest deploy --prod --yes`.
