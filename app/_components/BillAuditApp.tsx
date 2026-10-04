@@ -23,7 +23,6 @@ import ConfirmPanel, {
   type DocState,
 } from "./DocumentConfirmation";
 import ProcessingStatus from "./ProcessingStatus";
-import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
 import { describeSource } from "./sources";
 import type { Draft, ExtractedBill, Finding } from "@/lib/types";
@@ -490,16 +489,6 @@ export default function BillAuditApp() {
             after upload.
           </p>
         </div>
-      )}
-      {step === "start" && (
-        <CasePreferencesPanel
-          value={preferences}
-          disabled={busy}
-          onChange={(value) => {
-            setPreferences(value);
-            setPreferencesSaved(false);
-          }}
-        />
       )}
       {step === "start" && (
         <StartScreen
