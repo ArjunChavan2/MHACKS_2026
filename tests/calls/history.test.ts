@@ -19,6 +19,7 @@ const DONE = {
     { role: "agent", message: "Hi, I'm calling on behalf of Priya Ramaswamy.", time_in_call_secs: 0 },
     { role: "user", message: "Billing office, how can I help?", time_in_call_secs: 4 },
     { role: "agent", message: "", time_in_call_secs: 70 },
+    { role: "agent", message: "", time_in_call_secs: 72, tool_calls: [{ tool_name: "transfer_to_number" }] },
   ],
 };
 
@@ -51,6 +52,7 @@ describe("call history", () => {
     expect(s.calls[0].transcript).toEqual([
       { role: "agent", message: "Hi, I'm calling on behalf of Priya Ramaswamy.", atSecs: 0 },
       { role: "user", message: "Billing office, how can I help?", atSecs: 4 },
+      { role: "agent", message: "(Transferred the call to the patient)", atSecs: 72 },
     ]);
     expect((await loadCase(caseId))?.state.calls).toHaveLength(1);
   });

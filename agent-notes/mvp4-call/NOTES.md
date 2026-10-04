@@ -22,3 +22,17 @@ Result 2026-10-04: **all 23 criterion checks passed.** Run one scenario: `npm ru
 print transcripts with `AGENT_TEST_TRANSCRIPTS=1`. Uses the simulate-conversation endpoint
 (deprecated 2026-10-31; move to ElevenLabs agent-testing API before then). The grader is an AI, so a
 pass is strong evidence, not proof; keep live phone checks for voice and interruptions.
+
+## Take over (patient verification), 2026-10-04
+
+Billy has ElevenLabs' `transfer_to_number` tool (blind transfer) to `DEMO_PATIENT_PHONE` (the verified
+trial number). When the office needs to verify identity, needs consent, or asks for the patient,
+Billy says "One moment, I'll connect Priya so she can verify" and transfers. Saved transcripts show
+"(Transferred the call to the patient)". Real-world basis: under HIPAA the office needs the patient's
+verification/consent; the alternative is a signed authorization form on file.
+
+**Demo:** the billing-office teammate calls +1 734-977-0915 from their own phone; the patient
+teammate holds the verified phone (ending 1370). Office: "I need to verify the patient." → Billy
+transfers → patient phone rings. Trial caveats: Twilio trials may only accept inbound calls from
+verified numbers, and may block the transfer leg; if so, upgrade or show the simulated test
+(`npm run agent:test -- identity_pressure` passes `takes_over`).
