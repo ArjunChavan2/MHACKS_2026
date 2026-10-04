@@ -9,7 +9,7 @@ import { describeSource } from "./sources";
  * Letter screen: click any paragraph to see its sources; edit wording (when `onSave` is given); download the PDF.
  *
  * @param props.draft - The finished draft.
- * @param props.onSave - Saves patient wording; omitted where editing isn't supported (denial appeals).
+ * @param props.onSave - Saves patient wording; provided by each patient letter flow.
  * @param props.onTrack - Opens the case screen (dispute letters only).
  * @returns The letter screen.
  */

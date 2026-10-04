@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AppealResponse, CaseView } from "@/lib/cases/service";
 import ConfirmPanel, { type DocState } from "./DocumentConfirmation";
 import LetterScreen from "./LetterScreen";
+import type { LetterEdits } from "./LetterEditor";
 
 /**
  * Displays one denial on its existing case; reload reads saved evaluation rather than rechecking records.
@@ -48,6 +49,19 @@ export default function DenialFlow({
       cancelled = true;
     };
   }, [doc.ingest.caseId, doc.ingest.documentId]);
+
+  /** Saves appeal wording to the same case and refreshes the visible draft without rerunning policy checks. */
+  async function saveLetterEdits(edits: LetterEdits) {
+    const response = await fetch(`/api/cases/${doc.ingest.caseId}/letter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(edits),
+    });
+    const view = await response.json();
+    if (!response.ok) throw new Error(view.message ?? "Your letter could not be saved.");
+    if (!view.draft) throw new Error("The saved letter is unavailable. Reopen this case.");
+    setResult((current) => current ? { ...current, draft: view.draft } : current);
+  }
 
   /** Locks patient-confirmed values before evaluating fixed rules; failed confirmation stays editable. */
   async function check() {
@@ -224,7 +238,7 @@ export default function DenialFlow({
           >
             Back to policy evidence
           </button>
-          <LetterScreen draft={result.draft} />
+          <LetterScreen draft={result.draft} onSave={saveLetterEdits} />
         </>
       )}
       <button className="paper-secondary" onClick={onTrack}>

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   appealDenial,
+  editLetter,
   confirmDocument,
   ingestSample,
   loadCase,
@@ -42,6 +43,20 @@ describe("denial patient journey", () => {
       ),
     ).toBe(true);
   });
+  /** Edited denial correspondence reloads in the appeal flow without replacing policy evidence. */
+  it("restores personalized appeal wording after reload and reset", async () => {
+    const denial = await ingestSample(null, "denial-letter");
+    await confirmDocument(denial.documentId, CONFIRM);
+    const original = await appealDenial(denial.documentId);
+    const updated = await editLetter(denial.caseId, { expectedText: original.draft.paragraphs.map((p) => p.text), edits: [], personalNote: "Please send me a written explanation.", reset: false });
+    const reloaded = (await loadCase(denial.caseId))!;
+    expect(reloaded.appeal!.draft).toEqual(updated.draft);
+    expect(reloaded.appeal!.evaluation).toEqual(original.evaluation);
+    expect(reloaded.appeal!.draft.personalNote).toBe("Please send me a written explanation.");
+    const reset = await editLetter(denial.caseId, { expectedText: updated.draft!.paragraphs.map((p) => p.text), edits: [], personalNote: "", reset: true });
+    expect(reset.appeal!.draft.paragraphs).toEqual(original.draft.paragraphs);
+  });
+
   /** Missing time-window documentation routes to the doctor rather than an unsupported appeal. */
   it("prepares a doctor request when a criterion is missing", async () => {
     const denial = await ingestSample(null, "denial-letter");

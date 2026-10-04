@@ -905,7 +905,7 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
       const event = c.events.filter((e) => e.type === "appeal_evaluated").at(-1)
         ?.data as { documentId: string; response?: AppealResponse } | undefined;
       return event?.response
-        ? { ...event.response, documentId: event.documentId }
+        ? { ...event.response, draft: lastDraft && ["appeal_letter", "documentation_request"].includes(lastDraft.docType) ? lastDraft.draft as Draft : event.response.draft, documentId: event.documentId }
         : null;
     })(),
     state: caseStateOf(c),
