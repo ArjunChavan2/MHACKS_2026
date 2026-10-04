@@ -364,7 +364,9 @@ advice; rules vary by state and plan.
 - **Timeline and export:** one chronological view of documents, calls, decisions, and handoffs;
   exportable case packet for a human advocate.
 - Data: `cases`, `documents`, `findings`, `case_events`, `approvals`, `deadlines`, `calls` tables
-  in Neon; files in object storage (*Open:* Vercel Blob or similar). Relationships:
+  in Neon; original files in a private Neon `files` table for now (uploads are capped at 15 MB;
+  *Open:* move to Vercel Blob or similar if size becomes a problem). Migrations live in
+  `db/migrations/` (`npm run db:generate`, `db:migrate`, `db:check`). Relationships:
 
   ```
   cases 1─* documents     (each file or request; status, method, counterparty, reference no.)
