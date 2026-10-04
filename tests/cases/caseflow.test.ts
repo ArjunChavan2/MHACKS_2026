@@ -29,6 +29,7 @@ import {
   ingestSample,
   ingestUpload,
   loadCase,
+  reopenReview,
 } from "@/lib/cases/service";
 import { memoryStore, pgStore, type CaseStore } from "@/lib/cases/store";
 import type { Finding } from "@/lib/types";
@@ -112,6 +113,58 @@ describe.each([
 ] as const)("adaptive case on the %s store", (_name, makeStore) => {
   beforeEach(() => {
     g.__mhStore = makeStore();
+  });
+
+  /** Reopening preserves corrections, requires confirmation, and makes an earlier draft unavailable across reloads. */
+  it("reopens an unsent review and replaces stale findings and drafts", async () => {
+    const c = await drafted();
+    const old = await loadCase(c.caseId);
+    const reopened = await reopenReview(c.caseId);
+    expect(reopened.audit).toBeNull();
+    expect(reopened.draft).toBeNull();
+    expect(reopened.documents.every((d) => !d.confirmed)).toBe(true);
+    expect(reopened.state.phase).toBe("intake");
+    await expect(send(c.caseId)).rejects.toThrow();
+    await expect(auditCase(c.caseId, c.billId, c.eobId)).rejects.toThrow(
+      /must be confirmed/,
+    );
+    expect(
+      await confirmDocument(c.billId, {
+        ...AS_PRINTED,
+        corrections: { "lines.4.code": "84441" },
+      }),
+    ).toEqual({ ok: true });
+    expect(await confirmDocument(c.eobId, AS_PRINTED)).toEqual({ ok: true });
+    const audit = await auditCase(c.caseId, c.billId, c.eobId);
+    expect(audit.findings.some((f) => f.rule === "duplicate_charge")).toBe(
+      false,
+    );
+    const refreshed = await loadCase(c.caseId);
+    expect(refreshed?.draft).toBeNull();
+    const bill = refreshed?.documents.find(
+      (d) => d.ingest.documentId === c.billId,
+    );
+    expect(
+      bill?.ingest.result.kind === "bill" &&
+        bill.ingest.result.bill.lines[4].code.raw,
+    ).toBe("84441");
+    await draftLetter(c.caseId, c.billId, c.eobId);
+    expect((await loadCase(c.caseId))?.draft).not.toEqual(old?.draft);
+    const again = await reopenReview(c.caseId);
+    const saved = again.documents.find((d) => d.ingest.documentId === c.billId);
+    expect(
+      saved?.ingest.result.kind === "bill" &&
+        saved.ingest.result.bill.lines[4].code.raw,
+    ).toBe("84441");
+  });
+
+  /** An approved/sent dispute must retain its original documents and draft instead of being silently rewritten. */
+  it("refuses to reopen a case after patient approval and sending", async () => {
+    const c = await drafted();
+    await send(c.caseId);
+    const before = await loadCase(c.caseId);
+    await expect(reopenReview(c.caseId)).rejects.toThrow(/recorded approvals/);
+    expect(await loadCase(c.caseId)).toEqual(before);
   });
 
   /** Proves nothing is sent without approval, and approval is recorded before the send. */

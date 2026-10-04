@@ -4,6 +4,7 @@
  */
 import type { CaseTask, ConfirmedBill, ConfirmedEob } from "@/lib/types";
 import { snapshotOf } from "./caseflow";
+import { sameName } from "./consistency";
 import { REVISED_STATEMENT, CaseRuleError } from "./responses";
 import { auditCase } from "./service";
 import { getStore, type StoredCase, type StoredDocument } from "./store";
@@ -30,11 +31,12 @@ export function assertMatchingRevision(
 ): void {
   if (
     !identifier(original.billingEntity) ||
-    identifier(original.billingEntity) !== identifier(revised.billingEntity) ||
+    !sameName(original.billingEntity, revised.billingEntity) ||
     !original.accountNumber ||
     identifier(original.accountNumber) !== identifier(revised.accountNumber) ||
     !original.patientName ||
-    identifier(original.patientName) !== identifier(revised.patientName) ||
+    !revised.patientName ||
+    !sameName(original.patientName, revised.patientName) ||
     !original.serviceStart ||
     original.serviceStart !== revised.serviceStart ||
     original.serviceEnd !== revised.serviceEnd ||
@@ -68,7 +70,7 @@ export function assertMatchingRevision(
 function assertMatchingEob(bill: ConfirmedBill, eob: ConfirmedEob): void {
   if (
     !eob.provider ||
-    identifier(eob.provider) !== identifier(bill.billingEntity) ||
+    !sameName(eob.provider, bill.billingEntity) ||
     !eob.lines.length ||
     !eob.lines.every(
       (line) =>

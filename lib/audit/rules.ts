@@ -208,3 +208,38 @@ export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact
   }
   return findings;
 }
+
+/**
+ * Finds EOB lines the insurer paid nothing for while the patient is charged the full billed amount
+ * (a denial or non-covered line). The provider billed what the EOB says, so this is for the insurer:
+ * ask it to explain, reprocess, or start an appeal (SPEC.md §3.4 "insurance appeal").
+ *
+ * @param bill - Confirmed bill (for line numbers).
+ * @param eob - Confirmed EOB, or `null`.
+ * @returns One finding per such line, marked `contact: "insurer"`; empty when none or no EOB.
+ */
+export function findInsurerDenials(bill: ConfirmedBill, eob: ConfirmedEob | null): Finding[] {
+  if (!eob) return [];
+  const insurer = eob.insurer ?? "your insurer";
+  const findings: Finding[] = [];
+  eob.lines.forEach((l, i) => {
+    const billed = l.billedCents ?? 0;
+    if (billed <= 0 || l.planPaidCents !== 0 || (l.allowedCents ?? 0) !== 0 || l.patientResponsibilityCents !== billed) return;
+    const line = bill.lines.find((b) => b.code === l.code && b.serviceDate === l.serviceDate);
+    const where = line ? `line ${line.lineNumber}` : `EOB line ${i + 1}`;
+    findings.push({
+      id: `ins-denied-${l.code ?? i}-${l.serviceDate ?? "nodate"}`,
+      rule: "insurer_denied_line",
+      status: "potential",
+      contact: "insurer",
+      title: `${insurer} paid nothing for ${where} (${l.code ?? "no code"}, ${usd(billed)})`,
+      explanation: `Your EOB from ${insurer} (claim ${eob.claimNumber ?? "unknown"}) shows $0 allowed and $0 paid for ${l.code ?? "this service"} on ${l.serviceDate ? longDate(l.serviceDate) : "the service date"}, so you're asked to pay the full ${usd(billed)}. The provider billed what the EOB says, so this is a question for your insurer, not the billing office.`,
+      ask: `Ask ${insurer} why it paid nothing for this service, whether it can be reprocessed, and how to appeal if it was denied.`,
+      letterText: `My explanation of benefits (claim ${eob.claimNumber ?? "number not shown"}) shows $0 allowed and $0 paid for ${l.code ?? "this service"} on ${l.serviceDate ? longDate(l.serviceDate) : "the service date"}, leaving ${usd(billed)} as my responsibility. Please explain why, reprocess the claim if it was processed in error, or tell me how to appeal.`,
+      amountQuestionedCents: billed,
+      lineNumbers: line ? [line.lineNumber] : [],
+      sources: [{ kind: "eob_line", documentId: eob.documentId, index: i, provenance: l.provenance }, ...(line ? [lineSource(bill, line)] : [])] as NonEmpty<Source>,
+    });
+  });
+  return findings;
+}

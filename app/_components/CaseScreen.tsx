@@ -214,6 +214,31 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     }
   }
 
+  /**
+   * Confirms or rejects what Billy heard on a call.
+   *
+   * @param conversationId - The saved call.
+   * @param decision - "confirm" or "reject".
+   */
+  async function decideCall(
+    conversationId: string,
+    decision: "confirm" | "reject",
+  ) {
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/cases/${caseId}/calls/outcome`, {
+        conversationId,
+        decision,
+      });
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Saves the agent's latest finished call (transcript as recorded) to this case. */
   async function addLatestCall() {
     setBusy(true);
@@ -851,6 +876,48 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
               </div>
               {call.endedBy && (
                 <p className="paper-copy text-xs">Ended: {call.endedBy}</p>
+              )}
+              {s.callProposals?.[call.conversationId] && (
+                <div className="mt-2 rounded-md bg-sky-50 p-3 text-sm ring-1 ring-sky-200">
+                  <p className="font-semibold">
+                    Billy heard this on the call. Is it right?
+                  </p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {s.callProposals[call.conversationId].summary.map(
+                      (line, i) => (
+                        <li key={i}>{line}</li>
+                      ),
+                    )}
+                  </ul>
+                  <p className="mt-1 text-xs text-[var(--paper-muted)]">
+                    {s.callProposals[call.conversationId].kind === "response"
+                      ? "Confirming updates each issue as the office answered."
+                      : "Confirming adds a follow-up so the case doesn't wait silently."}
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className="paper-primary"
+                      disabled={busy}
+                      onClick={() => decideCall(call.conversationId, "confirm")}
+                    >
+                      Yes, that&apos;s right
+                    </button>
+                    <button
+                      className="paper-secondary"
+                      disabled={busy}
+                      onClick={() => decideCall(call.conversationId, "reject")}
+                    >
+                      That&apos;s not right
+                    </button>
+                  </div>
+                </div>
+              )}
+              {s.callDecisions?.[call.conversationId] && (
+                <p className="paper-copy text-xs">
+                  {s.callDecisions[call.conversationId] === "confirmed"
+                    ? "You confirmed this call's outcome."
+                    : "You marked this call's summary as not right."}
+                </p>
               )}
               <button
                 type="button"

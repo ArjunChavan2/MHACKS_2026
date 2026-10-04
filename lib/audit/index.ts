@@ -5,7 +5,7 @@
  * the same findings in the same order. Pure: no side effects.
  */
 import type { AuditResult, ConfirmedBill, ConfirmedEob, Finding, Verdict, VerbatimFact } from "@/lib/types";
-import { findBillExceedsEob, findDocumentationGaps, findDuplicateCharges } from "./rules";
+import { findBillExceedsEob, findDocumentationGaps, findDuplicateCharges, findInsurerDenials } from "./rules";
 
 /**
  * Computes the verdict. Each bill line's questioned amount is counted once even when several
@@ -53,6 +53,7 @@ export function runAudit(
     ...findDuplicateCharges(bill),
     ...findBillExceedsEob(bill, eob),
     ...findDocumentationGaps(bill, records, providers),
+    ...findInsurerDenials(bill, eob),
   ];
   return { findings, verdict: computeVerdict(bill, findings) };
 }

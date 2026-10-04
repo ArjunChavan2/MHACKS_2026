@@ -199,7 +199,8 @@ export function allowedActions(
     );
   }
   const working = open(s.findings);
-  if (working.length && !s.dispute)
+  // Insurer issues aren't disputed with the billing office (SPEC.md §3.4 routing).
+  if (working.some((f) => f.contact !== "insurer") && !s.dispute)
     out.push(action(s, "draft_dispute", "Draft the dispute letter"));
   if (s.dispute && !s.dispute.sent)
     out.push(
@@ -374,6 +375,18 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       citedFindingIds: ids,
     });
   }
+  const forInsurer = working.filter((f) => f.contact === "insurer");
+  if (!s.dispute && forInsurer.length && forInsurer.length === working.length) {
+    return card({
+      actionId: "wait",
+      title: "Call your insurer about the unpaid charge",
+      why: `${describe(forInsurer)}. The provider billed what your EOB says, so only your insurer can reprocess it or start an appeal. Billy can make this call for you.`,
+      needed: "Ask the insurer why it paid nothing, whether it can reprocess the claim, and how to appeal",
+      responsibleParty: "Your insurer",
+      deadline: null,
+      citedFindingIds: forInsurer.map((f) => f.id),
+    });
+  }
   if (!s.dispute && s.responsesRecorded === 0) {
     return card({
       actionId: "draft_dispute",
@@ -396,6 +409,31 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       deadline: null,
       target: request.id,
       citedFindingIds: request.findingId ? [request.findingId] : ids,
+    });
+  }
+  // Two call stages: a denied claim is appealed on a second call; denied again escalates.
+  const escalated = working.filter((f) => f.stage === "escalated");
+  if (escalated.length) {
+    return card({
+      actionId: "wait",
+      title: "Denied on appeal: send a written appeal or get help",
+      why: `${describe(escalated)} was denied again on the appeal call. The next step is a written appeal or complaint with the evidence; a human patient advocate can help.`,
+      needed: "A written appeal or complaint",
+      responsibleParty: "You (Billy can draft it)",
+      deadline: null,
+      citedFindingIds: escalated.map((f) => f.id),
+    });
+  }
+  const appealing = working.filter((f) => f.stage === "appeal");
+  if (appealing.length) {
+    return card({
+      actionId: "wait",
+      title: "Appeal the denial: Billy makes the appeal call",
+      why: `${office} denied ${describe(appealing)} on the first call. Billy can call back to appeal, citing the bill, your EOB, and your records.`,
+      needed: "Your go-ahead for the appeal call",
+      responsibleParty: "Billy, with your approval",
+      deadline: null,
+      citedFindingIds: appealing.map((f) => f.id),
     });
   }
   const waiting = openTasks(s.tasks, "await_document");

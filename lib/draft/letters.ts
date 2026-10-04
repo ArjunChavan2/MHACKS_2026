@@ -8,8 +8,9 @@
  * placeholders, same fill path) is used instead, and the draft is marked `author: "template"`.
  */
 import { z } from "zod";
+import { longDate } from "@/lib/format";
 import { generateJson, type LlmClient } from "@/lib/llm";
-import type { ConfirmedBill, Draft, Finding } from "@/lib/types";
+import type { ConfirmedBill, ConfirmedEob, Draft, Finding } from "@/lib/types";
 import { allowedTokens, fillContext, fillDraft, misplacedLetterText, type BillContext, type FillContext } from "./placeholders";
 
 /** Closing disclaimer on every letter (SPEC.md §4.5). */
@@ -147,4 +148,27 @@ export function draftItemizedBillRequest(bill: BillContext): Draft {
 function finish(kind: Draft["kind"], subject: string, paragraphs: string[], ctx: FillContext, author: Draft["author"]): Draft {
   const filled = fillDraft(subject, paragraphs, ctx);
   return { kind, subject: filled.subject, paragraphs: [...filled.paragraphs, { text: DISCLAIMER, sources: [] }], author };
+}
+
+/**
+ * Drafts a letter to the insurer for issues only the insurer can fix (e.g. a line it paid $0 for).
+ * Deterministic template; every fact is filled by code from the confirmed bill, EOB, and findings.
+ *
+ * @param bill - Confirmed bill (patient, provider, dates).
+ * @param eob - Confirmed EOB (insurer, claim number).
+ * @param findings - Findings with `contact: "insurer"`.
+ * @returns The letter (`kind: "appeal_letter"`, `author: "template"`) with sources per paragraph.
+ */
+export function draftInsurerLetter(bill: ConfirmedBill, eob: ConfirmedEob, findings: Finding[]): Draft {
+  const insurer = eob.insurer ?? "my insurer";
+  const dates = bill.serviceStart ? (bill.serviceEnd && bill.serviceEnd !== bill.serviceStart ? `${longDate(bill.serviceStart)} to ${longDate(bill.serviceEnd)}` : longDate(bill.serviceStart)) : "the dates on the claim";
+  const paragraphs = [
+    { text: `To ${insurer} Member Services:`, sources: [] },
+    { text: `I am writing about claim ${eob.claimNumber ?? "(number not shown)"} for ${bill.patientName ?? "me"}, for services on ${dates} with ${bill.billingEntity}. I'm asking you to review how this claim was processed.`, sources: [] },
+    ...findings.map((f) => ({ text: f.letterText, sources: f.sources })),
+    { text: "Please reprocess the claim if it was processed in error, or send me a written explanation of the denial, what documentation you need, and how and by when I can appeal.", sources: [] },
+    { text: `Thank you,\n${bill.patientName ?? ""}`.trim(), sources: [] },
+    { text: DISCLAIMER, sources: [] },
+  ];
+  return { kind: "appeal_letter", subject: `Request to review claim ${eob.claimNumber ?? ""}`.trim(), paragraphs, author: "template" };
 }

@@ -120,6 +120,18 @@ export function applyResponse(
       nextTasks = nextTasks.map((t) =>
         t.findingId === f.id && t.status === "open" ? { ...t, status: "done", fulfilledBy: response.documentId } : t,
       );
+    } else if (r.kind === "refused") {
+      // A denied claim moves to the appeal stage (secondary call); denied again on appeal escalates.
+      const onAppeal = f.stage === "appeal";
+      updated.set(f.id, {
+        ...f,
+        status: "pending",
+        stage: onAppeal ? "escalated" : "appeal",
+        statusNote: onAppeal
+          ? `${response.from} denied this again on appeal on ${on}. Next: a written appeal or complaint; a human advocate can help.`
+          : `${response.from} denied this claim on ${on} (said the charge is valid, without documentation). Next: appeal the denial on a second call.`,
+        statusSources: [...(f.statusSources ?? []), responseSource],
+      });
     } else if (r.kind === "needs_more_info") {
       updated.set(f.id, {
         ...f,

@@ -200,7 +200,7 @@ export async function extractDocument(file: FilePart, client?: LlmClient): Promi
 
   const chunks = isPdf ? await splitPdf(file.bytes) : [{ bytes: file.bytes, offset: 0 }];
   const prompt = (type: string) =>
-    `This document is a ${type}. Transcribe every field in the schema. Remember: copy values exactly as printed; never calculate or infer.`;
+    `This document is a ${type}. Transcribe every field in the schema. Remember: copy values exactly as printed; never calculate or infer. Each field is only its own value: billingEntity / provider / insurer = the organization's name only (no address, phone, or subtitle lines); patientName = the name only.`;
 
   if (docType === "eob") {
     const parts: RawEob[] = [];

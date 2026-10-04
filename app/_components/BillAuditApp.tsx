@@ -20,7 +20,10 @@ import { usd } from "@/lib/format";
 import LetterScreen from "./LetterScreen";
 import DenialFlow from "./DenialFlow";
 import CaseScreen from "./CaseScreen";
-import ConfirmPanel, { type DocState } from "./DocumentConfirmation";
+import ConfirmPanel, {
+  confirmationProgress,
+  type DocState,
+} from "./DocumentConfirmation";
 import ProcessingStatus from "./ProcessingStatus";
 import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
@@ -94,6 +97,20 @@ export default function BillAuditApp() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Combined document review progress shown beside the action that submits confirmation. */
+  const reviewProgress = [bill, eob].reduce(
+    (counts, doc) => {
+      if (!doc) return counts;
+      const progress = confirmationProgress(doc);
+      return {
+        total: counts.total + progress.total,
+        reviewed: counts.reviewed + progress.reviewed,
+        remaining: counts.remaining + progress.remaining,
+      };
+    },
+    { total: 0, reviewed: 0, remaining: 0 },
+  );
 
   const caseId =
     bill?.ingest.caseId ?? eob?.ingest.caseId ?? denial?.ingest.caseId ?? null;
@@ -183,7 +200,8 @@ export default function BillAuditApp() {
     setAudit(view.audit);
     setDraft(view.draft);
     const tracking =
-      view.draft?.kind === "dispute_letter" &&
+      (view.draft?.kind === "dispute_letter" ||
+        view.draft?.kind === "appeal_letter") &&
       view.state.phase !== "audited" &&
       view.state.phase !== "intake";
     setStep(
@@ -199,7 +217,14 @@ export default function BillAuditApp() {
               ? "letter"
               : view.audit
                 ? "audit"
-                : "start",
+                : view.documents.some(
+                      (d) =>
+                        !d.confirmed &&
+                        d.ingest.result.kind === "bill" &&
+                        d.ingest.result.bill.docType === "itemized_bill",
+                    )
+                  ? "confirm"
+                  : "start",
     );
   }
 
@@ -356,7 +381,22 @@ export default function BillAuditApp() {
           eobId: eob?.ingest.documentId ?? null,
         }),
       );
+      applyCase(await fetchCase(caseId!));
+      setDraft(null);
       setStep("audit");
+    });
+  }
+
+  /** Reopens the same unsent case; the server invalidates outdated findings and letter drafts first. */
+  async function correctDetails() {
+    await run(async () => {
+      if (!caseId) return;
+      const view = await postJson<CaseView>(
+        `/api/cases/${encodeURIComponent(caseId)}/reopen`,
+        {},
+      );
+      applyCase(view);
+      setStep("confirm");
     });
   }
 
@@ -465,16 +505,6 @@ export default function BillAuditApp() {
         </div>
       )}
       {step === "start" && (
-        <CasePreferencesPanel
-          value={preferences}
-          disabled={busy}
-          onChange={(value) => {
-            setPreferences(value);
-            setPreferencesSaved(false);
-          }}
-        />
-      )}
-      {step === "start" && (
         <StartScreen
           bill={bill}
           eob={eob}
@@ -495,13 +525,38 @@ export default function BillAuditApp() {
               onChange={setEob}
             />
           )}
-          <button
-            disabled={busy}
-            onClick={confirmAndAudit}
-            className="paper-primary w-full"
-          >
-            {busy ? "Checking…" : "Confirm and check my bill"}
-          </button>
+          <div className="billless-confirm-action">
+            <div className="billless-action-progress">
+              <p aria-live="polite">
+                {reviewProgress.remaining
+                  ? `${reviewProgress.remaining} ${reviewProgress.remaining === 1 ? "item" : "items"} left to review`
+                  : "Ready to check your bill"}
+              </p>
+              <progress
+                aria-label="Bill and EOB review progress"
+                max={100}
+                value={
+                  reviewProgress.total
+                    ? Math.round(
+                        (reviewProgress.reviewed / reviewProgress.total) * 100,
+                      )
+                    : 100
+                }
+              />
+              <small>
+                {reviewProgress.total
+                  ? `${reviewProgress.reviewed} of ${reviewProgress.total} items reviewed`
+                  : "No flagged fields"}
+              </small>
+            </div>
+            <button
+              disabled={busy}
+              onClick={confirmAndAudit}
+              className="paper-primary"
+            >
+              {busy ? "Checking…" : "Confirm and check my bill"}
+            </button>
+          </div>
         </section>
       )}
       {step === "audit" && audit && bill?.ingest.result.kind === "bill" && (
@@ -511,6 +566,7 @@ export default function BillAuditApp() {
           documentId={bill.ingest.documentId}
           busy={busy}
           onLetter={makeLetter}
+          onCorrect={correctDetails}
         />
       )}
       {step === "request" && bill && (
@@ -539,7 +595,9 @@ export default function BillAuditApp() {
         <LetterScreen
           draft={draft}
           onTrack={
-            draft.kind === "dispute_letter" ? () => setStep("case") : undefined
+            draft.kind === "dispute_letter" || draft.kind === "appeal_letter"
+              ? () => setStep("case")
+              : undefined
           }
         />
       )}
@@ -623,6 +681,19 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
+        <div className="billless-action-progress">
+          <p>
+            {bill
+              ? "Your bill is ready to confirm"
+              : "Add your bill to continue"}
+          </p>
+          <progress
+            aria-label="Upload preparation progress"
+            max={1}
+            value={bill ? 1 : 0}
+          />
+          <small>{eob ? "Bill and EOB added" : "EOB optional"}</small>
+        </div>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}
@@ -762,7 +833,7 @@ function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
  * Preserves rule explanations and verbatim evidence; never invents findings or savings.
  *
  * @param props.audit - Deterministic findings, searched providers, and amounts in integer cents.
- * @param props.bill - Extracted document used only for the original-document line table.
+ * @param props.bill - Stored document values used only for the inspection table; includes saved corrections.
  * @param props.documentId - Original bill document identifier for evidence preview links.
  * @param props.busy - Whether a draft request is running.
  * @param props.onLetter - Generates a draft for patient review; sends nothing.
@@ -774,10 +845,11 @@ function AuditScreen({
   documentId,
   busy,
   onLetter,
+  onCorrect,
 }: {
   /** Audit response from our server. */
   audit: AuditResponse;
-  /** Original extracted values, not a substitute for corrected audit inputs. */
+  /** Stored extracted values including saved corrections; the server computes audit inputs. */
   bill: ExtractedBill;
   /** Identifier of the original bill PDF or image. */
   documentId: string;
@@ -785,12 +857,17 @@ function AuditScreen({
   busy: boolean;
   /** Requests a draft without submitting it. */
   onLetter: () => void;
+  /** Reopens document confirmation and invalidates the current audit and draft. */
+  onCorrect: () => void;
 }) {
   /** Expanded evidence panel, or null when all are collapsed. */
   const [open, setOpen] = useState<string | null>(null);
   /** Server-produced monetary verdict and evidence-backed findings. */
   const { verdict, findings } = audit;
-  /** Maps original bill lines to server findings for inspection, without calculating flags. */
+  // Every issue is the insurer's (e.g. a line it paid $0 for): point the patient to the insurer.
+  const insurerOnly =
+    findings.length > 0 && findings.every((f) => f.contact === "insurer");
+  /** Maps bill lines to server findings for inspection, without calculating flags. */
   const flaggedLines = new Map<number, Finding[]>();
   for (const finding of findings) {
     for (const source of finding.sources) {
@@ -809,6 +886,15 @@ function AuditScreen({
           <span className="paper-badge">✓ Review complete</span>
         </div>
       )}
+      <div className="flex justify-end">
+        <button
+          className="paper-source-button"
+          disabled={busy}
+          onClick={onCorrect}
+        >
+          Correct bill or EOB details
+        </button>
+      </div>
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
@@ -946,14 +1032,18 @@ function AuditScreen({
         <aside className="paper-next" aria-label="Your next step">
           <p className="paper-eyebrow">YOUR NEXT STEP</p>
           <h3>
-            {findings.length
-              ? "Ask the billing office to review these charges."
-              : "You still have options."}
+            {!findings.length
+              ? "You still have options."
+              : insurerOnly
+                ? "Ask your insurer to review this claim."
+                : "Ask the billing office to review these charges."}
           </h3>
           <p className="paper-copy">
-            {findings.length
-              ? "Prepare a dispute draft with the evidence and documentation requests attached."
-              : "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."}
+            {!findings.length
+              ? "Ask the hospital about its financial assistance policy or available payment plans. Eligibility and terms depend on the hospital."
+              : insurerOnly
+                ? "The provider billed what your EOB says, so this is for your insurer. Prepare a letter asking it to reprocess the claim or explain how to appeal. Billy can also call them."
+                : "Prepare a dispute draft with the evidence and documentation requests attached."}
           </p>
           {findings.length > 0 && (
             <button
@@ -961,7 +1051,11 @@ function AuditScreen({
               disabled={busy}
               onClick={onLetter}
             >
-              {busy ? "Preparing your draft…" : "Prepare my dispute draft →"}
+              {busy
+                ? "Preparing your draft…"
+                : insurerOnly
+                  ? "Prepare my letter to the insurer →"
+                  : "Prepare my dispute draft →"}
             </button>
           )}
           <a
@@ -980,15 +1074,16 @@ function AuditScreen({
       </div>
       <details>
         <summary className="paper-source-button py-3">
-          Inspect original extracted line items
+          Inspect document values
         </summary>
         <p className="paper-copy py-3">
-          These are the original extracted values. Your confirmed corrections
-          are used by the audit.
+          These values include your saved corrections. The audit uses your
+          confirmed details. To fix a value, choose “Correct bill or EOB
+          details.”
         </p>
         <div className="paper-table-wrap">
           <table className="paper-table">
-            <caption>Original bill line items</caption>
+            <caption>Extracted bill line items</caption>
             <thead>
               <tr>
                 <th scope="col">Line</th>

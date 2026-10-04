@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { IngestResponse } from "@/lib/cases/service";
 import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { Field } from "@/lib/types";
+import { reviewItems } from "@/lib/extract/reviewProgress";
 import { fieldLabel } from "@/lib/format";
 
 /** One uploaded document as tracked in the browser. */
@@ -61,6 +62,32 @@ function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
   return out;
 }
 
+/** Summarizes local review tasks for the action beside the confirmation button.
+ * @param doc - Current editable bill/EOB state.
+ * @returns Review counts across flagged fields and printed totals; server confirmation remains authoritative.
+ */
+export function confirmationProgress(doc: DocState) {
+  const items = reviewItems(
+    listFields(doc.ingest.result),
+    doc.corrections,
+    doc.confirmedPaths,
+    doc.blocking,
+  );
+  const r = doc.ingest.result;
+  const totals =
+    r.kind === "bill"
+      ? r.bill.documentIssues
+      : r.kind === "eob"
+        ? r.eob.documentIssues
+        : [];
+  const total = items.length + (totals.length > 0 ? 1 : 0);
+  const remaining = doc.confirmed
+    ? 0
+    : items.filter((item) => !item.reviewed).length +
+      (totals.length > 0 && !doc.ackTotals ? 1 : 0);
+  return { total, remaining, reviewed: total - remaining };
+}
+
 /**
  * Confirm panel for one document: preview, flagged fields first, verified fields in one tap.
  *
@@ -86,7 +113,7 @@ export default function ConfirmPanel({
     ([, f]) => f.verification === "needs_attention",
   );
   const verified = fields.filter(
-    ([, f]) => f.verification === "verified" && f.status !== "absent",
+    ([, f]) => f.verification !== "needs_attention",
   );
   const r = doc.ingest.result;
   const docIssues =
@@ -98,6 +125,40 @@ export default function ConfirmPanel({
   const [showVerified, setShowVerified] = useState(false);
   const [previewPage, setPreviewPage] = useState(1);
 
+  /** Local review tasks; edited values remain subject to server confirmation. */
+  const items = reviewItems(
+    fields,
+    doc.corrections,
+    doc.confirmedPaths,
+    doc.blocking,
+  );
+  const pending = doc.confirmed ? [] : items.filter((item) => !item.reviewed);
+  const totalsPending =
+    !doc.confirmed && docIssues.length > 0 && !doc.ackTotals;
+  const { total, remaining, reviewed } = confirmationProgress(doc);
+
+  /** Stable field anchor per document; bill and EOB fields cannot collide. */
+  function fieldId(path: string) {
+    return `confirm-${doc.ingest.documentId}-${path}`;
+  }
+
+  /** Opens the field's section, shows its source page and focuses the unfinished input. */
+  function goToField(path: string) {
+    const field = fields.find(([key]) => key === path)?.[1];
+    if (field?.page) setPreviewPage(field.page);
+    if (!flagged.some(([key]) => key === path)) setShowVerified(true);
+    requestAnimationFrame(() => {
+      const input = document.getElementById(fieldId(path));
+      input?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+        block: "center",
+      });
+      input?.focus({ preventScroll: true });
+    });
+  }
+
   /**
    * Records a correction for a field.
    *
@@ -105,7 +166,11 @@ export default function ConfirmPanel({
    * @param value - New raw value.
    */
   function correct(path: string, value: string) {
-    onChange({ ...doc, corrections: { ...doc.corrections, [path]: value } });
+    onChange({
+      ...doc,
+      blocking: [],
+      corrections: { ...doc.corrections, [path]: value },
+    });
   }
 
   /**
@@ -117,6 +182,7 @@ export default function ConfirmPanel({
     const has = doc.confirmedPaths.includes(path);
     onChange({
       ...doc,
+      blocking: [],
       confirmedPaths: has
         ? doc.confirmedPaths.filter((p) => p !== path)
         : [...doc.confirmedPaths, path],
@@ -134,10 +200,76 @@ export default function ConfirmPanel({
         )}
       </div>
       <p className="mt-1 text-xs text-[var(--paper-muted)]">
-        {r.meta.textLayerChecked
-          ? "Values were cross-checked against the PDF's own text."
-          : "Photo or scan: please check every value carefully."}
+        Compare these values with your document. Saved corrections are included;
+        correct anything that was read incorrectly.
       </p>
+      <div className="billless-confirm-progress">
+        <div className="billless-confirm-progress-heading">
+          <strong>
+            {doc.confirmed
+              ? "Details confirmed"
+              : remaining
+                ? `${remaining} ${remaining === 1 ? "item needs" : "items need"} review`
+                : "Ready to confirm"}
+          </strong>
+          <span>
+            {total
+              ? `${reviewed} of ${total} review items checked`
+              : "No flagged fields"}
+          </span>
+        </div>
+        <p className="paper-copy" aria-live="polite">
+          {pending.length
+            ? `Next: ${fieldLabel(pending[0].path)}${pending[0].missing ? " — enter the value from your document." : " — check or correct this value."}`
+            : totalsPending
+              ? "Next: check the printed totals below."
+              : doc.confirmed
+                ? "Your confirmed details are saved."
+                : "Submit below to validate these details. Edited values will be checked again."}
+        </p>
+        {totalsPending && pending.length === 0 && (
+          <button
+            className="paper-source-button"
+            type="button"
+            onClick={() => goToField("totals")}
+          >
+            Go to printed totals →
+          </button>
+        )}
+        {pending.length > 0 && (
+          <button
+            className="paper-source-button"
+            type="button"
+            onClick={() => goToField(pending[0].path)}
+          >
+            Go to next unfinished field →
+          </button>
+        )}
+        {pending.length > 1 && (
+          <details>
+            <summary>See all unfinished fields ({pending.length})</summary>
+            <ul>
+              {pending.map((item) => (
+                <li key={item.path}>
+                  <button
+                    type="button"
+                    className="paper-source-button"
+                    onClick={() => goToField(item.path)}
+                  >
+                    {fieldLabel(item.path)}
+                    {item.missing ? " · Value needed" : " · Check value"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {docIssues.length > 0 && !doc.ackTotals && (
+          <p className="paper-copy">
+            Also check the printed totals below before confirming.
+          </p>
+        )}
+      </div>
       <iframe
         title={`${title} preview`}
         src={`/api/documents/${doc.ingest.documentId}/file#page=${previewPage}`}
@@ -152,6 +284,8 @@ export default function ConfirmPanel({
           <label className="mt-2 flex items-start gap-2">
             <input
               type="checkbox"
+              id={fieldId("totals")}
+              disabled={doc.confirmed}
               checked={doc.ackTotals}
               onChange={(e) =>
                 onChange({ ...doc, ackTotals: e.target.checked })
@@ -166,7 +300,7 @@ export default function ConfirmPanel({
       )}
 
       <h3 className="mt-5 text-sm font-semibold">
-        Needs your attention ({flagged.length})
+        Check these details ({flagged.length})
       </h3>
       {flagged.length === 0 && (
         <p className="text-sm text-[var(--paper-muted)]">Nothing flagged.</p>
@@ -175,10 +309,19 @@ export default function ConfirmPanel({
         {flagged.map(([path, f]) => (
           <li
             key={path}
-            className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200"
+            className={`billless-confirm-field ${pending.some((item) => item.path === path) ? "is-pending" : "is-reviewed"}`}
           >
             <div className="flex items-center justify-between text-sm font-medium">
               <span>{fieldLabel(path)}</span>
+              <span className="billless-field-state">
+                {doc.confirmed
+                  ? "Confirmed"
+                  : pending.find((item) => item.path === path)?.missing
+                    ? "Value needed"
+                    : pending.some((item) => item.path === path)
+                      ? "Check value"
+                      : "Reviewed"}
+              </span>
               {f.page && (
                 <button
                   className="text-xs text-[var(--paper-muted)] underline"
@@ -188,6 +331,11 @@ export default function ConfirmPanel({
                 </button>
               )}
             </div>
+            <p id={`${fieldId(path)}-hint`} className="billless-field-hint">
+              {pending.find((item) => item.path === path)?.missing
+                ? "Enter the value shown on the document."
+                : "Correct the value or confirm that it matches your document."}
+            </p>
             {f.issues.map((m) => (
               <p key={m} className="text-xs text-amber-900">
                 {m}
@@ -201,9 +349,16 @@ export default function ConfirmPanel({
             <div className="billless-correction-row">
               <input
                 className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
-                disabled={doc.confirmed}
+                id={fieldId(path)}
                 aria-label={`Correct ${fieldLabel(path)}`}
+                aria-describedby={`${fieldId(path)}-hint`}
+                aria-invalid={pending.some(
+                  (item) =>
+                    item.path === path &&
+                    (item.missing || item.errors.length > 0),
+                )}
                 value={doc.corrections[path] ?? f.raw ?? ""}
+                disabled={doc.confirmed}
                 placeholder="[to confirm]"
                 onChange={(e) => correct(path, e.target.value)}
               />
@@ -226,27 +381,31 @@ export default function ConfirmPanel({
         aria-expanded={showVerified}
         onClick={() => setShowVerified((s) => !s)}
       >
-        {showVerified ? "Hide" : "Review"} {verified.length} verified values
+        {showVerified ? "Hide" : "Review"} {verified.length} document values
       </button>
       {showVerified && (
         <ul className="mt-2 divide-y divide-slate-100 text-sm">
           {verified.map(([path, f]) => (
-            <li key={path} className="billless-verified-row">
+            <li
+              key={path}
+              className={`billless-verified-row ${pending.some((item) => item.path === path) ? "billless-confirm-field is-pending" : ""}`}
+            >
               <span className="text-[var(--paper-muted)]">
                 {fieldLabel(path)}
               </span>
-              {r.kind === "denial" && !doc.confirmed ? (
-                <input
-                  aria-label={`Correct ${fieldLabel(path)}`}
-                  className="rounded border border-[var(--paper-border)] p-2 min-w-0"
-                  value={doc.corrections[path] ?? f.raw ?? ""}
-                  onChange={(e) => correct(path, e.target.value)}
-                />
-              ) : (
-                <span className="font-mono">
-                  {doc.corrections[path] ?? f.raw}
-                </span>
-              )}
+              <input
+                id={fieldId(path)}
+                aria-invalid={pending.some(
+                  (item) =>
+                    item.path === path &&
+                    (item.missing || item.errors.length > 0),
+                )}
+                className="min-w-0 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
+                aria-label={`Correct ${fieldLabel(path)}`}
+                value={doc.corrections[path] ?? f.raw ?? ""}
+                disabled={doc.confirmed}
+                onChange={(e) => correct(path, e.target.value)}
+              />
             </li>
           ))}
         </ul>

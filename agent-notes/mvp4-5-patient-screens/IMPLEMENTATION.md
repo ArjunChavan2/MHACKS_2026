@@ -9,3 +9,5 @@
 - Removed the old appeal template's unsupported assertion that the draft was already sent before its deadline.
 
 No provider agent settings, real phone calls or external patient contacts were made during implementation/testing. Live outbound workspace calls default disabled. Synthetic rehearsal is fully connected to actual service/storage APIs. Deployment contract and remaining telephony/runtime limitations are in docs/CALL_WORKSPACE.md.
+
+Merge integration preserves the newer main branch’s insurer letters, call outcome confirmation, editable document reopen and confirmation progress. The shared letter component retains insurer tracking and correct PDF filenames.

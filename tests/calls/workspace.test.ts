@@ -264,5 +264,49 @@ describe("patient call workspace", () => {
     expect(refreshed.transcript).toEqual([]);
     expect(refreshed.record).toBeNull();
     expect((await loadCase(bill.caseId))!.state.calls).toEqual([]);
+    // The matching conversation preserves original turns and the newer main branch's proposal metadata.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.includes("api.twilio")
+                ? { status: "completed", duration: "20" }
+                : url.includes("conversations?")
+                  ? {
+                      conversations: [
+                        { conversation_id: "conv_owned", status: "done" },
+                      ],
+                    }
+                  : {
+                      conversation_id: "conv_owned",
+                      status: "done",
+                      metadata: { phone_call: { call_sid: sid } },
+                      transcript: [
+                        {
+                          role: "user",
+                          message: "  Please send written confirmation.  ",
+                          time_in_call_secs: 12,
+                        },
+                      ],
+                      analysis: {
+                        data_collection_results: {
+                          duplicate_tsh: { value: "confirmed" },
+                        },
+                      },
+                    },
+            ),
+          ),
+      ),
+    );
+    const owned = await refreshCall(bill.caseId, plan.id);
+    expect(owned.record?.extracted).toEqual({ duplicate_tsh: "confirmed" });
+    expect(owned.record?.transcript[0].message).toBe(
+      "  Please send written confirmation.  ",
+    );
+    expect((await loadCase(bill.caseId))!.state.calls[0].conversationId).toBe(
+      "conv_owned",
+    );
   });
 });
