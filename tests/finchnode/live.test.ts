@@ -39,10 +39,11 @@ function stubFetch(routes: Array<[string, unknown | number]>) {
 
 describe("mapSnapshot", () => {
   /** Proves records from both providers keep FinchNode's own text, code, date, and source. */
-  it("maps labs, medications, conditions, and immunizations from both providers", () => {
+  it("maps labs, medications, conditions, immunizations, visits, and vitals from both providers", () => {
     const { records, warnings } = mapSnapshot(snapshot);
     expect(warnings).toEqual([]);
-    expect(records).toHaveLength(16);
+    expect(records).toHaveLength(24);
+    expect(records.find((r) => r.category === "encounter" && r.recordedAt === "2026-03-05")).toMatchObject({ text: "Endocrinology consult", provider: "Quillhaven Medical Group (Synthetic)" });
     expect(new Set(records.map((r) => r.provider))).toEqual(
       new Set(["Northstar Health System (Synthetic)", "Quillhaven Medical Group (Synthetic)"]),
     );
@@ -53,7 +54,8 @@ describe("mapSnapshot", () => {
   /** Proves a record without provenance is skipped with a visible warning, never guessed. */
   it("skips records missing their provider or date", () => {
     expect(mapRecord("labs", { id: "rec_x", name: "Ferritin", codes: [] })).toMatch(/missing its text, provider, or date/);
-    expect(mapRecord("vitals", { id: "rec_y" })).toMatch(/not used/);
+    expect(mapRecord("vitals", { id: "rec_y" })).toMatch(/missing its text, provider, or date/);
+    expect(mapRecord("allergies", { id: "rec_z" })).toMatch(/not used/);
   });
 });
 
@@ -83,7 +85,7 @@ describe("loadLiveRecords", () => {
     stubFetch([]);
     const r = await loadLiveRecords({ key: undefined });
     expect(r.origin).toBe("saved-snapshot");
-    expect(r.records).toHaveLength(16);
+    expect(r.records).toHaveLength(24);
   });
 });
 

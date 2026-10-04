@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { computeVerdict, runAudit } from "@/lib/audit";
-import { findBillExceedsEob, findDocumentationGaps, findDuplicateCharges } from "@/lib/audit/rules";
+import { findBillExceedsEob, findDocumentationGaps, findDuplicateCharges, findServicesWithoutRecord } from "@/lib/audit/rules";
 import { getRecords, providersOf } from "@/lib/finchnode";
 import type { ConfirmedBill } from "@/lib/types";
 import { confirmedSampleBill, confirmedSampleEob } from "../helpers";
@@ -86,5 +86,33 @@ describe("runAudit and verdict", () => {
     const bill = await confirmedSampleBill();
     const [dup] = findDuplicateCharges(bill);
     expect(computeVerdict(bill, [{ ...dup, status: "withdrawn" }]).questionedCents).toBe(0);
+  });
+});
+
+describe("findServicesWithoutRecord", () => {
+  /** Proves the demo bill's visit and blood draw are supported by the provider's visit and lab records. */
+  it("accepts a visit and draw the records support", async () => {
+    const bill = await confirmedSampleBill();
+    expect(findServicesWithoutRecord(bill, getRecords())).toEqual([]);
+  });
+  /** Proves a procedure is flagged, quoting the only visit recorded that day, with the record cited. */
+  it("flags a procedure the records don't mention", async () => {
+    const bill = await confirmedSampleBill();
+    const last = bill.lines.at(-1)!;
+    const amputation = { ...bill, lines: [...bill.lines, { ...last, lineNumber: 6, code: "27880", description: "Amputation, leg, through tibia and fibula", chargeCents: 1840000, patientResponsibilityCents: null }] };
+    const [f, ...rest] = findServicesWithoutRecord(amputation, getRecords());
+    expect(rest).toEqual([]);
+    expect(f).toMatchObject({ rule: "service_without_record", lineNumbers: [6], amountQuestionedCents: 1840000 });
+    expect(f.explanation).toContain('"Endocrinology consult" (March 5, 2026)');
+    expect(f.letterText).toMatch(/operative or procedure report/);
+    expect(f.sources.some((s) => s.kind === "record" && s.fact.text === "Endocrinology consult")).toBe(true);
+  });
+  /** Proves a visit with no visit on record that day is flagged, and nothing is checked without the provider's records. */
+  it("flags a visit with no visit record, and skips unconnected providers", async () => {
+    const bill = await confirmedSampleBill();
+    const moved = { ...bill, lines: bill.lines.map((l) => (l.code === "99214" ? { ...l, serviceDate: "2026-02-10" } : l)) };
+    const found = findServicesWithoutRecord(moved, getRecords());
+    expect(found.map((f) => f.id)).toEqual(["norecord-1-99214"]);
+    expect(findServicesWithoutRecord({ ...moved, billingEntity: "Some Other Clinic" }, getRecords())).toEqual([]);
   });
 });

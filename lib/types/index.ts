@@ -247,7 +247,7 @@ export interface ConfirmedEob {
 }
 
 /** Category of a FinchNode record we use as evidence. */
-export type RecordCategory = "lab" | "medication" | "condition" | "immunization" | "other";
+export type RecordCategory = "lab" | "medication" | "condition" | "immunization" | "encounter" | "vital" | "other";
 
 /**
  * A health fact copied exactly from one FinchNode record. Never constructed from LLM output;
@@ -297,7 +297,7 @@ export type Source =
 export type NonEmpty<T> = [T, ...T[]];
 
 /** Which deterministic rule produced a finding (SPEC.md §4.3). */
-export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap" | "insurer_denied_line";
+export type RuleId = "duplicate_charge" | "bill_exceeds_eob" | "documentation_gap" | "service_without_record" | "insurer_denied_line";
 
 /**
  * Finding status. MVP 1 only produces `potential`; later rungs move findings to `confirmed`,

@@ -15,6 +15,7 @@ import type {
   Source,
   VerbatimFact,
 } from "@/lib/types";
+import { sameName } from "@/lib/cases/consistency";
 import { MATCH_WINDOW_DAYS, RECORD_LOOKUP } from "./lookup";
 
 /**
@@ -205,6 +206,90 @@ export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact
           recordsChecked: checked,
         },
         ...(closest ? [{ kind: "record" as const, fact: closest }] : []),
+      ],
+    });
+  }
+  return findings;
+}
+
+/** Visit codes (office/outpatient, hospital, consults, emergency) that need a visit on record that day. */
+const VISIT_CODE = /^99(20[2-5]|21[1-5]|22[1-3]|23[1-9]|24[1-5]|28[1-5])$/;
+/** Specimen collection codes that need a lab result from that day. */
+const DRAW_CODES = new Set(["36415"]);
+
+/**
+ * Whether a code is in the CPT surgery range (10000–69999).
+ *
+ * @param code - Billing code as printed.
+ * @returns True for five-digit codes in that range.
+ */
+function isProcedureCode(code: string): boolean {
+  return /^\d{5}$/.test(code) && Number(code) >= 10000 && Number(code) <= 69999;
+}
+
+/**
+ * Checks bill lines the lab/medication lookup doesn't cover against the rest of the records, at the
+ * billing provider only: a visit code needs a visit (encounter) that day, a blood draw needs a lab
+ * result that day, and a procedure is reported with the visits recorded that day, since FinchNode
+ * carries no procedure records. Lines are skipped when the billing provider's records aren't
+ * connected (nothing to compare). Records are quoted verbatim; a missing record is a reason to ask
+ * for documentation, not proof the service didn't happen.
+ *
+ * @param bill - Confirmed bill.
+ * @param records - The patient's records from every connected provider.
+ * @returns One finding per line that the billing provider's records don't support.
+ */
+export function findServicesWithoutRecord(bill: ConfirmedBill, records: VerbatimFact[]): Finding[] {
+  const atProvider = records.filter((r) => sameName(r.provider, bill.billingEntity));
+  if (!atProvider.length) return [];
+  const provider = atProvider[0].provider;
+  const near = (r: VerbatimFact, date: string) => daysApart(r.recordedAt, date) <= MATCH_WINDOW_DAYS;
+  const visitsOn = (date: string) => atProvider.filter((r) => r.category === "encounter" && near(r, date));
+  const quote = (rs: VerbatimFact[]) => rs.map((r) => `"${r.text}" (${longDate(r.recordedAt)})`).join(", ");
+  const findings: Finding[] = [];
+  for (const line of bill.lines) {
+    const code = line.code;
+    const date = line.serviceDate;
+    if (!code || !date || RECORD_LOOKUP[code]) continue;
+    const what = `${line.description ? `${line.description} ` : ""}(${code})`;
+    const visits = visitsOn(date);
+    let explanation: string;
+    let letterText: string;
+    let searched: string;
+    let cite: VerbatimFact[] = [];
+    if (VISIT_CODE.test(code)) {
+      if (visits.length) continue;
+      const closest = atProvider.filter((r) => r.category === "encounter").sort((a, b) => daysApart(a.recordedAt, date) - daysApart(b.recordedAt, date))[0];
+      cite = closest ? [closest] : [];
+      searched = `visit records dated ${date} ± ${MATCH_WINDOW_DAYS} day`;
+      explanation = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a visit, ${what}, on ${longDate(date)}, but your records from ${provider} show no visit within ${MATCH_WINDOW_DAYS} day of that date.${closest ? ` The closest visit on record is ${quote([closest])}.` : ""} This doesn't prove the visit didn't happen; your records may be incomplete.`;
+      letterText = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for ${what} on ${longDate(date)}. My records from ${provider} show no visit on that date. Please send the visit note or other documentation of this visit before I pay for line ${line.lineNumber}.`;
+    } else if (DRAW_CODES.has(code)) {
+      if (atProvider.some((r) => r.category === "lab" && near(r, date))) continue;
+      searched = `lab results dated ${date} ± ${MATCH_WINDOW_DAYS} day`;
+      explanation = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a blood draw, ${what}, on ${longDate(date)}, but your records from ${provider} show no lab result within ${MATCH_WINDOW_DAYS} day of that date. This doesn't prove it didn't happen; your records may be incomplete.`;
+      letterText = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for ${what} on ${longDate(date)}. My records from ${provider} show no lab result from that date. Please send documentation of the tests this sample was drawn for before I pay for line ${line.lineNumber}.`;
+    } else if (isProcedureCode(code)) {
+      cite = visits;
+      searched = `procedure and visit records dated ${date} ± ${MATCH_WINDOW_DAYS} day`;
+      const seen = visits.length ? `The only visit${visits.length > 1 ? "s" : ""} recorded that day: ${quote(visits)}.` : "There is no visit recorded that day.";
+      explanation = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a procedure, ${what}, on ${longDate(date)}. None of your records from ${provider} mention this procedure. ${seen} This doesn't prove it didn't happen; ask for the operative or procedure report before paying.`;
+      letterText = `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for ${what} on ${longDate(date)}. My records from ${provider} contain no record of this procedure${visits.length ? `; the only visit recorded that day is ${quote(visits)}` : " and no visit on that date"}. Please send the operative or procedure report for this charge, or remove it, before I pay for line ${line.lineNumber}.`;
+    } else continue;
+    findings.push({
+      id: `norecord-${line.lineNumber}-${code}`,
+      rule: "service_without_record",
+      status: "potential",
+      title: `No record of line ${line.lineNumber} (${line.description ?? code}) in your records`,
+      explanation,
+      ask: `Ask ${bill.billingEntity} for documentation of line ${line.lineNumber} before paying for it.`,
+      letterText,
+      amountQuestionedCents: lineAmount(line),
+      lineNumbers: [line.lineNumber],
+      sources: [
+        lineSource(bill, line),
+        { kind: "records_searched", providers: [provider], searched, recordsChecked: atProvider.length },
+        ...cite.map((fact) => ({ kind: "record" as const, fact })),
       ],
     });
   }

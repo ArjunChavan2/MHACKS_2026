@@ -106,12 +106,14 @@ const SessionSchema = z.object({
   simulation: z.object({ state: z.string() }).nullish(),
 });
 
-/** FinchNode category → our category. Others (vitals, encounters, allergies) are not facts we cite yet. */
+/** FinchNode category → our category. Others (allergies) are not facts we cite yet. */
 const CATEGORY_MAP: Record<string, RecordCategory> = {
   labs: "lab",
   medications: "medication",
   conditions: "condition",
   immunizations: "immunization",
+  encounters: "encounter",
+  vitals: "vital",
 };
 
 /** Coding-system URLs → short labels. Observation-category codes are not clinical codes and are skipped. */
