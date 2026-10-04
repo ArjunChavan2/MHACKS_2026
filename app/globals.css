@@ -1647,3 +1647,9 @@ h4 {
 /* Keep corrections beside the findings count, wrapping when space is limited. */
 .billless-findings-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
 .billless-findings-heading h3 { margin: 0; }
+
+/* Make the review correction action visibly clickable beside the item count. */
+.billless-findings-heading .paper-source-button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
