@@ -529,13 +529,6 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
-        <p className="paper-copy">
-          PDF or a clear photo.
-          <br />
-          <span className="text-sm">
-            Use synthetic documents for this demo.
-          </span>
-        </p>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}
@@ -544,6 +537,9 @@ function StartScreen(props: {
           {busy ? "Reading your document…" : "Continue to confirm →"}
         </button>
       </div>
+      <p className="text-center text-sm text-[var(--paper-muted)]">
+        Use synthetic documents for this demo.
+      </p>
       <details className="billless-demo">
         <summary>Just exploring? Try a synthetic demo</summary>
         <div className="billless-demo-actions">
@@ -633,7 +629,7 @@ function UploadSlot({
         <span>
           {ready
             ? "Choose another file to replace it"
-            : "Choose a PDF or photo"}
+            : "PDF or a clear photo"}
         </span>
         <input
           type="file"
