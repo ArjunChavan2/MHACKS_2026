@@ -186,7 +186,10 @@ export default function OperatorConsole() {
   return (
     <main className="paper-app">
       <header className="paper-header">
-        <span className="paper-wordmark">billkind / operator</span>
+        <span className="paper-wordmark">
+          Bill<span>Less</span>
+          <span className="billless-brand-dot">.</span> operator
+        </span>
         <span className="paper-badge paper-review-badge">Simulated billing office</span>
       </header>
       <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
