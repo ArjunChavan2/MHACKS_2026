@@ -313,6 +313,11 @@ export interface Finding {
   verified?: boolean;
   /** Who can fix it: the provider's billing office (default) or the insurer (SPEC.md §3.4 routing). */
   contact?: "provider" | "insurer";
+  /**
+   * Call stage: `claim` (initial call, default), `appeal` (the claim was denied; a secondary call
+   * appeals it), `escalated` (denied again on appeal; written appeal or a human advocate next).
+   */
+  stage?: "claim" | "appeal" | "escalated";
   /** Amount this finding questions, in cents (0 when not monetary). */
   amountQuestionedCents: Cents;
   /** Bill line numbers this finding covers, for de-duplicating the verdict total. */
@@ -359,7 +364,7 @@ export interface Draft {
 }
 
 /** How the counterparty answered one finding (recorded from the operator console, MVP 2). */
-export type ResponseKind = "confirms_error" | "provides_documentation" | "needs_more_info" | "will_send_later";
+export type ResponseKind = "confirms_error" | "provides_documentation" | "needs_more_info" | "will_send_later" | "refused";
 
 /**
  * A response from the billing office or insurer, recorded as structured data (SPEC.md §3.5).

@@ -411,6 +411,31 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       citedFindingIds: request.findingId ? [request.findingId] : ids,
     });
   }
+  // Two call stages: a denied claim is appealed on a second call; denied again escalates.
+  const escalated = working.filter((f) => f.stage === "escalated");
+  if (escalated.length) {
+    return card({
+      actionId: "wait",
+      title: "Denied on appeal: send a written appeal or get help",
+      why: `${describe(escalated)} was denied again on the appeal call. The next step is a written appeal or complaint with the evidence; a human patient advocate can help.`,
+      needed: "A written appeal or complaint",
+      responsibleParty: "You (Billy can draft it)",
+      deadline: null,
+      citedFindingIds: escalated.map((f) => f.id),
+    });
+  }
+  const appealing = working.filter((f) => f.stage === "appeal");
+  if (appealing.length) {
+    return card({
+      actionId: "wait",
+      title: "Appeal the denial: Billy makes the appeal call",
+      why: `${office} denied ${describe(appealing)} on the first call. Billy can call back to appeal, citing the bill, your EOB, and your records.`,
+      needed: "Your go-ahead for the appeal call",
+      responsibleParty: "Billy, with your approval",
+      deadline: null,
+      citedFindingIds: appealing.map((f) => f.id),
+    });
+  }
   const waiting = openTasks(s.tasks, "await_document");
   const late = waiting.find((t) => t.followUpDate && t.followUpDate < today);
   if (late) {
