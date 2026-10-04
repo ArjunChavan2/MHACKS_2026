@@ -6,8 +6,9 @@ and links to `/review`. `/review` hosts the existing bill-audit component. Its l
 home; Start over still resets the workspace. Existing `/?case=…` links continue to render
 the saved-case workspace directly, preserving previously shared URLs.
 
-The illustrative receipt contains no patient data, invented medical finding, or savings
-amount. The page describes review and patient-approved drafting without guaranteeing a
+The receipt contains no real patient data, invented medical finding, or savings
+amount. It now displays verbatim synthetic charges from sample-bill lines 3 and 5,
+labeled as a demo and cited to page 1. The page describes review and patient-approved drafting without guaranteeing a
 reduction or claiming the bill is wrong. No API, database, audit, or approval rules change.
 
 Validation: lint, TypeScript, and the Webpack production build passed. Local Chrome checks
@@ -36,3 +37,11 @@ committed as `7e8f463`; design handoff documentation is a separate descriptive c
 both stash backups and exclude `.tmp/` caches. All 91 tests, lint, and Webpack build passed
 after the pull. Standalone type checking was rerun after the build to avoid a race with
 Next.js regenerating `.next/types`. These commits have not been pushed.
+
+Copy/design audit follow-up: changed the headline to “Know what to question on your medical
+bill,” standardized CTA labels, replaced abstract section headings with concrete workflow
+labels, and removed the repeated final CTA card. Removed repeated reassurance while keeping
+Billy's one “We’ve goat this” aside. The hero now illustrates the actual synthetic duplicate
+lines ($68.00 each) with code/date, a possible-duplicate label, and a source caption. It
+does not claim an error is confirmed or that those dollars have been saved. Browser layout
+and navigation checks cover the new headline, sample rows, labels, and phone widths.

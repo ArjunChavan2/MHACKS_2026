@@ -4,6 +4,10 @@
 import BillAuditApp from "./_components/BillAuditApp";
 import Image from "next/image";
 import Link from "next/link";
+import sampleBill from "@/fixtures/llm-output/sample-bill.json";
+
+/** Verbatim lines from the synthetic sample bill; illustrates repeated charges, not savings. */
+const EXAMPLE_LINES = [sampleBill.lines[2], sampleBill.lines[4]];
 
 /**
  * Introduces the review workflow without making savings or medical claims.
@@ -38,19 +42,18 @@ export default async function Home({
         <section className="billless-home-hero" aria-labelledby="home-heading">
           <div className="billless-home-copy">
             <p className="billless-home-eyebrow">
-              <span aria-hidden="true" /> A LITTLE LESS WORRY
+              <span aria-hidden="true" /> MEDICAL BILL REVIEW
             </p>
             <h1 id="home-heading">
-              A big bill.
-              <br />
-              <span>A clearer next step.</span>
+              Know what to question <span>on your medical bill.</span>
             </h1>
             <p className="billless-home-description">
-              Medical bills can be a lot to take in. Let’s review the details,
-              find what’s worth asking about, and put your next step in writing.
+              Check for duplicate charges and differences from your insurance
+              explanation. See the source behind each finding, then prepare a
+              letter to the billing office.
             </p>
             <Link className="paper-primary billless-home-cta" href="/review">
-              Let’s review my bill <span aria-hidden="true">→</span>
+              Review my bill <span aria-hidden="true">→</span>
             </Link>
             <p className="billless-home-small">
               Start with an itemized bill. Add your insurance explanation if you
@@ -69,19 +72,17 @@ export default async function Home({
                 <path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z" />
                 <path d="m8 12 3 3 5-6" />
               </svg>
-              <span>
-                You stay in control. Nothing is sent without your approval.
-              </span>
+              <span>Nothing is sent without your approval.</span>
             </div>
           </div>
           <div
             className="billless-home-art"
-            aria-label="Billy the goat beside an illustration of a bill review"
+            aria-label="Billy the goat beside a synthetic bill example"
           >
             <div className="billless-home-sky" aria-hidden="true" />
-            <div className="billless-home-receipt" aria-hidden="true">
+            <div className="billless-home-receipt">
               <div className="billless-receipt-top">
-                <span>YOUR BILL, A LITTLE CLEARER</span>
+                <span>SYNTHETIC BILL · DEMO ONLY</span>
                 <svg
                   viewBox="0 0 24 24"
                   width="24"
@@ -89,28 +90,44 @@ export default async function Home({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.6"
+                  aria-hidden="true"
                 >
                   <path d="M7 3h7l4 4v14H7z" />
                   <path d="M14 3v5h4M10 12h5M10 16h5" />
                 </svg>
               </div>
               <div className="billless-receipt-heading">
-                Let’s take a closer look.
+                The same charge, twice?
               </div>
-              <div className="billless-receipt-lines">
-                <span />
-                <span />
-                <span />
+              <div className="billless-receipt-rows">
+                {EXAMPLE_LINES.map((line) => (
+                  <div
+                    className="billless-receipt-row"
+                    key={line.lineNumber.raw}
+                  >
+                    <div>
+                      <strong>Bill line {line.lineNumber.raw}</strong>
+                      <span>
+                        Code {line.code.raw} · {line.serviceDate.raw}
+                      </span>
+                    </div>
+                    <strong className="billless-receipt-amount">
+                      {line.charge.raw}
+                    </strong>
+                  </div>
+                ))}
               </div>
               <div className="billless-receipt-finding">
-                <span className="billless-receipt-check">✓</span>
+                <span className="billless-receipt-check" aria-hidden="true">
+                  ?
+                </span>
                 <div>
-                  <strong>Something worth asking about</strong>
-                  <p>Clear explanation. Original evidence.</p>
+                  <strong>Possible duplicate</strong>
+                  <p>Ask whether both charges apply.</p>
                 </div>
               </div>
               <div className="billless-receipt-footer">
-                Your next step, in writing <span>→</span>
+                Source: sample bill, page 1, lines 3 &amp; 5
               </div>
             </div>
             <div className="billless-home-billy">
@@ -122,9 +139,7 @@ export default async function Home({
                 priority
               />
             </div>
-            <div className="billless-home-speech">
-              We’ve goat this.<span>One step at a time.</span>
-            </div>
+            <div className="billless-home-speech">We’ve goat this.</div>
           </div>
         </section>
         <section
@@ -133,16 +148,13 @@ export default async function Home({
           aria-labelledby="how-heading"
         >
           <div className="billless-home-section-heading">
-            <p className="paper-eyebrow">FROM CONFUSING TO ACTIONABLE</p>
-            <h2 id="how-heading">A little help, every step.</h2>
-            <p>
-              No billing expertise needed. Just your documents and your say-so.
-            </p>
+            <h2 id="how-heading">How it works</h2>
+            <p>You check the document details before we review the charges.</p>
           </div>
           <div className="billless-home-steps">
             <article>
               <span className="billless-home-step">01</span>
-              <h3>Bring your bill.</h3>
+              <h3>Upload and confirm.</h3>
               <p>
                 Upload your itemized bill and an optional explanation of
                 benefits (EOB). Check the details we read before moving on.
@@ -150,7 +162,7 @@ export default async function Home({
             </article>
             <article>
               <span className="billless-home-step">02</span>
-              <h3>See what to ask.</h3>
+              <h3>Review the findings.</h3>
               <p>
                 Review flagged items with clear explanations and links to their
                 sources. An item under review isn’t a confirmed saving.
@@ -158,22 +170,13 @@ export default async function Home({
             </article>
             <article>
               <span className="billless-home-step">03</span>
-              <h3>Make your next move.</h3>
+              <h3>Prepare your letter.</h3>
               <p>
                 Prepare a dispute draft when there are findings to discuss.
                 Review it, download it, and decide whether to send it.
               </p>
             </article>
           </div>
-        </section>
-        <section className="billless-home-ready">
-          <div>
-            <h2>Let’s start with what’s on the bill.</h2>
-            <p>Billy’s here to help you through it.</p>
-          </div>
-          <Link href="/review" className="paper-primary">
-            Review my bill <span aria-hidden="true">→</span>
-          </Link>
         </section>
       </main>
       <footer className="billless-home-footer">

@@ -80,8 +80,18 @@ shadow. Avoid adding decorative charts, gradients, extra claims, or multiple com
 `public/brand/billy.png` is the transparent generated mascot asset, roughly 960KB. It is
 used by Next Image on the home page and in `BillyGuide`. Preserve its transparency and
 proportions. The receipt, speech bubble, and pale circle are native HTML/CSS, not a flattened
-hero image. The receipt is decorative, has no patient data or fabricated dollar amounts,
-and is hidden from assistive technology; Billy's home image has descriptive alt text.
+hero image. After the copy/design audit, the receipt shows verbatim lines 3 and 5 from
+`fixtures/llm-output/sample-bill.json`: code 84443, date 03/05/2026, and $68.00 per line.
+It is labeled SYNTHETIC BILL · DEMO ONLY and cites the sample bill page and lines. Those
+figures are example charges, not savings. The example is available to assistive technology;
+Billy's home image has descriptive alt text. No patient name is displayed.
+
+The current headline is “Know what to question on your medical bill.” CTA wording is
+consistently “Review my bill.” How it works uses Upload and confirm / Review the findings /
+Prepare your letter. Generic reassurance labels and the extra final CTA card were removed.
+“We’ve goat this” is the sole playful aside. The mascot sits beside the sample on desktop
+and below it on phones so it does not cover the evidence. These audit edits are local and
+uncommitted after the preceding home/design commits.
 
 Billy's generation direction: soft 2D cream goat, navy contour, small tan horns, large
 expressive ears, blue-gray hooves, sky-blue neckerchief, raised waving hoof, friendly
