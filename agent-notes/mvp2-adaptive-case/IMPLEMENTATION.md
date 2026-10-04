@@ -73,13 +73,10 @@ unused; mirror approvals into `approvals` later if judges should see it in Neon.
 
 ## Notes for the next steps
 
-- Step 3 (store): `CaseSnapshot` is what the service must assemble: `dispute` from the outgoing
-  dispute document + its meta (`sent`, `sentAt`), `tasks` from `deadlines` (+ `details` JSON),
-  `approvals` from the `approvals` table, `responsesRecorded` = count of `response_recorded` events,
-  `revisedAwaitingConfirmation` = an attached `revised_statement` document not yet confirmed.
-- Step 5 (service): call `mergeFindings(stored, runAudit(...).findings)` in `auditCase` and
-  `draftLetter` instead of overwriting. Store the response event first so its ID goes into
-  `applyResponse`'s `ctx.eventId`.
+- Steps 6–7 (UI) only need the API above; the case screen reads `view.state` and never computes
+  phase, savings, or the card itself.
+- Mark "Simulated billing office" on every operator screen; sends are already recorded as
+  "patient portal (simulated)".
 - The demo verdict numbers: questioned $122.00; confirms branch offers $68.00, then confirms $68.00
   after the revised statement ($321.00 → $253.00); disproves branch drops questioned to $68.00.
 
