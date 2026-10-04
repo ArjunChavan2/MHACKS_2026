@@ -18,7 +18,10 @@ import type {
 } from "@/lib/cases/service";
 import { usd } from "@/lib/format";
 import CaseScreen from "./CaseScreen";
-import ConfirmPanel, { type DocState } from "./DocumentConfirmation";
+import ConfirmPanel, {
+  confirmationProgress,
+  type DocState,
+} from "./DocumentConfirmation";
 import ProcessingStatus from "./ProcessingStatus";
 import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
@@ -91,6 +94,20 @@ export default function BillAuditApp() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Combined document review progress shown beside the action that submits confirmation. */
+  const reviewProgress = [bill, eob].reduce(
+    (counts, doc) => {
+      if (!doc) return counts;
+      const progress = confirmationProgress(doc);
+      return {
+        total: counts.total + progress.total,
+        reviewed: counts.reviewed + progress.reviewed,
+        remaining: counts.remaining + progress.remaining,
+      };
+    },
+    { total: 0, reviewed: 0, remaining: 0 },
+  );
 
   const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
 
@@ -505,13 +522,38 @@ export default function BillAuditApp() {
               onChange={setEob}
             />
           )}
-          <button
-            disabled={busy}
-            onClick={confirmAndAudit}
-            className="paper-primary w-full"
-          >
-            {busy ? "Checking…" : "Confirm and check my bill"}
-          </button>
+          <div className="billless-confirm-action">
+            <div className="billless-action-progress">
+              <p aria-live="polite">
+                {reviewProgress.remaining
+                  ? `${reviewProgress.remaining} ${reviewProgress.remaining === 1 ? "item" : "items"} left to review`
+                  : "Ready to check your bill"}
+              </p>
+              <progress
+                aria-label="Bill and EOB review progress"
+                max={100}
+                value={
+                  reviewProgress.total
+                    ? Math.round(
+                        (reviewProgress.reviewed / reviewProgress.total) * 100,
+                      )
+                    : 100
+                }
+              />
+              <small>
+                {reviewProgress.total
+                  ? `${reviewProgress.reviewed} of ${reviewProgress.total} items reviewed`
+                  : "No flagged fields"}
+              </small>
+            </div>
+            <button
+              disabled={busy}
+              onClick={confirmAndAudit}
+              className="paper-primary"
+            >
+              {busy ? "Checking…" : "Confirm and check my bill"}
+            </button>
+          </div>
         </section>
       )}
       {step === "audit" && audit && bill?.ingest.result.kind === "bill" && (
@@ -603,6 +645,19 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
+        <div className="billless-action-progress">
+          <p>
+            {bill
+              ? "Your bill is ready to confirm"
+              : "Add your bill to continue"}
+          </p>
+          <progress
+            aria-label="Upload preparation progress"
+            max={1}
+            value={bill ? 1 : 0}
+          />
+          <small>{eob ? "Bill and EOB added" : "EOB optional"}</small>
+        </div>
         <button
           disabled={!bill || busy}
           onClick={props.onNext}

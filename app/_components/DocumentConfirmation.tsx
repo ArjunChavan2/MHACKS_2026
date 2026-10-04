@@ -57,6 +57,32 @@ function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
   return out;
 }
 
+/** Summarizes local review tasks for the action beside the confirmation button.
+ * @param doc - Current editable bill/EOB state.
+ * @returns Review counts across flagged fields and printed totals; server confirmation remains authoritative.
+ */
+export function confirmationProgress(doc: DocState) {
+  const items = reviewItems(
+    listFields(doc.ingest.result),
+    doc.corrections,
+    doc.confirmedPaths,
+    doc.blocking,
+  );
+  const r = doc.ingest.result;
+  const totals =
+    r.kind === "bill"
+      ? r.bill.documentIssues
+      : r.kind === "eob"
+        ? r.eob.documentIssues
+        : [];
+  const total = items.length + (totals.length > 0 ? 1 : 0);
+  const remaining = doc.confirmed
+    ? 0
+    : items.filter((item) => !item.reviewed).length +
+      (totals.length > 0 && !doc.ackTotals ? 1 : 0);
+  return { total, remaining, reviewed: total - remaining };
+}
+
 /**
  * Confirm panel for one document: preview, flagged fields first, verified fields in one tap.
  *
@@ -104,10 +130,7 @@ export default function ConfirmPanel({
   const pending = doc.confirmed ? [] : items.filter((item) => !item.reviewed);
   const totalsPending =
     !doc.confirmed && docIssues.length > 0 && !doc.ackTotals;
-  const total = items.length + (docIssues.length > 0 ? 1 : 0);
-  const remaining = pending.length + (totalsPending ? 1 : 0);
-  const reviewed = total - remaining;
-  const percentage = total ? Math.round((reviewed / total) * 100) : 100;
+  const { total, remaining, reviewed } = confirmationProgress(doc);
 
   /** Stable field anchor per document; bill and EOB fields cannot collide. */
   function fieldId(path: string) {
@@ -190,11 +213,6 @@ export default function ConfirmPanel({
               : "No flagged fields"}
           </span>
         </div>
-        <progress
-          aria-label={`${title} detail review progress`}
-          max={100}
-          value={percentage}
-        />
         <p className="paper-copy" aria-live="polite">
           {pending.length
             ? `Next: ${fieldLabel(pending[0].path)}${pending[0].missing ? " — enter the value from your document." : " — check or correct this value."}`
