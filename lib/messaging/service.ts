@@ -13,6 +13,7 @@
  */
 import { ActionRefusedError, runCaseAction } from "@/lib/cases/caseflow";
 import { isConsentPhrase, recordConsent } from "@/lib/cases/consent";
+import { answerQuestion, openQuestionOf } from "@/lib/cases/patientQuestions";
 import type { ActionId } from "@/lib/cases/machine";
 import { loadCase, type CaseView } from "@/lib/cases/service";
 import { getStore, newId, type StoredCase } from "@/lib/cases/store";
@@ -73,7 +74,7 @@ function eventsOf<T>(c: StoredCase, type: string): T[] {
  * @param c - Stored case.
  * @returns Linked handles.
  */
-function activeHandles(c: StoredCase): string[] {
+export function activeHandles(c: StoredCase): string[] {
   const set = new Set<string>();
   for (const e of c.events) {
     const handle = (e.data as { handle?: string } | null)?.handle;
@@ -219,7 +220,7 @@ async function link(
   const update = composeUpdate(view, caseLink(baseUrl, caseId));
   return deliver(caseId, view, {
     ...update,
-    text: `Linked. You'll get updates about this case here.\n${update.text}`,
+    text: `Linked. You'll get updates about this case here.\n\n${update.text}`,
   });
 }
 
@@ -248,7 +249,7 @@ async function approve(
     const update = composeUpdate(view, link);
     return deliver(caseId, view, {
       ...update,
-      text: `${REFUSAL_TEXT[r.reason]}\n${update.text}`,
+      text: `${REFUSAL_TEXT[r.reason]}\n\n${update.text}`,
     });
   }
   const { actionId, target, promptId } = r.prompt;
@@ -273,7 +274,7 @@ async function approve(
     const update = composeUpdate(view, link);
     return deliver(caseId, view, {
       ...update,
-      text: `${REFUSAL_TEXT.stale}\n${update.text}`,
+      text: `${REFUSAL_TEXT.stale}\n\n${update.text}`,
     });
   }
   await store.addEvent(caseId, "imessage_reply", {
@@ -285,7 +286,7 @@ async function approve(
   const update = composeUpdate(after.view, link);
   return deliver(caseId, after.view, {
     ...update,
-    text: `Done: ${label}. (Recorded with your approval; sending is simulated in this demo.)\n${update.text}`,
+    text: `Done: ${label}. (Recorded with your approval; sending is simulated in this demo.)\n\n${update.text}`,
   });
 }
 
@@ -357,6 +358,10 @@ export async function handleInbound(
     return `Thanks. Billy will tell ${who} you consent to him representing you.`;
   }
   const { c, view } = await loadBoth(caseId);
+  // While Billy is waiting on a question from a live call, the patient's next text is the answer
+  // (even "yes" or "A"); only STOP keeps its meaning.
+  const question = intent.kind === "stop" ? null : openQuestionOf(c);
+  if (question) return answerQuestion(caseId, question, text);
   const url = caseLink(baseUrl, caseId);
   switch (intent.kind) {
     case "approve":
@@ -370,7 +375,7 @@ export async function handleInbound(
       });
       return r.ok
         ? fit(
-            ["Okay, holding. Nothing was sent. Reply A any time to approve."],
+            ["Okay, holding. Nothing was sent.", "Reply A any time to approve it."],
             url,
           )
         : fit([REFUSAL_TEXT[r.reason]], url);

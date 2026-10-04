@@ -78,7 +78,7 @@ export interface ImessagePrompt {
 /** A composed text plus the approval it asks for, if any. */
 export interface Composed {
   text: string;
-  /** Set when the text ends with "Reply A to approve"; the service stores it as a prompt. */
+  /** Set when the text lists the A/B options; the service stores it as a prompt. */
   prompt?: { actionId: ActionId; target?: string };
 }
 
@@ -165,29 +165,69 @@ function savingsLine(view: CaseView): string | null {
 }
 
 /**
- * Fits text into one iMessage: whole lines are kept until the budget runs out, then the case link
- * is added for the rest. Lines are never cut mid-sentence, so a citation is shown whole or not at all.
+ * Fits text into one iMessage: whole lines are kept until the budget runs out, then a "(N more in the
+ * app)" note is added. Lines are never cut mid-sentence, so a citation is shown whole or not at all.
+ * The footer (reply options) and the case link are always kept, so a prompt never loses its options.
  *
- * @param lines - Lines in order; the first is always kept.
+ * @param lines - Body lines in order; the first is always kept. Empty strings are blank lines.
  * @param link - Case link appended at the end.
+ * @param footer - Lines always kept after the body (e.g. reply options).
  * @returns The text.
  */
-export function fit(lines: string[], link: string): string {
-  const tail = `Open your case: ${link}`;
+export function fit(lines: string[], link: string, footer: string[] = []): string {
+  const tail = [...(footer.length ? ["", ...footer] : []), "", `Open your case: ${link}`];
   const kept: string[] = [];
   let dropped = 0;
   for (const line of lines) {
-    const next = [...kept, line, tail].join("\n");
+    const next = [...kept, line, ...tail].join("\n");
     if (kept.length && next.length > MAX_TEXT_CHARS) dropped++;
     else kept.push(line);
   }
+  while (kept.length && kept.at(-1) === "") kept.pop();
   if (dropped) kept.push(`(${dropped} more in the app)`);
-  return [...kept, tail].join("\n");
+  return [...kept, ...tail].join("\n");
+}
+
+/** First line of every update: who is texting and what kind of message it is. */
+export function header(kind: string): string {
+  return `BillLess · ${kind}`;
 }
 
 /**
- * Composes an update from the "What happens next?" card. Ends with "Reply A to approve…" only when
- * the card's exact action is allowed and needs approval.
+ * The card as text lines: title, why, then labeled details (needed, date, money).
+ *
+ * @param view - Case view.
+ * @returns Body lines.
+ */
+function cardLines(view: CaseView): string[] {
+  const next = view.state.next;
+  const lines = [header("Next step"), next.title, "", next.why];
+  const details: string[] = [];
+  if (next.needed) details.push(`• Needed: ${next.needed}`);
+  if (next.deadline) details.push(next.deadline === "unconfirmed" ? "• Date: none given yet" : `• ${next.overdue ? "Was due" : "Expected by"}: ${longDate(next.deadline)}${next.overdue ? " (overdue)" : ""}`);
+  const savings = savingsLine(view);
+  if (savings) details.push(`• ${savings}`);
+  if (details.length) lines.push("", ...details);
+  return lines;
+}
+
+/**
+ * The reply options for the card, spelled out ("A → Send the dispute letter"), or none when the card
+ * needs no approval.
+ *
+ * @param view - Case view.
+ * @returns Footer lines, or an empty list.
+ */
+function optionLines(view: CaseView): string[] {
+  if (!approvable(view)) return [];
+  const next = view.state.next;
+  const label = view.state.allowed.find((a) => a.id === next.actionId && (a.target ?? undefined) === (next.target ?? undefined))?.label ?? next.title;
+  return ["Reply with:", `A → Approve: ${label}`, "B → Hold for now (nothing is sent)", "WHY → See the evidence"];
+}
+
+/**
+ * Composes an update from the "What happens next?" card. Lists the reply options (A, B, WHY) with
+ * what each does only when the card's exact action is allowed and needs approval.
  *
  * @param view - Case view.
  * @param link - Case link.
@@ -195,19 +235,14 @@ export function fit(lines: string[], link: string): string {
  */
 export function composeUpdate(view: CaseView, link: string): Composed {
   const next = view.state.next;
-  const lines = [`BillLess: ${next.title}`, next.why];
-  if (next.needed) lines.push(`Needed: ${next.needed}`);
-  if (next.deadline) lines.push(next.deadline === "unconfirmed" ? "No date given yet" : `${next.overdue ? "Was due" : "Expected by"} ${longDate(next.deadline)}${next.overdue ? " (overdue)" : ""}`);
-  const savings = savingsLine(view);
-  if (savings) lines.push(savings);
-  if (!approvable(view)) return { text: fit(lines, link) };
-  lines.push("Reply A to approve, B to hold, or WHY to see why.");
-  return { text: fit(lines, link), prompt: { actionId: next.actionId, ...(next.target ? { target: next.target } : {}) } };
+  const options = optionLines(view);
+  const text = fit(cardLines(view), link, options);
+  return options.length ? { text, prompt: { actionId: next.actionId, ...(next.target ? { target: next.target } : {}) } } : { text };
 }
 
 /**
- * Composes the STATUS reply: the current update plus a numbered list of the case's issues (the
- * numbers `WHY <n>` refers to).
+ * Composes the STATUS reply: the current card, a numbered list of the case's issues (the numbers
+ * `WHY <n>` refers to), and the reply options.
  *
  * @param view - Case view.
  * @param link - Case link.
@@ -218,14 +253,16 @@ export function composeStatus(view: CaseView, link: string): Composed {
   const findings = view.audit?.findings ?? [];
   if (!findings.length) return update;
   const list = findings.map((f, i) => `${i + 1}. ${f.title} (${statusWords(f)})`);
-  const lines = [...update.text.split("\n").slice(0, -1), "Issues:", ...list, "Reply WHY <number> for the evidence."];
-  return { text: fit(lines, link), ...(update.prompt ? { prompt: update.prompt } : {}) };
+  const options = optionLines(view);
+  const footer = [...(options.length ? options : ["Reply with:"]), "WHY 1, WHY 2… → Evidence for that issue"];
+  const lines = [...cardLines(view), "", "Issues:", ...list];
+  return { text: fit(lines, link, footer), ...(update.prompt ? { prompt: update.prompt } : {}) };
 }
 
 /**
  * Composes the grounded answer to "why was this flagged?": the finding's template title, status note,
  * and explanation, then each source exactly as `describeSource` writes it (verbatim record text with
- * provider and date), records first. Nothing else is added.
+ * provider and date), records first. Nothing else is added beyond fixed labels.
  *
  * @param view - Case view.
  * @param findingId - Finding to explain.
@@ -235,11 +272,11 @@ export function composeStatus(view: CaseView, link: string): Composed {
 export function composeWhy(view: CaseView, findingId: string, link: string): string {
   const f = view.audit?.findings.find((x) => x.id === findingId);
   if (!f) return fit(["I couldn't find that issue on your case."], link);
-  const lines = [`Why "${f.title}" (${statusWords(f)}):`];
-  if (f.statusNote) lines.push(f.statusNote);
-  lines.push(f.explanation, "Evidence:");
+  const lines = [header("Why this was flagged"), f.title, `Status: ${statusWords(f)}`, ""];
+  if (f.statusNote) lines.push(f.statusNote, "");
+  lines.push(f.explanation, "", "Evidence:");
   const sources = [...(f.statusSources ?? []), ...f.sources].sort((a, b) => (SOURCE_ORDER[a.kind] ?? 9) - (SOURCE_ORDER[b.kind] ?? 9));
-  for (const s of sources) lines.push(`- ${describeSource(s)}`);
+  for (const s of sources) lines.push(`• ${describeSource(s)}`);
   return fit(lines, link);
 }
 
@@ -342,6 +379,6 @@ export function resolvePrompt(prompts: ImessagePrompt[], view: CaseView, now: Da
  * @returns The text.
  */
 export function composeHelp(link: string | null): string {
-  const lines = ["BillLess commands:", "STATUS: where your case stands", "A / B: approve or hold the step I asked about", "WHY or WHY <number>: the evidence behind an issue", "STOP: stop texts about this case"];
-  return link ? fit(lines, link) : [...lines, "To start, open your case on the web and text the LINK code it shows."].join("\n");
+  const lines = [header("Text commands"), "STATUS → Where your case stands", "A / B → Approve or hold the step I asked about", "WHY or WHY 2 → The evidence behind an issue", "STOP → Stop texts about this case"];
+  return link ? fit(lines, link) : [...lines, "", "To start, open your case on the web and text the LINK code it shows."].join("\n");
 }

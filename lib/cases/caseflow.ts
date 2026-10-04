@@ -308,6 +308,10 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
     case "consent_requested":
       return `Billy asked for your consent on a call with ${String(data.counterparty ?? "the billing office")}`;
+    case "patient_question_asked":
+      return `Billy asked you by text, for ${String(data.counterparty ?? "the office")}: “${String(data.question ?? "")}”`;
+    case "patient_question_answered":
+      return data.outcome === "answered" ? "You answered Billy's question by text (shared on the call)" : data.outcome === "skipped" ? "You chose not to share that" : data.outcome === "withheld" ? "Your reply wasn't shared (it looked like an SSN or card number)" : "Your reply came after the call moved on (not shared)";
     case "call_armed":
       return "You got Billy ready to call about this case";
     case "consent_given":

@@ -75,7 +75,7 @@ export async function requestConsent(caseId: string, counterparty: string): Prom
   await store.addEvent(caseId, "consent_requested", { requestId, counterparty });
   await store.addEvent(caseId, "imessage_direct", {
     messageId: newId("msg"),
-    text: `Billy is on a call with ${counterparty} about your bill. To let Billy represent you, reply exactly:\n${CONSENT_PHRASE}`,
+    text: ["BillLess · Billy is on a call", `With: ${counterparty}`, "They need your consent before they'll discuss your bill with Billy.", "", "To consent, reply exactly:", CONSENT_PHRASE, "", "Not ready? Just don't reply; Billy will say you'll call them back."].join("\n"),
   });
   return requestId;
 }

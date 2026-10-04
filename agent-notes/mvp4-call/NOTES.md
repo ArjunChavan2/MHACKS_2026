@@ -75,3 +75,34 @@ Health → Billy makes the case with the records → switch back with `npm run c
 
 Both agents spell IDs with the NATO alphabet ("Q as in Quebec...") and digits one at a time, and
 understand and read back phonetically spelled references. Tests: `spelling` and `--insurer insurer_spelling` (pass).
+
+## Ask the patient by text (`ask_patient`), 2026-10-04
+
+When the office asks for a detail Billy doesn't have (date of birth, member ID, address…), Billy
+says "One moment, I'll ask <first name> by text" and calls the ElevenLabs webhook tool
+`ask_patient` → `POST /api/calls/ask` (header `x-billy-secret` = MESSAGING_SECRET). The app texts
+the patient the question through Photon on the live case (`DEMO_CASE_ID`, else the case whose screen last pressed "Get Billy ready", else the latest case),
+waits ~40 s, and returns the patient's reply **verbatim**; Billy may read only that text back. SKIP,
+no reply, or a late reply means nothing is shared. Code (`lib/cases/patientQuestions.ts`) refuses
+questions about any part of an SSN, card or bank numbers, passwords, or PINs before texting, and
+withholds replies that look like an SSN or card number. While a question is open (2 min), the
+patient's next text is the answer (even "yes"); only STOP keeps its meaning. If no phone is linked
+to the live case, the tool answers at once ("can't be reached by text").
+
+**ElevenLabs setup (checklist: `ELEVENLABS_SETUP.md`; needs the ElevenLabs dashboard or API):** add a webhook
+tool to both agents (billing and insurer):
+- Name `ask_patient`; method POST; URL `https://billless.tech/api/calls/ask`; header
+  `x-billy-secret` = the Vercel `MESSAGING_SECRET`; response timeout 50–60 s.
+- Description: "Ask the patient by text for a detail you don't have (date of birth, member ID,
+  address). Returns the patient's reply verbatim, or that nothing may be shared."
+- Body parameters: `question` (string, required: the question as the office asked it),
+  `counterparty` (string: who is asking).
+
+The billing agent's rules come from the per-call brief (`lib/calls/brief.ts`), so they deploy with
+the app; the static prompts (`agent-prompt.txt`, `insurer-prompt.txt`) were updated to match and must
+be pasted into ElevenLabs for the insurer agent. New simulated tests: `npm run agent:test --
+ask_patient_answered` and `-- ask_patient_skipped` (not run yet: no ElevenLabs key here).
+
+**Texts are structured now:** every message starts with "BillLess · <kind>", the card's details are
+bulleted, and approval prompts spell out the options ("A → Approve: Send the dispute letter",
+"B → Hold for now (nothing is sent)", "WHY → See the evidence"). Options are never trimmed away.
