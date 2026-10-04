@@ -115,13 +115,32 @@ export async function waitForConsent(caseId: string, requestId: string, timeoutM
   }
 }
 
+/** How long a started call stays tied to the case it was briefed for (calls are capped at 30 min). */
+export const ACTIVE_CALL_MS = 35 * 60_000;
+
 /**
- * Picks the case a live call is about: `DEMO_CASE_ID` if set, otherwise the case with the most recent
- * activity (inbound calls carry no case ID, so this is a demo rule).
+ * Picks the case a new call is about. Inbound calls carry no case ID, so the patient picks it: the case
+ * whose screen last pressed "Get Billy ready" (`call_armed`). `DEMO_CASE_ID` overrides; with no armed
+ * case ever, falls back to the most recent activity. Other people using the site don't move it.
  *
  * @returns Case ID, or null when there is no candidate.
  */
 export async function caseForLiveCall(): Promise<string | null> {
   if (process.env.DEMO_CASE_ID) return process.env.DEMO_CASE_ID;
-  return getStore().latestCaseId();
+  const store = getStore();
+  return (await store.latestEventOf("call_armed"))?.caseId ?? store.latestCaseId();
+}
+
+/**
+ * Picks the case of the call in progress (for Billy's tools mid-call): the case the latest call was
+ * briefed for, if that was within `ACTIVE_CALL_MS`; otherwise `caseForLiveCall`.
+ *
+ * @param now - Current time (ms), for tests.
+ * @returns Case ID, or null.
+ */
+export async function caseForActiveCall(now = Date.now()): Promise<string | null> {
+  if (process.env.DEMO_CASE_ID) return process.env.DEMO_CASE_ID;
+  const briefed = await getStore().latestEventOf("call_briefed");
+  if (briefed && now - Date.parse(briefed.createdAt) < ACTIVE_CALL_MS) return briefed.caseId;
+  return caseForLiveCall();
 }

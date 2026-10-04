@@ -213,6 +213,20 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     }
   }
 
+  /** Makes this case the one Billy's next demo call is about. */
+  async function armCall() {
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/cases/${caseId}/calls/arm`, {});
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Saves the agent's latest finished call (transcript as recorded) to this case. */
   async function addLatestCall() {
     setBusy(true);
@@ -758,6 +772,19 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           Transcripts exactly as the voice assistant recorded them. Synthetic
           demo calls.
         </p>
+        <div className="mt-2 rounded-md bg-sky-50 p-3 text-sm ring-1 ring-sky-200">
+          <p className="font-semibold">
+            {s.callArmedAt
+              ? `Billy is ready to call about this case (since ${new Date(s.callArmedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}).`
+              : "Before a call, get Billy ready for this case."}
+          </p>
+          <p className="paper-copy text-xs">
+            Billy talks about whichever case pressed this last, so press it right before the call.
+          </p>
+          <button className="paper-primary mt-2" disabled={busy} onClick={armCall}>
+            {s.callArmedAt ? "Get Billy ready again" : "Get Billy ready for this case"}
+          </button>
+        </div>
         {(s.calls ?? []).length === 0 && (
           <p className="paper-copy text-sm">No calls saved to this case yet.</p>
         )}
