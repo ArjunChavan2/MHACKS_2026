@@ -7,6 +7,7 @@
 import type { BillLine, ExtractedBill, ExtractedEob, EobLine } from "@/lib/types";
 import { checkBill, checkEob } from "./checks";
 import {
+  inferCodeType,
   parseCodeType,
   parseDate,
   parseInteger,
@@ -47,11 +48,15 @@ export function buildBill(raw: RawBill, layer: TextLayer): ExtractedBill {
     },
     lines: raw.lines.map((l, i): BillLine => {
       const n = `Line ${l.lineNumber.raw ?? i + 1}`;
+      const code = toField(l.code, (s) => parseText(s)?.toUpperCase() ?? null, `${n} code`);
+      const codeType = toField(l.codeType, parseCodeType, `${n} code type`);
+      // Bills rarely print the code type; infer it from the code's format when no label was given.
+      if (codeType.value === null && !codeType.issues.length && code.value) codeType.value = inferCodeType(code.value);
       return {
         lineNumber: toField(l.lineNumber, parseInteger, `${n} number`),
         serviceDate: toField(l.serviceDate, parseDate, `${n} service date`),
-        code: toField(l.code, (s) => parseText(s)?.toUpperCase() ?? null, `${n} code`),
-        codeType: toField(l.codeType, parseCodeType, `${n} code type`),
+        code,
+        codeType,
         description: toField(l.description, parseText, `${n} description`),
         quantity: toField(l.quantity, parseInteger, `${n} quantity`),
         unitPrice: toField(l.unitPrice, parseMoney, `${n} unit price`),
