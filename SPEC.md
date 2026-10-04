@@ -1045,7 +1045,7 @@ Verified from finchnode.com on 2026-10-02 plus workshop notes.
 4. **Take over:** warm transfer or hand-back with notes (O2).
 5. **Call consent model** for real-world use.
 6. **Login:** Neon Auth or one demo user.
-7. **Worker hosting** during judging.
+7. ~~**Worker hosting** during judging~~ Decided (2026-10-04): the Photon worker runs on a teammate's computer (proof of concept); it is transport only, so it can move to Railway later without code changes. Cloudflare Workers can't hold Photon's gRPC stream.
 8. **Coding-mismatch rule:** include only if simple and defensible.
 9. **File storage** for documents.
 10. **Product name.**

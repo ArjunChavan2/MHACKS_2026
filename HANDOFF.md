@@ -57,6 +57,10 @@ Progress per rung is the Status column in SPEC.md §6.
 - **Letters read like letters now:** each finding carries a first-person `letterText` written by
   code; the model may only place `{{finding:<id>:letter}}` at the start of a sentence (else retry,
   then template); greeting and sign-off are added by code.
+- **Photon worker host:** a teammate's computer (proof of concept). Needs only `APP_URL`,
+  `MESSAGING_SECRET` (same as Vercel), `PHOTON_PROJECT_ID`, `PHOTON_PROJECT_SECRET` in its
+  `.env.local`; run `npm run worker:photon` and keep the machine awake and online. Test without
+  Photon: `npm run worker:photon -- --local +15555550123`.
 - **Deployed** (Vercel project `mhacks-2026`, team `bill-less1`, folder linked via `.vercel/`):
   production at **https://mhacks-2026.vercel.app** (redirect to the custom domain removed) and
   **https://billless.tech** (registered 2026-10-04 through .tech Domains, registrar Namify, Vercel
