@@ -33,7 +33,8 @@ export function buildBill(raw: RawBill, layer: TextLayer): ExtractedBill {
   const bill: ExtractedBill = {
     docType: raw.docType,
     header: {
-      billingEntity: toField(h.billingEntity, parseText, "Billing entity"),
+      // The entity is the organization's name; models sometimes include the address block below it.
+      billingEntity: toField(h.billingEntity, (s) => parseText(s.split(/\r?\n/).find((l) => l.trim()) ?? s), "Billing entity"),
       providerType: toField(h.providerType, parseProviderType, "Provider type"),
       accountNumber: toField(h.accountNumber, parseText, "Account number"),
       patientName: toField(h.patientName, parseText, "Patient name"),
