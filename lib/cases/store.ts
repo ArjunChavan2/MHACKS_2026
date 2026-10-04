@@ -7,7 +7,7 @@
  * memory otherwise. Never expose stored files publicly.
  */
 import { neon } from "@neondatabase/serverless";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { caseEvents, cases, documents, files, findings } from "@/db/schema";
@@ -63,6 +63,12 @@ export interface CaseStore {
   saveFindings(caseId: string, list: Finding[]): Promise<void>;
   /** Appends an event to the case timeline. */
   addEvent(caseId: string, type: string, data: unknown): Promise<void>;
+  /**
+   * Finds the cases that have an event of this type whose data has every given string field (MVP 3:
+   * a case by iMessage link code, by handle, or by outbox message ID). An empty `match` finds every
+   * case with an event of that type.
+   */
+  findCasesByEvent(type: string, match: Record<string, string>): Promise<string[]>;
   /** Stores a file privately and returns its storage key. */
   putFile(bytes: Uint8Array, mimeType: string): Promise<string>;
   /** Reads a privately stored file, or `null` if the key is unknown. */
@@ -133,6 +139,10 @@ export function memoryStore(): CaseStore {
     },
     async addEvent(caseId, type, data) {
       events.push({ caseId, type, data: structuredClone(data), createdAt: new Date().toISOString() });
+    },
+    async findCasesByEvent(type, match) {
+      const hit = (data: unknown) => Object.entries(match).every(([k, v]) => (data as Record<string, unknown> | null)?.[k] === v);
+      return [...new Set(events.filter((e) => e.type === type && hit(e.data)).map((e) => e.caseId))];
     },
     async putFile(bytes, mimeType) {
       const key = newId("file");
@@ -228,6 +238,11 @@ export function pgStore(db: PgDb): CaseStore {
     },
     async addEvent(caseId, type, data) {
       await db.insert(caseEvents).values({ id: newId("evt"), caseId, type, data });
+    },
+    async findCasesByEvent(type, match) {
+      const fields = Object.entries(match).map(([k, v]) => sql`${caseEvents.data}->>${k} = ${v}`);
+      const rows = await db.selectDistinct({ caseId: caseEvents.caseId }).from(caseEvents).where(and(eq(caseEvents.type, type), ...fields));
+      return rows.map((r) => r.caseId);
     },
     async putFile(bytes, mimeType) {
       const key = newId("file");

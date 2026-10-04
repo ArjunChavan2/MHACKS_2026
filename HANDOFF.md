@@ -63,6 +63,11 @@ Progress per rung is the Status column in SPEC.md §6.
   URLs require a Vercel login. Env vars set in Vercel: XAI_API_KEY, GEMINI_API_KEY, GEMINI_MODEL,
   DATABASE_URL(_UNPOOLED), NEON_BRANCH, FINCHNODE_API_KEY, USE_MOCK=false (live FinchNode demo API records), FINCHNODE_CONNECT=off. Deploy:
   `npx vercel deploy --prod`. Live checks passed: full case flow on Neon, Grok upload 56/56 fields.
+- **MVP 3 iMessage built** (`agent-notes/mvp3-imessage/IMPLEMENTATION.md`): `lib/messaging/`,
+  `/api/messaging/{inbound,outbox,ack}` (Bearer `MESSAGING_SECRET`), case screen panel with a
+  `LINK <code>`, and `workers/photon/` (`npm run worker:photon`, or `-- --local <handle>` to test
+  without Photon). Needs `PHOTON_PROJECT_ID`/`PHOTON_PROJECT_SECRET` for real iMessage, and
+  `MESSAGING_SECRET` set in Vercel. The worker runs on a laptop or always-on host, never Vercel.
 - **MVP 2 backend done** (`agent-notes/mvp2-adaptive-case/`): case state machine, approvals,
   three outcome branches, wait/resume, revised-statement verification, savings trio, timeline, and
   the `/api/cases/[id]/actions` and `/responses` endpoints. No DB migration (events). The case screen

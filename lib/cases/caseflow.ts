@@ -129,6 +129,12 @@ export function snapshotOf(c: StoredCase): { snapshot: CaseSnapshot; tasks: Case
   return { snapshot, tasks, verification };
 }
 
+/** Bookkeeping events kept off the timeline (task snapshots and iMessage delivery state). */
+const HIDDEN_EVENTS: ReadonlySet<string> = new Set(["tasks_updated", "imessage_link_code", "imessage_prompt", "imessage_outbox", "imessage_superseded", "imessage_notified"]);
+
+/** How an iMessage reply reads on the timeline, by intent. */
+const IMESSAGE_REPLY_LABEL: Record<string, string> = { link: "LINK", approve: "A to approve", decline: "B to hold", why: "WHY", status: "STATUS" };
+
 /**
  * Writes a plain summary for a timeline event (templates only).
  *
@@ -151,6 +157,10 @@ function summarize(type: string, data: Record<string, unknown>): string {
     case "handoff": return `You took over: ${String(data.documentNeeded)}`;
     case "revised_verified": return `Revised statement checked: ${usd(Number((data.comparison as RevisedComparison | undefined)?.confirmedSavingsCents ?? 0))} confirmed`;
     case "tasks_updated": return "Tasks updated";
+    case "imessage_linked": return "iMessage updates turned on";
+    case "imessage_unlinked": return "iMessage updates turned off";
+    case "imessage_sent": return "Update sent by iMessage";
+    case "imessage_reply": return `You texted ${IMESSAGE_REPLY_LABEL[String(data.intent)] ?? String(data.intent)}${data.result === "approved" ? " (approved)" : data.result === "declined" ? " (holding)" : ""}`;
     default: return type.replaceAll("_", " ");
   }
 }
@@ -173,7 +183,7 @@ export function caseStateOf(c: StoredCase): CaseState {
     savings: orig && snapshot.audited ? computeSavings(orig.bill, c.findings, verification) : null,
     verification,
     timeline: c.events
-      .filter((e) => e.type !== "tasks_updated")
+      .filter((e) => !HIDDEN_EVENTS.has(e.type))
       .map((e) => ({ at: e.createdAt, type: e.type, summary: summarize(e.type, (e.data ?? {}) as Record<string, unknown>) })),
   };
 }

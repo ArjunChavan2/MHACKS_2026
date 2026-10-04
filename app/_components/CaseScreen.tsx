@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import type { CaseState } from "@/lib/cases/caseflow";
 import type { CaseView } from "@/lib/cases/service";
+import type { ImessageStatus } from "@/lib/messaging/service";
 import { longDate, usd } from "@/lib/format";
 import type { ExtractedBill, Finding } from "@/lib/types";
 import { describeSource } from "./sources";
@@ -85,6 +86,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [imessage, setImessage] = useState<ImessageStatus | null>(null);
 
   /** Reloads the case after an action. */
   async function refresh() {
@@ -102,8 +104,19 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           if (!cancelled && v) setView(v);
         })
         .catch(() => undefined);
+    const loadImessage = () =>
+      fetch(`/api/cases/${caseId}/imessage`, { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<ImessageStatus>) : null))
+        .then((m) => {
+          if (!cancelled && m) setImessage(m);
+        })
+        .catch(() => undefined);
     load();
-    const t = setInterval(load, REFRESH_MS);
+    loadImessage();
+    const t = setInterval(() => {
+      load();
+      loadImessage();
+    }, REFRESH_MS);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -235,6 +248,21 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           </button>
         ))}
       </aside>
+
+      {imessage && (
+        <aside className="rounded-md bg-white p-4 text-sm ring-1 ring-[var(--paper-border)]" aria-label="iMessage updates">
+          <p className="paper-eyebrow">IMESSAGE UPDATES</p>
+          {imessage.linked ? (
+            <p className="mt-1">
+              <strong>Linked to iMessage.</strong> You&apos;ll get a text when this case needs you. Reply A to approve, B to hold, WHY for the evidence, or STOP to turn texts off.
+            </p>
+          ) : (
+            <p className="mt-1">
+              Text <strong className="font-mono">LINK {imessage.code}</strong> to {imessage.photonNumber ? <strong>{imessage.photonNumber}</strong> : "the BillLess iMessage number"} to get updates and approve steps by text.
+            </p>
+          )}
+        </aside>
+      )}
 
       {s.savings && (
         <dl className="paper-summary">
