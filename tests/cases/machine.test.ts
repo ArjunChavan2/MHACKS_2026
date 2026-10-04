@@ -92,7 +92,8 @@ describe("branch: evidence confirms the error", () => {
     const v = applyVerification(r.findings, r.tasks, cmp, { documentId: "doc_revised", receivedAt: "2026-04-02" });
     expect(v.findings.find((f) => f.id === dup)).toMatchObject({ status: "confirmed", verified: true });
     expect(v.tasks[0].status).toBe("done");
-    expect(computeSavings(bill, v.findings, cmp)).toEqual({ questionedCents: 12200, offeredCents: 0, confirmedCents: 6800 });
+    // Settled lines leave "still in question"; only the free T4 ($54) stays open.
+    expect(computeSavings(bill, v.findings, cmp)).toEqual({ questionedCents: 5400, offeredCents: 0, confirmedCents: 6800 });
     // The free T4 gap is still open, so the case is not resolved.
     expect(derivePhase(sent(v.findings, v.tasks))).toBe("waiting_response");
   });

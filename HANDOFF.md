@@ -54,8 +54,9 @@ Progress per rung is the Status column in SPEC.md §6.
   then template); greeting and sign-off are added by code.
 - **MVP 2 backend done** (`agent-notes/mvp2-adaptive-case/`): case state machine, approvals,
   three outcome branches, wait/resume, revised-statement verification, savings trio, timeline, and
-  the `/api/cases/[id]/actions` and `/responses` endpoints. No DB migration (events). Next: the
-  case screen and the operator console (PLAN.md steps 6–7).
+  the `/api/cases/[id]/actions` and `/responses` endpoints. No DB migration (events). The case screen
+  and the operator console (`/operator?case=…`, simulated billing office) are built and walked
+  through in the browser. `?case=` links now resume cases (was broken).
 - **Demo switch:** `FINCHNODE_CONNECT=off` skips the stuck sandbox Connect (no 45 s wait) and uses
   FinchNode's demo API directly.
 - **Grok is now the default AI provider** (when `XAI_API_KEY` is set); Gemini stays for the judged

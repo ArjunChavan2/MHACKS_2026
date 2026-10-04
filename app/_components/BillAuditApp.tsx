@@ -1,6 +1,7 @@
 "use client";
 /**
- * @file The MVP 1 flow in the browser: start → confirm → audit → letter (SPEC.md §6 MVP 1).
+ * @file The patient flow in the browser: start → confirm → audit → letter → case (SPEC.md §6
+ * MVP 1–2). The case screen (`CaseScreen`) tracks approvals, responses, and verification.
  *
  * Talks only to our API routes. Never computes findings or writes facts itself: findings come from
  * `/api/audit` and letters from `/api/letters`. Labels anything that came from a saved sample
@@ -11,16 +12,17 @@ import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { AuditResponse, CaseView, IngestResponse } from "@/lib/cases/service";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
 import { fieldLabel, usd } from "@/lib/format";
+import CaseScreen from "./CaseScreen";
+import { describeSource } from "./sources";
 import type {
   Draft,
   ExtractedBill,
   Field,
   Finding,
-  Source,
 } from "@/lib/types";
 
 /** Which screen is showing. */
-type Step = "start" | "confirm" | "audit" | "letter" | "request";
+type Step = "start" | "confirm" | "audit" | "letter" | "request" | "case";
 
 /** One uploaded document as tracked in the browser. */
 interface DocState {
@@ -123,11 +125,13 @@ export default function BillAuditApp() {
   const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
 
   // Keep the case ID in the URL so a reload or shared link resumes the case.
+  // Only ever adds the ID: on first load caseId is still null while the resume effect below reads
+  // ?case=, so deleting here would drop the link before it's used. "Start over" removes it.
   useEffect(() => {
+    if (!caseId) return;
     const url = new URL(window.location.href);
-    if ((url.searchParams.get("case") ?? null) === caseId) return;
-    if (caseId) url.searchParams.set("case", caseId);
-    else url.searchParams.delete("case");
+    if (url.searchParams.get("case") === caseId) return;
+    url.searchParams.set("case", caseId);
     window.history.replaceState(null, "", url);
   }, [caseId]);
 
@@ -179,13 +183,17 @@ export default function BillAuditApp() {
    */
   function applyCase(view: CaseView) {
     for (const d of view.documents) {
+      const r = d.ingest.result;
+      // A revised statement belongs to the case screen, not the original bill slot.
+      if (r.kind === "bill" && r.bill.docType === "revised_statement") continue;
       const state: DocState = { ingest: d.ingest, corrections: {}, confirmedPaths: [], ackTotals: false, confirmed: d.confirmed, blocking: [] };
-      if (d.ingest.result.kind === "eob") setEob(state);
+      if (r.kind === "eob") setEob(state);
       else setBill(state);
     }
     setAudit(view.audit);
     setDraft(view.draft);
-    setStep(view.draft ? "letter" : view.audit ? "audit" : "start");
+    const tracking = view.draft?.kind === "dispute_letter" && view.state.phase !== "audited" && view.state.phase !== "intake";
+    setStep(tracking ? "case" : view.draft ? "letter" : view.audit ? "audit" : "start");
   }
 
   // Resume a saved case named in the URL (?case=…) once, on first load.
@@ -330,6 +338,7 @@ export default function BillAuditApp() {
 
   /** Starts over. */
   function reset() {
+    window.history.replaceState(null, "", window.location.pathname);
     setStep("start");
     setBill(null);
     setEob(null);
@@ -442,7 +451,10 @@ export default function BillAuditApp() {
           </button>
         </section>
       )}
-      {step === "letter" && draft && <LetterScreen draft={draft} />}
+      {step === "letter" && draft && (
+        <LetterScreen draft={draft} onTrack={draft.kind === "dispute_letter" ? () => setStep("case") : undefined} />
+      )}
+      {step === "case" && caseId && <CaseScreen caseId={caseId} />}
     </main>
   );
 }
@@ -767,32 +779,6 @@ function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
   return "";
 }
 
-/**
- * Describes a source for the evidence view.
- *
- * @param s - Source.
- * @returns Plain-language description.
- */
-function describeSource(s: Source): string {
-  switch (s.kind) {
-    case "bill_line":
-      return `Bill line ${s.lineNumber}${s.provenance.page ? `, page ${s.provenance.page}` : ""}: “${s.provenance.snippet ?? ""}”`;
-    case "eob_line":
-      return `EOB line ${s.index + 1}: “${s.provenance.snippet ?? ""}”`;
-    case "eob_total":
-      return `EOB: “${s.provenance.snippet ?? ""}”`;
-    case "bill_total":
-      return `Bill: “${s.provenance.snippet ?? ""}”`;
-    case "record":
-      return `${s.fact.provider}, ${s.fact.recordedAt}: “${s.fact.text}” (record ${s.fact.recordId})`;
-    case "records_searched":
-      return `Searched ${s.recordsChecked} records from ${s.providers.join(" and ")}: ${s.searched}. No match.`;
-    case "response":
-      return `Response from ${s.from}, ${s.receivedAt}${s.note ? `: “${s.note}”` : ""}`;
-    case "document":
-      return `Document: ${s.label}`;
-  }
-}
 
 /**
  * Responsive Paper case review driven entirely by the server audit (SPEC.md §4.3–4.4).
@@ -1102,9 +1088,10 @@ function AuditScreen({
  * Letter screen: click any paragraph to see its sources; download the PDF.
  *
  * @param props.draft - The finished draft.
+ * @param props.onTrack - Opens the case screen (dispute letters only).
  * @returns The letter screen.
  */
-function LetterScreen({ draft }: { draft: Draft }) {
+function LetterScreen({ draft, onTrack }: { draft: Draft; onTrack?: () => void }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   /** Visible PDF failure; a failed request must never be downloaded as a document. */
@@ -1210,9 +1197,15 @@ function LetterScreen({ draft }: { draft: Draft }) {
       >
         Download PDF
       </button>
+      {onTrack && (
+        <button onClick={onTrack} className="w-full rounded-lg py-3 font-semibold ring-1 ring-[var(--paper-border)]">
+          Track this case →
+        </button>
+      )}
       <p className="text-center text-xs text-[var(--paper-muted)]">
-        Nothing is sent for you in this version. Review the letter, then send it
-        yourself.
+        {onTrack
+          ? "Sending happens from the case screen and only with your approval (simulated in this demo)."
+          : "Nothing is sent for you in this version. Review the letter, then send it yourself."}
       </p>
     </section>
   );

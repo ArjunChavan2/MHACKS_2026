@@ -190,7 +190,7 @@ export function applyVerification(
 
 /** The savings trio shown on the case screen (SPEC.md §4.6). Each bill line is counted once. */
 export interface Savings {
-  /** Amount still in question: findings not withdrawn. */
+  /** Amount still in question: findings neither withdrawn nor verified on a revised statement. */
   questionedCents: number;
   /** Amount the office agreed to fix but no revised statement proves yet. */
   offeredCents: number;
@@ -207,10 +207,10 @@ export interface Savings {
  * @returns The savings trio; text for display is formatted by the caller with `usd`.
  */
 export function computeSavings(bill: ConfirmedBill, findings: Finding[], cmp: RevisedComparison | null): Savings {
-  const active = findings.filter((f) => f.status !== "withdrawn");
-  const offered = active.filter((f) => f.status === "confirmed" && !f.verified);
+  const open = findings.filter((f) => f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified));
+  const offered = open.filter((f) => f.status === "confirmed");
   return {
-    questionedCents: computeVerdict(bill, active).questionedCents,
+    questionedCents: computeVerdict(bill, open).questionedCents,
     offeredCents: computeVerdict(bill, offered).questionedCents,
     confirmedCents: cmp ? cmp.confirmedSavingsCents : null,
   };

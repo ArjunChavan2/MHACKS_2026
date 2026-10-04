@@ -1,8 +1,8 @@
-# IMPLEMENTATION: mvp2-adaptive-case (steps 1, 2, 4, 5 of PLAN.md)
+# IMPLEMENTATION: mvp2-adaptive-case (steps 1, 2, 4–7 of PLAN.md)
 
-Status: **steps 1, 2, 4, 5 done** (pure core, verification, branch fixtures, service + API). Step 3
-is **not needed as planned** (see deviation). Steps 6–9 (case screen, operator console, optional LLM
-pick, docs) not started. The MVP 1 UI flow is unchanged.
+Status: **steps 1, 2, 4, 5, 6, 7 done** (pure core, verification, branch fixtures, service + API,
+case screen, operator console). Step 3 is **not needed as planned** (see deviation). Step 8 (optional
+LLM action pick) not started. MVP 1 screens unchanged except the letter screen's "Track this case".
 
 ## Deviation from PLAN.md: no migration
 
@@ -71,12 +71,32 @@ unused; mirror approvals into `approvals` later if judges should see it in Neon.
   - Incomplete: `{ from, perFinding: [{gap, will_send_later, neededDocument, responsibleParty, promisedBy: today+7}], attachSample: "response-incomplete" }`; later the lab sends `lab-result-ft4` as `provides_documentation`.
 - Dates: `receivedAt` is today; set `DEMO_TODAY` for rehearsals with fixed dates.
 
+## Steps 6–7 (UI)
+
+| File | What |
+|---|---|
+| `app/_components/CaseScreen.tsx` | Patient case screen: phase heading, "What happens next?" card with the approve button (`approve: true` only on that press), revised-statement review ("These values match my statement"), savings trio, findings with status chips, status notes and evidence (document sources link to the file), tracked paperwork with "I'll do this myself", timeline, case ID. Refreshes every 3 s so operator responses appear live |
+| `app/operator/page.tsx`, `app/_components/OperatorConsole.tsx` | `/operator?case=…`, labeled **Simulated billing office**: one-click presets A (confirm duplicate), B (send lab report), C (lab will send later, +7 days), "C, later" (lab record arrives), "A, later" (send revised statement); optional verbatim note; action log |
+| `app/_components/BillAuditApp.tsx` | `case` step; letter screen "Track this case →"; `?case=` reload routes to the case screen once the dispute exists; revised statements never replace the original bill slot |
+| `app/_components/sources.ts` | `describeSource` shared by the screens (handles `response` and `document` sources) |
+
+Fixes found in browser testing:
+- **"Still in question" counted verified findings**; now it counts only findings neither withdrawn
+  nor verified (`computeSavings`). After the confirms branch: $54.00 in question, $68.00 confirmed.
+- **`?case=` links never resumed a case** (pre-existing): the URL-sync effect ran first with a null
+  case ID and deleted the parameter before the resume effect read it. It now only adds the ID;
+  "Start over" clears it.
+
+Browser walk-through (desktop, in-memory store): sample bill + EOB → confirm → audit → letter →
+Track this case → approve send → operator A → patient screen updated live ($68 offered) → operator
+sends revised statement → patient confirms → $68 confirmed → operator B → **Case resolved**, $0.00 in
+question. Branch C is covered by the service tests.
+
 ## Notes for the next steps
 
-- Steps 6–7 (UI) only need the API above; the case screen reads `view.state` and never computes
-  phase, savings, or the card itself.
-- Mark "Simulated billing office" on every operator screen; sends are already recorded as
-  "patient portal (simulated)".
+- Demo setup: patient on a phone or one window at `/?case=…`, teammate on `/operator?case=…` (case ID
+  is shown at the bottom of the case screen). Use `FINCHNODE_CONNECT=off` to skip the stuck sandbox.
+- Not yet checked at phone width; step 8 (LLM action pick) is optional.
 - The demo verdict numbers: questioned $122.00; confirms branch offers $68.00, then confirms $68.00
   after the revised statement ($321.00 → $253.00); disproves branch drops questioned to $68.00.
 

@@ -104,7 +104,7 @@ describe.each([
     expect((await state(c.caseId)).phase).toBe("verifying");
     expect((await confirmDocument(revised.documentId, AS_PRINTED)).ok).toBe(true);
     const v = await state(c.caseId);
-    expect(v.savings).toEqual({ questionedCents: 12200, offeredCents: 0, confirmedCents: 6800 });
+    expect(v.savings).toEqual({ questionedCents: 5400, offeredCents: 0, confirmedCents: 6800 });
     expect(v.verification?.removedLines).toEqual([5]);
     expect(v.tasks.every((t) => t.status === "done")).toBe(true);
     const view = await loadCase(c.caseId);
