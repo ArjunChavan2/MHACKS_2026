@@ -259,6 +259,8 @@ const IMESSAGE_REPLY_LABEL: Record<string, string> = {
  */
 function summarize(type: string, data: Record<string, unknown>): string {
   switch (type) {
+    case "letter_edited":
+      return data.reset ? "You reset the letter to its original wording" : "You saved personalized letter wording; the final version needs your approval";
     case "finding_selection_changed":
       return data.excluded ? "You excluded an issue from your dispute; its evidence is preserved" : "You restored an issue to your dispute";
     case "review_reopened":

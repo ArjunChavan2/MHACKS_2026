@@ -31,6 +31,7 @@ import {
   loadCase,
   reopenReview,
   setFindingExcluded,
+  editLetter,
 } from "@/lib/cases/service";
 import { memoryStore, pgStore, type CaseStore } from "@/lib/cases/store";
 import type { Finding } from "@/lib/types";
@@ -114,6 +115,79 @@ describe.each([
 ] as const)("adaptive case on the %s store", (_name, makeStore) => {
   beforeEach(() => {
     g.__mhStore = makeStore();
+  });
+
+  /** Personalization preserves sourced facts, persists on both stores, and invalidates earlier draft targets. */
+  it("saves personalized wording, protects facts, rejects stale edits and resets to original", async () => {
+    const c = await drafted();
+    const before = (await loadCase(c.caseId))!;
+    const draft = before.draft!;
+    const index = draft.paragraphs.findIndex(
+      (p, i) => !p.sources.length && i < draft.paragraphs.length - 1,
+    );
+    const input = {
+      expectedText: draft.paragraphs.map((p) => p.text),
+      edits: [{ index, text: "Hello billing team," }],
+      personalNote: "Please reply to me in writing.",
+      reset: false,
+    };
+    const edited = (await editLetter(c.caseId, input)).draft!;
+    expect(edited.paragraphs[index].text).toBe("Hello billing team,");
+    expect(
+      edited.paragraphs.some(
+        (p) => p.text === input.personalNote && p.patientProvided,
+      ),
+    ).toBe(true);
+    for (const paragraph of draft.paragraphs.filter((p) => p.sources.length))
+      expect(edited.paragraphs).toContainEqual(paragraph);
+    expect((await loadCase(c.caseId))!.draft).toEqual(edited);
+    const current = (await state(c.caseId)).next.target;
+    expect(current).not.toBe(before.state.next.target);
+    await expect(
+      runCaseAction(c.caseId, {
+        actionId: "send_dispute",
+        target: before.state.next.target,
+        approve: true,
+      }),
+    ).rejects.toThrow();
+    await expect(editLetter(c.caseId, input)).rejects.toThrow(/changed/);
+    const expectedText = edited.paragraphs.map((p) => p.text);
+    const sourced = draft.paragraphs.findIndex((p) => p.sources.length > 0);
+    await expect(
+      editLetter(c.caseId, {
+        ...input,
+        expectedText,
+        edits: [{ index: sourced, text: "An invented amount" }],
+      }),
+    ).rejects.toThrow(/facts/);
+    await expect(
+      editLetter(c.caseId, {
+        ...input,
+        expectedText,
+        edits: [
+          { index: draft.paragraphs.length - 1, text: "Remove disclaimer" },
+        ],
+      }),
+    ).rejects.toThrow(/disclaimer/);
+    const reset = (
+      await editLetter(c.caseId, {
+        expectedText,
+        edits: [],
+        personalNote: "",
+        reset: true,
+      })
+    ).draft!;
+    expect(reset.paragraphs).toEqual(draft.paragraphs);
+    expect(reset.patientEdited).toBe(false);
+    await send(c.caseId);
+    await expect(
+      editLetter(c.caseId, {
+        expectedText: reset.paragraphs.map((p) => p.text),
+        edits: [],
+        personalNote: "test",
+        reset: false,
+      }),
+    ).rejects.toThrow(/recorded approvals/);
   });
 
   /** Patient exclusions persist on either store, survive re-auditing, and never enter a new letter. */

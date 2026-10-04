@@ -466,6 +466,42 @@ export async function setFindingExcluded(
   return (await loadCase(caseId))!;
 }
 
+/**
+ * Personalizes the latest unsent letter using server-held originals. Sourced facts and the final
+ * disclaimer are immutable. Each save replaces the draft document, requiring fresh approval.
+ * @param caseId - Case owning the letter.
+ * @param input - Expected current text, edits to source-free paragraphs, a personal note, or reset.
+ * @returns Refreshed case containing the saved letter.
+ */
+export async function editLetter(caseId: string, input: { expectedText: string[]; edits: { index: number; text: string }[]; personalNote: string; reset: boolean }): Promise<CaseView> {
+  const store = getStore();
+  const c = await store.getCase(caseId);
+  if (!c) throw new BadRequestError("Unknown case");
+  if (c.events.some((e) => ["approval_recorded", "dispute_sent", "response_recorded", "consent_given", "call_recorded", "document_requested", "follow_up_sent"].includes(e.type)))
+    throw new BadRequestError("This case already has recorded approvals or correspondence. Its letter cannot be edited here.");
+  const document = c.documents.filter((d) => d.direction === "outgoing" && d.status !== "superseded" && d.draft).at(-1);
+  if (!document) throw new BadRequestError("No current letter to edit");
+  const current = document.draft as Draft;
+  if (JSON.stringify(current.paragraphs.map((p) => p.text)) !== JSON.stringify(input.expectedText))
+    throw new BadRequestError("This letter changed. Reload the case before editing it.");
+  const original = current.originalParagraphs ?? current.paragraphs;
+  const paragraphs = original.map((p) => ({ ...p }));
+  if (!input.reset) {
+    for (const edit of input.edits) {
+      const paragraph = original[edit.index];
+      if (!paragraph || paragraph.sources.length || edit.index === original.length - 1)
+        throw new BadRequestError("Document facts and the disclaimer cannot be edited. Correct the bill or EOB details instead.");
+      paragraphs[edit.index] = { ...paragraph, text: edit.text.trim(), patientProvided: edit.text.trim() !== paragraph.text };
+    }
+    if (input.personalNote.trim()) paragraphs.splice(paragraphs.length - 1, 0, { text: input.personalNote.trim(), sources: [], patientProvided: true });
+  }
+  const draft: Draft = { ...current, paragraphs, originalParagraphs: original, personalNote: input.reset ? "" : input.personalNote.trim(), patientEdited: !input.reset };
+  const documentId = await saveDraft(caseId, draft);
+  await store.saveDocument({ ...document, status: "superseded" });
+  await store.addEvent(caseId, "letter_edited", { documentId, previousDocumentId: document.id, reset: input.reset });
+  return (await loadCase(caseId))!;
+}
+
 /** Reopens an unsent review for corrections, preserving documents and superseded drafts in its history.
  * Refuses cases with recorded approvals or correspondence so editing cannot rewrite an active dispute.
  * @param caseId - Existing case whose bill and EOB should be reconfirmed.

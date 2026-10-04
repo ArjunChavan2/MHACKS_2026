@@ -1660,3 +1660,12 @@ h4 {
 .billless-excluded-findings { padding-top: 24px; border-top: 1px solid var(--paper-border); }
 .billless-excluded-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
 .billless-excluded-item button { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Letter personalization keeps the sourced evidence legible and editing controls within the shared column. */
+.billless-letter-editor { display: grid; gap: 20px; }
+.billless-letter-editor label { display: grid; gap: 8px; font-weight: 600; }
+.billless-letter-editor textarea { width: 100%; border: 1px solid var(--paper-border); border-radius: 12px; padding: 12px; font: inherit; font-weight: 400; resize: vertical; }
+.billless-letter-edit-paragraph { padding: 16px; border-radius: 12px; background: var(--paper-surface); overflow-wrap: anywhere; }
+.billless-letter-edit-paragraph small { color: var(--paper-muted); }
+.billless-letter-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.billless-personal-note { margin-top: 16px; }
