@@ -1297,17 +1297,8 @@ h4 {
 /* One friendly greeting per hover; touch devices avoid persistent hover states. */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .billless-home-receipt,
-  .billless-home-speech {
-    transition: transform 400ms ease;
-  }
-  .billless-home-art:hover .billless-home-billy img {
+  .billless-home-billy:hover img {
     animation: billless-home-greeting 1100ms ease-in-out;
-  }
-  .billless-home-art:hover .billless-home-receipt {
-    transform: translateY(-6px) rotate(-2deg);
-  }
-  .billless-home-art:hover .billless-home-speech {
-    transform: translateY(-4px) rotate(0deg);
   }
 }
 /* Whole-mascot bounce and wiggle keeps the existing illustration intact. */
@@ -1331,8 +1322,9 @@ h4 {
 }
 .billless-home-speech {
   position: absolute;
-  bottom: 30px;
-  left: 16px;
+  bottom: 248px;
+  right: 28px;
+  left: auto;
   background: white;
   border: 1px solid #dce6f0;
   border-radius: 16px 16px 0 16px;
@@ -1347,8 +1339,7 @@ h4 {
   pointer-events: none;
   transition: opacity 180ms ease, transform 180ms ease;
 }
-.billless-home-art:hover .billless-home-speech,
-.billless-home-art:focus-visible .billless-home-speech {
+.billless-home-billy:hover + .billless-home-speech {
   opacity: 1;
   transform: rotate(-3deg) translateY(0) scale(1);
 }
@@ -1434,7 +1425,8 @@ h4 {
     right: -16px;
   }
   .billless-home-speech {
-    left: 0;
+    bottom: 185px;
+    right: 18px;
   }
 }
 @media (max-width: 700px) {
@@ -1511,8 +1503,9 @@ h4 {
     bottom: 0;
   }
   .billless-home-speech {
-    bottom: 15px;
-    left: 0;
+    bottom: 180px;
+    right: 12px;
+    left: auto;
     padding: 12px 16px;
     font-size: 20px;
   }
@@ -1605,7 +1598,8 @@ h4 {
     right: 0;
   }
   .billless-home-speech {
-    bottom: 20px;
+    bottom: 185px;
+    right: 12px;
     font-size: 20px;
     padding: 12px 16px;
   }
@@ -1624,7 +1618,8 @@ h4 {
     right: 0;
   }
   .billless-home-speech {
-    bottom: 40px;
+    bottom: 150px;
+    right: 12px;
   }
 }
 @media (max-width: 360px) {
@@ -1640,6 +1635,8 @@ h4 {
     height: 170px;
   }
   .billless-home-speech {
+    bottom: 170px;
+    right: 8px;
     padding: 12px;
     font-size: 18px;
   }

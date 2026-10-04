@@ -79,7 +79,6 @@ export default async function Home({
             className="billless-home-art"
             role="group"
             aria-label="Billy the goat beside a synthetic bill example"
-            tabIndex={0}
           >
             <div className="billless-home-sky" aria-hidden="true" />
             <div className="billless-home-receipt">
