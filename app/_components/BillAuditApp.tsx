@@ -537,9 +537,6 @@ function StartScreen(props: {
           {busy ? "Reading your document…" : "Continue to confirm →"}
         </button>
       </div>
-      <p className="text-center text-sm text-[var(--paper-muted)]">
-        Use synthetic documents for this demo.
-      </p>
       <details className="billless-demo">
         <summary>Just exploring? Try a synthetic demo</summary>
         <div className="billless-demo-actions">
