@@ -388,6 +388,19 @@ export default function BillAuditApp() {
     });
   }
 
+  /** Persists a patient exclusion, refreshing the verdict and invalidating any older unsent draft. */
+  async function selectFinding(findingId: string, excluded: boolean) {
+    await run(async () => {
+      if (!caseId) return;
+      const view = await postJson<CaseView>(
+        `/api/cases/${encodeURIComponent(caseId)}/findings`,
+        { findingId, excluded },
+      );
+      applyCase(view);
+      setStep("audit");
+    });
+  }
+
   /** Requests the dispute letter. */
   async function makeLetter() {
     await run(async () => {
@@ -594,6 +607,7 @@ export default function BillAuditApp() {
           busy={busy}
           onLetter={makeLetter}
           onCorrect={correctDetails}
+          onSelectFinding={selectFinding}
         />
       )}
       {step === "request" && bill && (
@@ -629,11 +643,11 @@ export default function BillAuditApp() {
         />
       )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
-      {step !== "start" && <nav
-        className="paper-flow billless-back-navigation"
-        aria-label="Previous screen"
-      >
-
+      {step !== "start" && (
+        <nav
+          className="paper-flow billless-back-navigation"
+          aria-label="Previous screen"
+        >
           <button
             type="button"
             className="paper-secondary"
@@ -642,7 +656,8 @@ export default function BillAuditApp() {
           >
             ← {backLabel}
           </button>
-      </nav>}
+        </nav>
+      )}
     </main>
   );
 }
@@ -860,6 +875,7 @@ function AuditScreen({
   busy,
   onLetter,
   onCorrect,
+  onSelectFinding,
 }: {
   /** Audit response from our server. */
   audit: AuditResponse;
@@ -873,11 +889,19 @@ function AuditScreen({
   onLetter: () => void;
   /** Reopens document confirmation and invalidates the current audit and draft. */
   onCorrect: () => void;
+  /** Saves whether the patient wants to pursue a server-produced issue. */
+  onSelectFinding: (findingId: string, excluded: boolean) => void;
 }) {
   /** Expanded evidence panel, or null when all are collapsed. */
   const [open, setOpen] = useState<string | null>(null);
   /** Server-produced monetary verdict and evidence-backed findings. */
-  const { verdict, findings } = audit;
+  const { verdict } = audit;
+  /** Selected issues alone determine the next draft; excluded evidence stays available to restore. */
+  const findings = audit.findings.filter((finding) => !finding.patientExcluded);
+  /** Persisted issues the patient has chosen not to pursue. */
+  const excludedFindings = audit.findings.filter(
+    (finding) => finding.patientExcluded,
+  );
   // Every issue is the insurer's (e.g. a line it paid $0 for): point the patient to the insurer.
   const insurerOnly =
     findings.length > 0 && findings.every((f) => f.contact === "insurer");
@@ -945,7 +969,8 @@ function AuditScreen({
           <div className="billless-findings-heading">
             {findings.length > 0 && (
               <h3>
-                {findings.length} item{findings.length === 1 ? "" : "s"} to review
+                {findings.length} item{findings.length === 1 ? "" : "s"} to
+                review
               </h3>
             )}
             <button
@@ -973,6 +998,14 @@ function AuditScreen({
                     <span>{usd(finding.amountQuestionedCents)}</span>
                   </div>
                   <p className="paper-copy">{finding.ask}</p>
+                  <button
+                    className="paper-source-button billless-exclude-finding"
+                    disabled={busy}
+                    onClick={() => onSelectFinding(finding.id, true)}
+                    aria-label={`Exclude issue: ${finding.title}`}
+                  >
+                    Don’t include this issue
+                  </button>
                   <button
                     className="paper-source-button"
                     aria-expanded={open === finding.id}
@@ -1019,11 +1052,15 @@ function AuditScreen({
               <div className="paper-check" aria-hidden="true">
                 ✓
               </div>
-              <h3>No issues found in the checks we ran.</h3>
+              <h3>
+                {excludedFindings.length
+                  ? "No issues selected for your dispute."
+                  : "No issues found in the checks we ran."}
+              </h3>
               <p className="paper-copy">
-                Our supported checks did not flag this bill. This does not
-                guarantee every charge is correct or that the balance cannot be
-                reduced.
+                {excludedFindings.length
+                  ? "You’ve excluded every issue. Restore an issue below to include it in a draft."
+                  : "Our supported checks did not flag this bill. This does not guarantee every charge is correct or that the balance cannot be reduced."}
               </p>
               <div className="paper-evidence">
                 Supported checks: duplicate charges, bill vs. EOB when
@@ -1041,6 +1078,28 @@ function AuditScreen({
               >
                 View original bill ↗
               </a>
+            </div>
+          )}
+          {excludedFindings.length > 0 && (
+            <div className="billless-excluded-findings">
+              <h4>Excluded from your dispute ({excludedFindings.length})</h4>
+              <p className="paper-copy">
+                These issues won’t appear in your letter or call brief.
+                Excluding an issue does not verify the charge.
+              </p>
+              {excludedFindings.map((finding) => (
+                <div key={finding.id} className="billless-excluded-item">
+                  <span>{finding.title}</span>
+                  <button
+                    className="paper-source-button"
+                    disabled={busy}
+                    onClick={() => onSelectFinding(finding.id, false)}
+                    aria-label={`Restore issue: ${finding.title}`}
+                  >
+                    Restore issue
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -1653,3 +1653,9 @@ h4 {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Patient issue choices remain distinct from the evidence disclosure. */
+.billless-exclude-finding { display: block; text-decoration: underline; text-underline-offset: 3px; margin-bottom: 12px; }
+.billless-excluded-findings { padding-top: 24px; border-top: 1px solid var(--paper-border); }
+.billless-excluded-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+.billless-excluded-item button { text-decoration: underline; text-underline-offset: 3px; }

@@ -102,7 +102,9 @@ export interface NextAction {
 function open(findings: Finding[]): Finding[] {
   return findings.filter(
     (f) =>
-      f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified),
+      !f.patientExcluded &&
+      f.status !== "withdrawn" &&
+      !(f.status === "confirmed" && f.verified),
   );
 }
 
@@ -121,11 +123,12 @@ export function derivePhase(s: CaseSnapshot): CasePhase {
   if (!s.hasConfirmedBill) return "intake";
   if (!s.audited) return "audited";
   if (s.revisedAwaitingConfirmation) return "verifying";
-  if (!open(s.findings).length) return "resolved";
+  if (!open(s.findings).length)
+    return s.findings.some((f) => f.patientExcluded) ? "audited" : "resolved";
   if (openTasks(s.tasks, "request_document").length) return "awaiting_approval";
   if (openTasks(s.tasks, "await_document").length) return "waiting_document";
   const unverified = s.findings.some(
-    (f) => f.status === "confirmed" && !f.verified,
+    (f) => !f.patientExcluded && f.status === "confirmed" && !f.verified,
   );
   if (unverified) return "awaiting_approval";
   if (s.dispute && !s.dispute.sent) return "awaiting_approval";
@@ -216,7 +219,7 @@ export function allowedActions(
       action(s, "request_document", `Request: ${t.documentNeeded}`, t.id),
     );
   const needsRevised = s.findings.some(
-    (f) => f.status === "confirmed" && !f.verified,
+    (f) => !f.patientExcluded && f.status === "confirmed" && !f.verified,
   );
   const revisedTask = s.tasks.some(
     (t) => t.status === "open" && t.documentNeeded === REVISED_STATEMENT,
@@ -342,9 +345,13 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
     const any = s.findings.length > 0;
     return card({
       actionId: "wait",
-      title: any ? "Case resolved" : "No issues found",
+      title: s.findings.some((f) => f.patientExcluded)
+        ? "No issues selected"
+        : any
+          ? "Case resolved"
+          : "No issues found",
       why: any
-        ? "Every issue is either verified on a revised statement or withdrawn with evidence."
+        ? "No issues remain to pursue. Issues may be verified, withdrawn with evidence, or excluded by you."
         : "The checks found nothing to question on this bill.",
       needed: null,
       responsibleParty: "Nobody",
@@ -381,7 +388,8 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       actionId: "wait",
       title: "Call your insurer about the unpaid charge",
       why: `${describe(forInsurer)}. The provider billed what your EOB says, so only your insurer can reprocess it or start an appeal. Billy can make this call for you.`,
-      needed: "Ask the insurer why it paid nothing, whether it can reprocess the claim, and how to appeal",
+      needed:
+        "Ask the insurer why it paid nothing, whether it can reprocess the claim, and how to appeal",
       responsibleParty: "Your insurer",
       deadline: null,
       citedFindingIds: forInsurer.map((f) => f.id),
@@ -464,7 +472,7 @@ export function recommendAction(s: CaseSnapshot, today: IsoDate): NextAction {
       citedFindingIds: t.findingId ? [t.findingId] : ids,
     });
   }
-  if (s.findings.some((f) => f.status === "confirmed" && !f.verified)) {
+  if (s.findings.some((f) => !f.patientExcluded && f.status === "confirmed" && !f.verified)) {
     return card({
       actionId: "request_revised_statement",
       title: "Request a revised statement",

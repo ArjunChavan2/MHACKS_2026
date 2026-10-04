@@ -58,6 +58,20 @@ describe("buildCallBrief", () => {
     expect(brief.firstMessage).not.toMatch(/billing office/);
     expect(brief.prompt).toContain("calling the INSURER");
   });
+  /** Patient exclusions must never appear in the call prompt or generate a call on their own. */
+  it("skips issues the patient excluded", async () => {
+    const bill = await confirmedSampleBill();
+    const eob = await confirmedSampleEob();
+    const excluded = findDuplicateCharges(bill).map((f) => ({
+      ...f,
+      patientExcluded: true,
+    }));
+    expect(buildCallBrief(bill, eob, excluded)).toBeNull();
+    const selected = findBillExceedsEob(bill, eob);
+    const brief = buildCallBrief(bill, eob, [...excluded, ...selected])!;
+    for (const finding of excluded)
+      expect(brief.prompt).not.toContain(finding.letterText);
+  });
   /** Proves there is no brief when nothing is open. */
   it("returns null with no open findings", async () => {
     expect(buildCallBrief(await confirmedSampleBill(), null, [])).toBeNull();

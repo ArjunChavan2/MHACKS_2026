@@ -292,6 +292,8 @@ export interface Finding {
   id: string;
   /** Rule that produced it. */
   rule: RuleId;
+  /** Patient chose not to pursue this issue; does not change its evidence or status. */
+  patientExcluded?: boolean;
   /** Current status. */
   status: FindingStatus;
   /** Short plain-language title, written by code from a template. */

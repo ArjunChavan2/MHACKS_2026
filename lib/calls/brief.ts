@@ -52,7 +52,7 @@ ENDING THE CALL:
  * @returns The brief, or null when there is nothing to call about.
  */
 export function buildCallBrief(bill: ConfirmedBill, eob: ConfirmedEob | null, findings: Finding[]): CallBrief | null {
-  const open = findings.filter((f) => f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified));
+  const open = findings.filter((f) => !f.patientExcluded && f.status !== "withdrawn" && !(f.status === "confirmed" && f.verified));
   if (!open.length) return null;
   const forInsurer = open.filter((f) => f.contact === "insurer");
   const mode: CallMode = forInsurer.length === open.length && eob ? "insurer" : "billing";
