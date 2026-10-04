@@ -780,6 +780,7 @@ h4 {
   align-items: center;
   gap: 24px;
 }
+.billless-upload-back { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; white-space: nowrap; }
 .billless-continue-row .paper-primary {
   min-width: 280px;
 }
@@ -943,10 +944,13 @@ h4 {
     border-radius: 20px;
   }
   .billless-continue-row {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: stretch;
     gap: 16px;
   }
+  .billless-continue-row .billless-action-progress { grid-column: 1 / -1; grid-row: 1; }
+  .billless-continue-row .paper-primary { padding-inline: 12px; }
   .billless-continue-row .paper-primary {
     width: 100%;
     min-width: 0;
