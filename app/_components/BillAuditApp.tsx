@@ -895,7 +895,7 @@ function AuditScreen({
   }
 
   return (
-    <section className="space-y-8">
+    <section className="paper-flow space-y-8">
       {findings.length === 0 && (
         <div className="paper-case-heading">
           <span className="paper-badge">✓ Review complete</span>
