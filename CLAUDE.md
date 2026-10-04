@@ -47,4 +47,10 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
   `subject` null, `GET /users` empty (every attempt 2026-10-04). Not our bug. Workaround:
   `lib/finchnode/live.ts` falls back to the demo API, then the saved snapshot; failed Connect is
   cached for 10 min so audits don't each wait 45 s.
+- **Grok uploads returned "unknown document" on Vercel only.** Two causes: PDF.js's worker
+  (`pdf.worker.mjs`) is loaded by a runtime import the tracer misses, and PDF.js drew non-embedded
+  standard fonts (Courier) with system fonts, which serverless Linux doesn't have, so pages rendered
+  blank. Fix: `outputFileTracingIncludes` in `next.config.ts` (worker, `standard_fonts`, fixtures) and
+  `useSystemFonts: false` + `standardFontDataUrl` in `lib/llm/pdfPages.ts`. Test uploads on the live URL.
+- **`vercel link` rewrites `.env.local`** (it added `VERCEL_OIDC_TOKEN`; keys survived). Back it up first.
 - **New Gemini keys start with `AQ.`**, not `AIza`; that's Google's new format, not a wrong key.
