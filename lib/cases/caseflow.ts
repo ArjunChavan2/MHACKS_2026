@@ -55,6 +55,7 @@ import {
   latestFinishedCallId,
   type CallRecord,
 } from "@/lib/calls/history";
+import { consentStateOf, type ConsentState } from "./consent";
 
 /** Correspondence samples the operator console can attach (`fixtures/documents/<name>.pdf`). */
 export const CORRESPONDENCE_SAMPLES: Record<string, string> = {
@@ -95,6 +96,8 @@ export interface CaseState {
   timeline: TimelineEntry[];
   /** Calls saved to this case, oldest first, with transcripts as recorded. */
   calls: CallRecord[];
+  /** Live-call consent (demo stand-in for identity verification). */
+  consent: ConsentState;
 }
 
 /**
@@ -225,6 +228,7 @@ const HIDDEN_EVENTS: ReadonlySet<string> = new Set([
   "imessage_outbox",
   "imessage_superseded",
   "imessage_notified",
+  "imessage_direct",
 ]);
 
 /** How an iMessage reply reads on the timeline, by intent. */
@@ -287,6 +291,10 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return `You texted ${IMESSAGE_REPLY_LABEL[String(data.intent)] ?? String(data.intent)}${data.result === "approved" ? " (approved)" : data.result === "declined" ? " (holding)" : ""}`;
     case "call_recorded":
       return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
+    case "consent_requested":
+      return `Billy asked for your consent on a call with ${String(data.counterparty ?? "the billing office")}`;
+    case "consent_given":
+      return `You consented to Billy representing you (${data.via === "imessage" ? "by iMessage" : "on the web"})`;
     default:
       return type.replaceAll("_", " ");
   }
@@ -314,6 +322,7 @@ export function caseStateOf(c: StoredCase): CaseState {
         : null,
     verification,
     calls: eventsOf<CallRecord>(c, "call_recorded"),
+    consent: consentStateOf(c),
     timeline: c.events
       .filter((e) => !HIDDEN_EVENTS.has(e.type))
       .map((e) => ({

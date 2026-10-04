@@ -12,6 +12,7 @@
  * `runCaseAction` gate as the web button. Anything else is refused with the current status.
  */
 import { ActionRefusedError, runCaseAction } from "@/lib/cases/caseflow";
+import { isConsentPhrase, recordConsent } from "@/lib/cases/consent";
 import type { ActionId } from "@/lib/cases/machine";
 import { loadCase, type CaseView } from "@/lib/cases/service";
 import { getStore, newId, type StoredCase } from "@/lib/cases/store";
@@ -345,6 +346,14 @@ export async function handleInbound(
   const caseId = await caseForHandle(handle);
   if (!caseId)
     return "This number isn't linked to a case yet. Open your case on the web and text the LINK code it shows, e.g. LINK 4F7K2Q.";
+  if (isConsentPhrase(text)) {
+    await recordConsent(caseId, text, "imessage");
+    await store.addEvent(caseId, "imessage_reply", {
+      intent: "consent",
+      result: "recorded",
+    });
+    return "Thanks. Billy will tell the billing office you consent to him representing you.";
+  }
   const { c, view } = await loadBoth(caseId);
   const url = caseLink(baseUrl, caseId);
   switch (intent.kind) {
@@ -454,6 +463,14 @@ export async function pendingOutbox(baseUrl: string): Promise<OutboxItem[]> {
     if (current)
       for (const handle of handles)
         out.push({ messageId: current.messageId, handle, text: current.text });
+    // Direct messages (e.g. a consent request during a live call) are always delivered, never superseded.
+    for (const d of eventsOf<{ messageId: string; text: string }>(
+      c,
+      "imessage_direct",
+    ).filter((m) => !sent.has(m.messageId))) {
+      for (const handle of handles)
+        out.push({ messageId: d.messageId, handle, text: d.text });
+    }
   }
   return out;
 }
@@ -466,6 +483,20 @@ export async function pendingOutbox(baseUrl: string): Promise<OutboxItem[]> {
  */
 export async function ack(messageId: string): Promise<boolean> {
   const store = getStore();
+  const [direct] = await store.findCasesByEvent("imessage_direct", {
+    messageId,
+  });
+  if (direct) {
+    const dc = await store.getCase(direct);
+    if (
+      dc &&
+      !eventsOf<{ messageId: string }>(dc, "imessage_sent").some(
+        (e) => e.messageId === messageId,
+      )
+    )
+      await store.addEvent(direct, "imessage_sent", { messageId });
+    return true;
+  }
   const [caseId] = await store.findCasesByEvent("imessage_outbox", {
     messageId,
   });

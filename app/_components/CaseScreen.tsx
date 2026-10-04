@@ -139,6 +139,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
+  const [consentText, setConsentText] = useState("");
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
 
   /** Reloads the case after an action. */
@@ -186,6 +187,28 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
       clearInterval(t);
     };
   }, [caseId]);
+
+  /**
+   * Runs a case action. `approve` is true only for the patient's explicit approve button.
+   *
+   * @param actionId - Action.
+   * @param target - Task or document ID.
+   * @param approve - Whether this press is the approval.
+   */
+  /** Sends the typed consent phrase (demo stand-in for the iMessage reply). */
+  async function giveConsent() {
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/cases/${caseId}/consent`, { text: consentText });
+      setConsentText("");
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   /** Saves the agent's latest finished call (transcript as recorded) to this case. */
   async function addLatestCall() {
@@ -407,6 +430,56 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
           </button>
         )}
       </section>
+      {s.consent?.pendingRequest && (
+        <section
+          className="rounded-xl bg-amber-50 p-4 ring-2 ring-amber-300"
+          aria-live="assertive"
+        >
+          <p className="paper-eyebrow">BILLY NEEDS YOU ON A LIVE CALL</p>
+          <h3 className="mt-1 text-lg font-semibold">
+            The billing office needs your consent
+          </h3>
+          <p className="paper-copy text-sm">
+            Billy is on the phone and the office needs to know you agree to him
+            representing you. Reply by iMessage, or type the phrase here
+            exactly:
+          </p>
+          <p className="my-2 font-mono text-sm font-semibold">
+            I consent to Billy representing me
+          </p>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void giveConsent();
+            }}
+          >
+            <input
+              value={consentText}
+              onChange={(e) => setConsentText(e.target.value)}
+              className="flex-1 rounded-md bg-white px-3 py-2 ring-1 ring-[var(--paper-border)]"
+              aria-label="Consent phrase"
+              placeholder="I consent to Billy representing me"
+            />
+            <button
+              className="paper-primary"
+              disabled={busy || !consentText.trim()}
+              type="submit"
+            >
+              Send
+            </button>
+          </form>
+          <p className="mt-2 text-xs text-[var(--paper-muted)]">
+            Demo only: typed consent stands in for identity verification.
+          </p>
+        </section>
+      )}
+      {!s.consent?.pendingRequest && s.consent?.givenAt && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">
+          You consented to Billy representing you (
+          {s.consent.via === "imessage" ? "by iMessage" : "on the web"}).
+        </p>
+      )}
 
       <aside className="paper-next" aria-label="What happens next">
         <p className="paper-eyebrow">WHAT HAPPENS NEXT?</p>

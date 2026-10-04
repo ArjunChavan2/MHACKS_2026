@@ -33,7 +33,7 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 
 ## Patient case screen completion (2026-10-04)
 
-On branch `feat/mvp2-case-journey`: saved goals and explicit restrictions, honest processing/retry feedback, patient document attachment/confirmation from an active case, source-preserving EOB rechecks, and guarded revised-statement verification. See `agent-notes/mvp2-screen-shortfalls/IMPLEMENTATION.md` and `TEST_RESULTS.md`. 153 tests, lint, types and production build pass; synthetic browser checks cover desktop and narrow phones. No migration. Live call/denial UI remain later-rung work. Preview: http://localhost:3002/review in the isolated worktree `/private/tmp/billless-case-journey`.
+On branch `feat/mvp2-case-journey`: saved goals and explicit restrictions, honest processing/retry feedback, patient document attachment/confirmation from an active case, source-preserving EOB rechecks, and guarded revised-statement verification. See `agent-notes/mvp2-screen-shortfalls/IMPLEMENTATION.md` and `TEST_RESULTS.md`. 158 tests, lint, types and production build pass; synthetic browser checks cover desktop and narrow phones. No migration. Live call/denial UI remain later-rung work. Preview: http://localhost:3002/review in the isolated worktree `/private/tmp/billless-case-journey`.
 
 ## State right now (updated 2026-10-03 night)
 
