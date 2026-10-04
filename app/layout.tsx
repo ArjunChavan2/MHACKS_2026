@@ -6,8 +6,9 @@ import "./globals.css";
 
 /** Page metadata. */
 export const metadata: Metadata = {
-  title: "Bill Advocate",
-  description: "Check a medical bill against your records and draft a cited dispute letter.",
+  title: "Billkind | Your medical bill, made clearer",
+  description:
+    "Check a medical bill against your records and draft a cited dispute letter.",
 };
 
 /** Mobile viewport settings. */
@@ -19,10 +20,14 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
  * @param props.children - Page content.
  * @returns The HTML shell.
  */
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">{children}</body>
+      <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
 }
