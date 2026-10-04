@@ -52,6 +52,7 @@ Progress per rung is the Status column in SPEC.md §6.
   findings, events, drafted letters, original files); `?case=<id>` reloads a case. Migrations in
   `db/migrations/` (`npm run db:migrate`, `db:check`). Teammates: `neon login`, then
   `neon link --project-id snowy-star-63367096 --branch production -y` to get `.env.local`.
+  Full teammate guide: `docs/NEON_SETUP.md`.
   Next for MVP 1: run the audit and test phases, then start MVP 2.
 - SPEC.md is complete through: product, rules, agent model, capabilities (full extraction spec in
   §4.2), engineering rules and docstrings, MVP ladder (MVP 0–6, with status), obstacle register

@@ -23,3 +23,4 @@ before changing code. This file only points there and repeats the rules that mus
   - No secrets, no real patient data, no AI authors or co-authors on commits.
 - Build plan: SPEC.md §6 (MVP ladder). Work on the current MVP rung only.
 - Team workflow and prompts: SPEC.md §13 and `CLAUDE.md`.
+- Database setup (Neon): `docs/NEON_SETUP.md`.
