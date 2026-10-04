@@ -896,13 +896,11 @@ function AuditScreen({
 
   return (
     <section className="space-y-8">
-      <div className="paper-case-heading">
-        <span
-          className={`paper-badge ${findings.length ? "paper-review-badge" : ""}`}
-        >
-          {findings.length ? "◷ Review ready" : "✓ Review complete"}
-        </span>
-      </div>
+      {findings.length === 0 && (
+        <div className="paper-case-heading">
+          <span className="paper-badge">✓ Review complete</span>
+        </div>
+      )}
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
