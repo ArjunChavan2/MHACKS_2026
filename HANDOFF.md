@@ -14,7 +14,7 @@ and what to do next. Delete or overwrite it when it goes stale.
 | Google Doc | "MHacks 2026", Drive ID `1S4FueYPu7byvy9Q3Qk__S0C31WRCCDMtkgiwihTp9xQ` |
 | Official prizes | safe-banon-80d.notion.site/Tracks-Prizes-3ed24ca0c81b80579aeff03edfa88af5 and mhacks-2026.devpost.com |
 
-### Google Doc tabs (IDs for the Docs API)
+### Google Doc tabs (IDs for the Docs API) 
 
 | Tab | ID | State |
 |---|---|---|
