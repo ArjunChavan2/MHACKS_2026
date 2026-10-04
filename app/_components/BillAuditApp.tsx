@@ -478,7 +478,6 @@ export default function BillAuditApp() {
         </p>
       )}
 
-      {processingFile && <ProcessingStatus filename={processingFile} />}
       {retryFile && !busy && (
         <div className="paper-flow">
           <button className="paper-secondary" onClick={() => upload(retryFile)}>
@@ -501,6 +500,7 @@ export default function BillAuditApp() {
           onNext={next}
         />
       )}
+      {processingFile && <ProcessingStatus filename={processingFile} />}
       {step === "confirm" && bill && (
         <section className="paper-flow space-y-6">
           <ConfirmPanel title="Your bill" doc={bill} onChange={setBill} />
