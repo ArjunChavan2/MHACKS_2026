@@ -1,0 +1,248 @@
+"use client";
+/** @file Shared patient confirmation UI for intake and case arrivals (SPEC.md §4.2). No audit logic. */
+import { useMemo, useState } from "react";
+import type { IngestResponse } from "@/lib/cases/service";
+import type { ExtractionResult } from "@/lib/extract/pipeline";
+import type { Field } from "@/lib/types";
+import { fieldLabel } from "@/lib/format";
+
+/** One uploaded document as tracked in the browser. */
+export interface DocState {
+  /** Server response for the document. */
+  ingest: IngestResponse;
+  /** Patient corrections by field path. */
+  corrections: Record<string, string | null>;
+  /** Paths the patient confirmed as printed. */
+  confirmedPaths: string[];
+  /** Whether the patient acknowledged that printed totals don't add up. */
+  ackTotals: boolean;
+  /** Whether the server locked the confirmation. */
+  confirmed: boolean;
+  /** Messages that blocked the last confirmation attempt. */
+  blocking: string[];
+}
+
+/**
+ * Lists every field in an extraction with its path, in document order.
+ *
+ * @param r - Extraction result (bill or EOB).
+ * @returns Path/field pairs; empty for unsupported documents.
+ */
+function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
+  const out: Array<[string, Field<unknown>]> = [];
+  if (r.kind === "bill") {
+    for (const [k, f] of Object.entries(r.bill.header))
+      out.push([`header.${k}`, f]);
+    r.bill.lines.forEach((l, i) =>
+      Object.entries(l).forEach(([k, f]) =>
+        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
+      ),
+    );
+  } else if (r.kind === "eob") {
+    const { insurer, claimNumber, provider, totalPatientResponsibility } =
+      r.eob;
+    out.push(
+      ["insurer", insurer],
+      ["claimNumber", claimNumber],
+      ["provider", provider],
+      ["totalPatientResponsibility", totalPatientResponsibility],
+    );
+    r.eob.lines.forEach((l, i) =>
+      Object.entries(l).forEach(([k, f]) =>
+        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
+      ),
+    );
+  }
+  return out;
+}
+
+/**
+ * Confirm panel for one document: preview, flagged fields first, verified fields in one tap.
+ *
+ * @param props.title - Panel heading.
+ * @param props.doc - Document state.
+ * @param props.onChange - Updates the document state.
+ * @returns The confirm panel.
+ */
+export default function ConfirmPanel({
+  title,
+  doc,
+  onChange,
+}: {
+  title: string;
+  doc: DocState;
+  onChange: (d: DocState) => void;
+}) {
+  const fields = useMemo(
+    () => listFields(doc.ingest.result),
+    [doc.ingest.result],
+  );
+  const flagged = fields.filter(
+    ([, f]) => f.verification === "needs_attention",
+  );
+  const verified = fields.filter(
+    ([, f]) => f.verification === "verified" && f.status !== "absent",
+  );
+  const r = doc.ingest.result;
+  const docIssues =
+    r.kind === "bill"
+      ? r.bill.documentIssues
+      : r.kind === "eob"
+        ? r.eob.documentIssues
+        : [];
+  const [showVerified, setShowVerified] = useState(false);
+  const [previewPage, setPreviewPage] = useState(1);
+
+  /**
+   * Records a correction for a field.
+   *
+   * @param path - Field path.
+   * @param value - New raw value.
+   */
+  function correct(path: string, value: string) {
+    onChange({ ...doc, corrections: { ...doc.corrections, [path]: value } });
+  }
+
+  /**
+   * Toggles "confirmed as printed" for a flagged field.
+   *
+   * @param path - Field path.
+   */
+  function toggleConfirm(path: string) {
+    const has = doc.confirmedPaths.includes(path);
+    onChange({
+      ...doc,
+      confirmedPaths: has
+        ? doc.confirmedPaths.filter((p) => p !== path)
+        : [...doc.confirmedPaths, path],
+    });
+  }
+
+  return (
+    <div className="billless-document-card">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {doc.confirmed && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+            Confirmed and locked
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-[var(--paper-muted)]">
+        {r.meta.textLayerChecked
+          ? "Values were cross-checked against the PDF's own text."
+          : "Photo or scan: please check every value carefully."}
+      </p>
+      <iframe
+        title={`${title} preview`}
+        src={`/api/documents/${doc.ingest.documentId}/file#page=${previewPage}`}
+        className="mt-3 h-72 w-full rounded-md ring-1 ring-[var(--paper-border)]"
+      />
+
+      {docIssues.length > 0 && (
+        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+          {docIssues.map((m) => (
+            <p key={m}>{m}</p>
+          ))}
+          <label className="mt-2 flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={doc.ackTotals}
+              onChange={(e) =>
+                onChange({ ...doc, ackTotals: e.target.checked })
+              }
+            />
+            <span>
+              I checked the document: the printed totals themselves don&apos;t
+              add up (this is how the bill is printed).
+            </span>
+          </label>
+        </div>
+      )}
+
+      <h3 className="mt-5 text-sm font-semibold">
+        Needs your attention ({flagged.length})
+      </h3>
+      {flagged.length === 0 && (
+        <p className="text-sm text-[var(--paper-muted)]">Nothing flagged.</p>
+      )}
+      <ul className="mt-2 space-y-3">
+        {flagged.map(([path, f]) => (
+          <li
+            key={path}
+            className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200"
+          >
+            <div className="flex items-center justify-between text-sm font-medium">
+              <span>{fieldLabel(path)}</span>
+              {f.page && (
+                <button
+                  className="text-xs text-[var(--paper-muted)] underline"
+                  onClick={() => setPreviewPage(f.page ?? 1)}
+                >
+                  page {f.page}
+                </button>
+              )}
+            </div>
+            {f.issues.map((m) => (
+              <p key={m} className="text-xs text-amber-900">
+                {m}
+              </p>
+            ))}
+            {f.snippet && (
+              <p className="mt-1 rounded bg-white px-2 py-1 font-mono text-xs text-[var(--paper-muted)]">
+                “{f.snippet}”
+              </p>
+            )}
+            <div className="billless-correction-row">
+              <input
+                className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
+                aria-label={`Correct ${fieldLabel(path)}`}
+                value={doc.corrections[path] ?? f.raw ?? ""}
+                placeholder="[to confirm]"
+                onChange={(e) => correct(path, e.target.value)}
+              />
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={doc.confirmedPaths.includes(path)}
+                  onChange={() => toggleConfirm(path)}
+                />{" "}
+                matches the document
+              </label>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        className="paper-source-button mt-4"
+        aria-expanded={showVerified}
+        onClick={() => setShowVerified((s) => !s)}
+      >
+        {showVerified ? "Hide" : "Review"} {verified.length} verified values
+      </button>
+      {showVerified && (
+        <ul className="mt-2 divide-y divide-slate-100 text-sm">
+          {verified.map(([path, f]) => (
+            <li key={path} className="billless-verified-row">
+              <span className="text-[var(--paper-muted)]">
+                {fieldLabel(path)}
+              </span>
+              <span className="font-mono">{f.raw}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {doc.blocking.length > 0 && (
+        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+          <p className="font-medium">
+            Still needs fixing before we can check the bill:
+          </p>
+          {doc.blocking.map((m) => (
+            <p key={m}>• {m}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -4,26 +4,65 @@
  *
  * Every step appends a case event (SPEC.md §4.6). Drafted letters are saved as outgoing documents.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { computeVerdict, runAudit } from "@/lib/audit";
-import { draftDisputeLetter, draftItemizedBillRequest } from "@/lib/draft/letters";
+import {
+  draftDisputeLetter,
+  draftItemizedBillRequest,
+} from "@/lib/draft/letters";
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
-import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
+import {
+  confirmBill,
+  confirmEob,
+  type ConfirmInput,
+} from "@/lib/extract/confirm";
 import { confirmDenial, denialFields } from "@/lib/extract/denial";
 import { evaluateDenial, type DenialEvaluation } from "@/lib/appeals/criteria";
-import { draftAppealLetter, draftDocumentationRequest } from "@/lib/appeals/letter";
-import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
+import {
+  draftAppealLetter,
+  draftDocumentationRequest,
+} from "@/lib/appeals/letter";
+import {
+  extractDocument,
+  extractFromSavedReply,
+  type ExtractionResult,
+} from "@/lib/extract/pipeline";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
-import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
+import {
+  caseStateOf,
+  verifyRevisedStatement,
+  type CaseState,
+} from "./caseflow";
+import { validateCaseDocument, resumeCaseDocument } from "./attachments";
 import { billEobMismatches, revisedMismatches } from "./consistency";
-import { mergeFindings } from "./responses";
-import type { AuditResult, ConfirmedBill, ConfirmedDenial, ConfirmedEob, Draft, ExtractedBill, ExtractedDenial, ExtractedEob, Finding, Verdict } from "@/lib/types";
+import { mergeFindings, CaseRuleError } from "./responses";
+import type {
+  AuditResult,
+  ConfirmedBill,
+  ConfirmedDenial,
+  ConfirmedEob,
+  Draft,
+  ExtractedBill,
+  ExtractedDenial,
+  ExtractedEob,
+  Finding,
+  Verdict,
+} from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
 
 /** Names of the saved sample documents available for the labeled no-AI path. */
-export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection", "revised-statement", "denial-letter"] as const;
+export const SAMPLE_NAMES = [
+  "sample-bill",
+  "sample-eob",
+  "balance-statement",
+  "bill-broken-totals",
+  "bill-injection",
+  "revised-statement",
+  "denial-letter",
+] as const;
 
 /** A sample document name. */
 export type SampleName = (typeof SAMPLE_NAMES)[number];
@@ -51,7 +90,14 @@ export interface CaseView {
   caseId: string;
   status: string;
   /** Incoming bills and EOBs in upload order, with whether each is confirmed and locked. */
-  documents: Array<{ ingest: IngestResponse; confirmed: boolean }>;
+  documents: Array<{
+    ingest: IngestResponse;
+    confirmed: boolean;
+    /** Stored filename, including sample labels. */
+    fileName?: string | null;
+    /** Patient-selected paperwork task, retained across reload for pending confirmation. */
+    taskId?: string;
+  }>;
   /** The latest audit, or `null` if none has run. */
   audit: AuditResponse | null;
   /** The latest drafted letter or request, or `null`. */
@@ -77,7 +123,8 @@ export class BadRequestError extends Error {
 function attentionOf(result: ExtractionResult): string[] {
   if (result.kind === "bill") return needsAttention(billFields(result.bill));
   if (result.kind === "eob") return needsAttention(eobFields(result.eob));
-  if (result.kind === "denial") return needsAttention(denialFields(result.denial));
+  if (result.kind === "denial")
+    return needsAttention(denialFields(result.denial));
   return [];
 }
 
@@ -90,12 +137,25 @@ function attentionOf(result: ExtractionResult): string[] {
  * @param result - Extraction result.
  * @returns The ingest response.
  */
-async function save(caseId: string | null, fileName: string, storageKey: string, result: ExtractionResult): Promise<IngestResponse> {
+async function save(
+  caseId: string | null,
+  fileName: string,
+  storageKey: string,
+  result: ExtractionResult,
+): Promise<IngestResponse> {
   const store = getStore();
-  if (caseId && !(await store.getCase(caseId))) throw new BadRequestError("Unknown case");
+  if (caseId && !(await store.getCase(caseId)))
+    throw new BadRequestError("Unknown case");
   const cid = caseId ?? (await store.createCase(null));
   const documentId = newId("doc");
-  const docType = result.kind === "bill" ? result.bill.docType : result.kind === "eob" ? "eob" : result.kind === "denial" ? "denial_letter" : result.docType;
+  const docType =
+    result.kind === "bill"
+      ? result.bill.docType
+      : result.kind === "eob"
+        ? "eob"
+        : result.kind === "denial"
+          ? "denial_letter"
+          : result.docType;
   await store.saveDocument({
     id: documentId,
     caseId: cid,
@@ -104,12 +164,24 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
     status: "received",
     fileName,
     storageKey,
-    extraction: result.kind === "bill" ? result.bill : result.kind === "eob" ? result.eob : result.kind === "denial" ? result.denial : null,
+    extraction:
+      result.kind === "bill"
+        ? result.bill
+        : result.kind === "eob"
+          ? result.eob
+          : result.kind === "denial"
+            ? result.denial
+            : null,
     extractionMeta: result.meta,
     confirmed: null,
     draft: null,
   });
-  await store.addEvent(cid, "document_received", { documentId, docType, source: result.meta.source, fileName });
+  await store.addEvent(cid, "document_received", {
+    documentId,
+    docType,
+    source: result.meta.source,
+    fileName,
+  });
   return { caseId: cid, documentId, result, attention: attentionOf(result) };
 }
 
@@ -120,15 +192,47 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
  * @param fileName - Original file name.
  * @param mimeType - MIME type (PDF, JPEG, PNG, HEIC, WEBP).
  * @param bytes - File bytes.
- * @returns The ingest response.
- * @throws {BadRequestError} For unsupported file types.
+ * @returns The ingest response; identical bytes already on a known case reuse its document.
+ * Sequential retries are idempotent within an existing case; first uploads without a case ID are not.
+ * @throws {BadRequestError} For unsupported file types or unknown cases.
  * @throws {import("@/lib/llm").LlmUnavailableError} When the active AI provider's key is not set.
  */
-export async function ingestUpload(caseId: string | null, fileName: string, mimeType: string, bytes: Uint8Array): Promise<IngestResponse> {
-  const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
-  if (!allowed.includes(mimeType)) throw new BadRequestError(`Unsupported file type ${mimeType}. Upload a PDF or a photo.`);
+export async function ingestUpload(
+  caseId: string | null,
+  fileName: string,
+  mimeType: string,
+  bytes: Uint8Array,
+): Promise<IngestResponse> {
+  const allowed = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+  ];
+  if (!allowed.includes(mimeType))
+    throw new BadRequestError(
+      `Unsupported file type ${mimeType}. Upload a PDF or a photo.`,
+    );
+  if (caseId) {
+    const existing = await getStore().getCase(caseId);
+    if (!existing) throw new BadRequestError("Unknown case");
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    for (const doc of existing.documents) {
+      if (doc.direction !== "incoming" || !doc.storageKey) continue;
+      const file = await getStore().getFile(doc.storageKey);
+      if (
+        file?.mimeType === mimeType &&
+        createHash("sha256").update(file.bytes).digest("hex") === digest
+      ) {
+        const prior = ingestOf(doc);
+        if (prior) return prior;
+      }
+    }
+  }
+  const result = await extractDocument({ mimeType, bytes });
   const key = await getStore().putFile(bytes, mimeType);
-  return save(caseId, fileName, key, await extractDocument({ mimeType, bytes }));
+  return save(caseId, fileName, key, result);
 }
 
 /**
@@ -139,13 +243,26 @@ export async function ingestUpload(caseId: string | null, fileName: string, mime
  * @returns The ingest response with `meta.source === "saved-fixture"`.
  * @throws {BadRequestError} For unknown sample names.
  */
-export async function ingestSample(caseId: string | null, name: string): Promise<IngestResponse> {
-  if (!(SAMPLE_NAMES as readonly string[]).includes(name)) throw new BadRequestError(`Unknown sample ${name}`);
+export async function ingestSample(
+  caseId: string | null,
+  name: string,
+): Promise<IngestResponse> {
+  if (!(SAMPLE_NAMES as readonly string[]).includes(name))
+    throw new BadRequestError(`Unknown sample ${name}`);
   const dir = join(process.cwd(), "fixtures");
-  const pdf = new Uint8Array(readFileSync(join(dir, "documents", `${name}.pdf`)));
-  const raw = JSON.parse(readFileSync(join(dir, "llm-output", `${name}.json`), "utf8"));
+  const pdf = new Uint8Array(
+    readFileSync(join(dir, "documents", `${name}.pdf`)),
+  );
+  const raw = JSON.parse(
+    readFileSync(join(dir, "llm-output", `${name}.json`), "utf8"),
+  );
   const key = await getStore().putFile(pdf, "application/pdf");
-  return save(caseId, `${name}.pdf (sample)`, key, await extractFromSavedReply(raw, pdf));
+  return save(
+    caseId,
+    `${name}.pdf (sample)`,
+    key,
+    await extractFromSavedReply(raw, pdf),
+  );
 }
 
 /**
@@ -156,12 +273,17 @@ export async function ingestSample(caseId: string | null, name: string): Promise
  * @returns `{ ok: true }` when locked, or `{ ok: false, blocking }`.
  * @throws {BadRequestError} When the document is unknown, already confirmed, or not a bill/EOB.
  */
-export async function confirmDocument(documentId: string, input: Omit<ConfirmInput, "documentId">): Promise<{ ok: true } | { ok: false; blocking: string[] }> {
+export async function confirmDocument(
+  documentId: string,
+  input: Omit<ConfirmInput, "documentId">,
+): Promise<{ ok: true } | { ok: false; blocking: string[] }> {
   const store = getStore();
   const doc = await store.getDocument(documentId);
   if (!doc) throw new BadRequestError("Unknown document");
-  if (doc.confirmed) throw new BadRequestError("This document is already confirmed and locked");
-  if (!doc.extraction) throw new BadRequestError("This document type can't be confirmed");
+  if (doc.confirmed)
+    throw new BadRequestError("This document is already confirmed and locked");
+  if (!doc.extraction)
+    throw new BadRequestError("This document type can't be confirmed");
   const full = { ...input, documentId };
   const r =
     doc.docType === "eob"
@@ -173,9 +295,41 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
   // A revised statement can only verify savings for the same account as the original bill.
   if (doc.docType === "revised_statement") {
     const c = await store.getCase(doc.caseId);
-    const original = c?.documents.find((d) => d.direction === "incoming" && d.docType === "itemized_bill" && d.confirmed);
-    const mismatch = original ? revisedMismatches(original.confirmed as ConfirmedBill, r.value as ConfirmedBill) : [];
-    if (mismatch.length) return { ok: false, blocking: [...mismatch, "This doesn't look like a revised statement for the same bill, so it can't be used to verify savings."] };
+    const original = c?.documents.find(
+      (d) =>
+        d.direction === "incoming" &&
+        d.docType === "itemized_bill" &&
+        d.confirmed,
+    );
+    const mismatch = original
+      ? revisedMismatches(
+          original.confirmed as ConfirmedBill,
+          r.value as ConfirmedBill,
+        )
+      : [];
+    if (mismatch.length)
+      return {
+        ok: false,
+        blocking: [
+          ...mismatch,
+          "This doesn't look like a revised statement for the same bill, so it can't be used to verify savings.",
+        ],
+      };
+  }
+  const c = await store.getCase(doc.caseId);
+  if (!c) throw new BadRequestError("Unknown case");
+  const attached = c.events.some(
+    (e) =>
+      e.type === "case_document_attached" &&
+      (e.data as { documentId: string }).documentId === documentId,
+  );
+  if (attached || doc.docType === "revised_statement") {
+    try {
+      validateCaseDocument(c, { ...doc, confirmed: r.value });
+    } catch (err) {
+      if (!(err instanceof CaseRuleError)) throw err;
+      return { ok: false, blocking: [err.message] };
+    }
   }
   await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
   await store.addEvent(doc.caseId, "fields_confirmed", {
@@ -185,7 +339,9 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
     totalsMismatchAcknowledged: input.acknowledgeTotalsMismatch,
   });
   // A confirmed revised statement is checked against the original bill (MVP 2 verification).
-  if (doc.docType === "revised_statement") await verifyRevisedStatement(doc.caseId, documentId);
+  if (doc.docType === "revised_statement")
+    await verifyRevisedStatement(doc.caseId, documentId);
+  if (attached) await resumeCaseDocument(doc.caseId, documentId);
   return { ok: true };
 }
 
@@ -197,10 +353,17 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
  * @returns The confirmed value.
  * @throws {BadRequestError} When missing or not yet confirmed.
  */
-async function loadConfirmed<K extends "bill" | "eob">(id: string, kind: K): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
+async function loadConfirmed<K extends "bill" | "eob">(
+  id: string,
+  kind: K,
+): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
   const doc = await getStore().getDocument(id);
-  if (!doc?.confirmed) throw new BadRequestError(`The ${kind === "bill" ? "bill" : "EOB"} must be confirmed before the audit runs`);
-  if ((kind === "eob") !== (doc.docType === "eob")) throw new BadRequestError(`Document ${id} is not a ${kind}`);
+  if (!doc?.confirmed)
+    throw new BadRequestError(
+      `The ${kind === "bill" ? "bill" : "EOB"} must be confirmed before the audit runs`,
+    );
+  if ((kind === "eob") !== (doc.docType === "eob"))
+    throw new BadRequestError(`Document ${id} is not a ${kind}`);
   return doc.confirmed as K extends "bill" ? ConfirmedBill : ConfirmedEob;
 }
 
@@ -218,12 +381,22 @@ export async function auditCase(
   billId: string,
   eobId: string | null,
 ): Promise<AuditResponse> {
+  const owned = await getStore().getCase(caseId);
+  if (
+    !owned ||
+    !owned.documents.some((d) => d.id === billId) ||
+    (eobId && !owned.documents.some((d) => d.id === eobId))
+  )
+    throw new BadRequestError("Audit documents must belong to this case");
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
   // Comparing a bill with an EOB from a different visit would produce false findings.
   if (eob) {
     const mismatch = billEobMismatches(bill, eob);
-    if (mismatch.length) throw new BadRequestError(`This EOB doesn't look like it's for the same visit as the bill. ${mismatch.join(" ")} Upload the matching EOB, or check the bill without one.`);
+    if (mismatch.length)
+      throw new BadRequestError(
+        `This EOB doesn't look like it's for the same visit as the bill. ${mismatch.join(" ")} Upload the matching EOB, or check the bill without one.`,
+      );
   }
   const { records, providers, origin, warnings } = await loadRecords(caseId);
   const fresh = runAudit(bill, eob, records, providers);
@@ -234,8 +407,21 @@ export async function auditCase(
   const result = { findings, verdict: computeVerdict(bill, findings) };
   await store.saveFindings(caseId, result.findings);
   await store.setCaseStatus(caseId, "audited");
-  await store.addEvent(caseId, "audit_run", { billId, eobId, findings: result.findings.map((f) => f.id), verdict: result.verdict, providers, recordsOrigin: origin, recordWarnings: warnings });
-  return { ...result, providers, recordsOrigin: origin, recordWarnings: warnings };
+  await store.addEvent(caseId, "audit_run", {
+    billId,
+    eobId,
+    findings: result.findings.map((f) => f.id),
+    verdict: result.verdict,
+    providers,
+    recordsOrigin: origin,
+    recordWarnings: warnings,
+  });
+  return {
+    ...result,
+    providers,
+    recordsOrigin: origin,
+    recordWarnings: warnings,
+  };
 }
 
 /**
@@ -248,20 +434,46 @@ export async function auditCase(
  * @returns The draft.
  * @throws {BadRequestError} When there are no findings to dispute.
  */
-export async function draftLetter(caseId: string, billId: string, eobId: string | null): Promise<Draft> {
+export async function draftLetter(
+  caseId: string,
+  billId: string,
+  eobId: string | null,
+): Promise<Draft> {
+  const owned = await getStore().getCase(caseId);
+  if (
+    !owned ||
+    !owned.documents.some((d) => d.id === billId) ||
+    (eobId && !owned.documents.some((d) => d.id === eobId))
+  )
+    throw new BadRequestError("Audit documents must belong to this case");
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
   const { records, providers } = await loadRecords(caseId);
   const previous = (await getStore().getCase(caseId))?.findings ?? [];
-  const merged = mergeFindings(previous, runAudit(bill, eob, records, providers).findings);
+  const merged = mergeFindings(
+    previous,
+    runAudit(bill, eob, records, providers).findings,
+  );
   await getStore().saveFindings(caseId, merged);
   // The letter covers only issues still in question (withdrawn ones stay out).
   const findings = merged.filter((f) => f.status !== "withdrawn");
-  if (!findings.length) throw new BadRequestError("No potential issues were found, so there is nothing to dispute.");
-  const draft = await draftDisputeLetter(bill, findings, llmConfigured() ? undefined : null);
+  if (!findings.length)
+    throw new BadRequestError(
+      "No potential issues were found, so there is nothing to dispute.",
+    );
+  const draft = await draftDisputeLetter(
+    bill,
+    findings,
+    llmConfigured() ? undefined : null,
+  );
   const documentId = await saveDraft(caseId, draft);
   await getStore().setCaseStatus(caseId, "letter_drafted");
-  await getStore().addEvent(caseId, "letter_drafted", { kind: draft.kind, author: draft.author, documentId, findings: findings.map((f) => f.id) });
+  await getStore().addEvent(caseId, "letter_drafted", {
+    kind: draft.kind,
+    author: draft.author,
+    documentId,
+    findings: findings.map((f) => f.id),
+  });
   return draft;
 }
 
@@ -274,7 +486,10 @@ export async function draftLetter(caseId: string, billId: string, eobId: string 
  */
 export async function draftItemizedRequest(documentId: string): Promise<Draft> {
   const doc = await getStore().getDocument(documentId);
-  if (!doc || doc.docType !== "balance_statement") throw new BadRequestError("An itemized-bill request needs a balance statement");
+  if (!doc || doc.docType !== "balance_statement")
+    throw new BadRequestError(
+      "An itemized-bill request needs a balance statement",
+    );
   const h = (doc.extraction as ExtractedBill).header;
   const draft = draftItemizedBillRequest({
     billingEntity: h.billingEntity.value ?? "the provider",
@@ -286,7 +501,11 @@ export async function draftItemizedRequest(documentId: string): Promise<Draft> {
   });
   const draftId = await saveDraft(doc.caseId, draft);
   await getStore().setCaseStatus(doc.caseId, "request_drafted");
-  await getStore().addEvent(doc.caseId, "request_drafted", { kind: draft.kind, documentId, draftId });
+  await getStore().addEvent(doc.caseId, "request_drafted", {
+    kind: draft.kind,
+    documentId,
+    draftId,
+  });
   return draft;
 }
 
@@ -331,28 +550,45 @@ export interface AppealResponse {
  * @returns Evaluation, draft, providers searched, and where the records came from.
  * @throws {BadRequestError} When the document isn't a confirmed denial letter or the policy is unknown.
  */
-export async function appealDenial(documentId: string): Promise<AppealResponse> {
+export async function appealDenial(
+  documentId: string,
+): Promise<AppealResponse> {
   const store = getStore();
   const doc = await store.getDocument(documentId);
-  if (!doc || doc.docType !== "denial_letter") throw new BadRequestError("An appeal needs a denial letter");
-  if (!doc.confirmed) throw new BadRequestError("Confirm the denial letter's details first");
+  if (!doc || doc.docType !== "denial_letter")
+    throw new BadRequestError("An appeal needs a denial letter");
+  if (!doc.confirmed)
+    throw new BadRequestError("Confirm the denial letter's details first");
   const denial = doc.confirmed as ConfirmedDenial;
   const { records, origin } = await loadRecords(doc.caseId);
   const evaluation = evaluateDenial(denial, records);
   if (!evaluation.policyKnown) {
-    throw new BadRequestError(`We can't check policy ${denial.policyId ?? "(none)"} yet, so no appeal was drafted. A human advocate can review this denial.`);
+    throw new BadRequestError(
+      `We can't check policy ${denial.policyId ?? "(none)"} yet, so no appeal was drafted. A human advocate can review this denial.`,
+    );
   }
-  const draft = evaluation.allMet ? draftAppealLetter(denial, evaluation) : draftDocumentationRequest(denial, evaluation);
+  const draft = evaluation.allMet
+    ? draftAppealLetter(denial, evaluation)
+    : draftDocumentationRequest(denial, evaluation);
   const draftId = await saveDraft(doc.caseId, draft);
   await store.addEvent(doc.caseId, "appeal_evaluated", {
     documentId,
     policyId: evaluation.policy?.id,
-    criteria: evaluation.criteria.map((c) => ({ id: c.id, status: c.status, records: c.evidence.map((r) => r.recordId) })),
+    criteria: evaluation.criteria.map((c) => ({
+      id: c.id,
+      status: c.status,
+      records: c.evidence.map((r) => r.recordId),
+    })),
     allMet: evaluation.allMet,
     draftId,
     recordsOrigin: origin,
   });
-  return { evaluation, draft, providers: evaluation.providers, recordsOrigin: origin };
+  return {
+    evaluation,
+    draft,
+    providers: evaluation.providers,
+    recordsOrigin: origin,
+  };
 }
 
 /**
@@ -370,7 +606,12 @@ function ingestOf(doc: StoredDocument): IngestResponse | null {
       : doc.docType === "denial_letter"
         ? { kind: "denial", denial: doc.extraction as ExtractedDenial, meta }
         : { kind: "bill", bill: doc.extraction as ExtractedBill, meta };
-  return { caseId: doc.caseId, documentId: doc.id, result, attention: attentionOf(result) };
+  return {
+    caseId: doc.caseId,
+    documentId: doc.id,
+    result,
+    attention: attentionOf(result),
+  };
 }
 
 /**
@@ -387,17 +628,52 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
   if (!c) return null;
   const documents = c.documents.flatMap((d) => {
     const ingest = ingestOf(d);
-    return ingest ? [{ ingest, confirmed: d.confirmed != null }] : [];
+    const attachment = c.events
+      .filter((e) => e.type === "case_document_attached")
+      .map((e) => e.data as { documentId: string; taskId?: string })
+      .find((e) => e.documentId === d.id);
+    return ingest
+      ? [
+          {
+            ingest,
+            confirmed: d.confirmed != null,
+            fileName: d.fileName,
+            ...(attachment?.taskId ? { taskId: attachment.taskId } : {}),
+          },
+        ]
+      : [];
   });
-  const lastAudit = c.events.filter((e) => e.type === "audit_run").at(-1)?.data as
-    | { findings: string[]; verdict: Verdict; providers?: string[]; recordsOrigin?: RecordsOrigin; recordWarnings?: string[] }
+  const lastAudit = c.events.filter((e) => e.type === "audit_run").at(-1)
+    ?.data as
+    | {
+        findings: string[];
+        verdict: Verdict;
+        providers?: string[];
+        recordsOrigin?: RecordsOrigin;
+        recordWarnings?: string[];
+      }
     | undefined;
   let audit: AuditResponse | null = null;
   if (lastAudit) {
     const byId = new Map(c.findings.map((f): [string, Finding] => [f.id, f]));
     const ordered = lastAudit.findings.flatMap((id) => byId.get(id) ?? []);
-    audit = { findings: ordered, verdict: lastAudit.verdict, providers: lastAudit.providers ?? [], recordsOrigin: lastAudit.recordsOrigin, recordWarnings: lastAudit.recordWarnings };
+    audit = {
+      findings: ordered,
+      verdict: lastAudit.verdict,
+      providers: lastAudit.providers ?? [],
+      recordsOrigin: lastAudit.recordsOrigin,
+      recordWarnings: lastAudit.recordWarnings,
+    };
   }
-  const lastDraft = c.documents.filter((d) => d.direction === "outgoing" && d.draft).at(-1);
-  return { caseId: c.id, status: c.status, documents, audit, draft: (lastDraft?.draft as Draft | undefined) ?? null, state: caseStateOf(c) };
+  const lastDraft = c.documents
+    .filter((d) => d.direction === "outgoing" && d.draft)
+    .at(-1);
+  return {
+    caseId: c.id,
+    status: c.status,
+    documents,
+    audit,
+    draft: (lastDraft?.draft as Draft | undefined) ?? null,
+    state: caseStateOf(c),
+  };
 }

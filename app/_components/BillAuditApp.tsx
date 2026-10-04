@@ -7,73 +7,26 @@
  * `/api/audit` and letters from `/api/letters`. Labels anything that came from a saved sample
  * document so a demo never passes a fixture off as live (SPEC.md §2 rule 9).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
-import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
 import type {
   AuditResponse,
   CaseView,
   IngestResponse,
 } from "@/lib/cases/service";
-import { fieldLabel, usd } from "@/lib/format";
+import { usd } from "@/lib/format";
 import CaseScreen from "./CaseScreen";
+import ConfirmPanel, { type DocState } from "./DocumentConfirmation";
+import ProcessingStatus from "./ProcessingStatus";
+import CasePreferencesPanel from "./CasePreferencesPanel";
+import type { CasePreferencesInput } from "@/lib/cases/preferences";
 import { describeSource } from "./sources";
-import type { Draft, ExtractedBill, Field, Finding } from "@/lib/types";
+import type { Draft, ExtractedBill, Finding } from "@/lib/types";
 
 /** Which screen is showing, including the saved-case tracking screen. */
 type Step = ReviewStep | "case";
-
-/** One uploaded document as tracked in the browser. */
-interface DocState {
-  /** Server response for the document. */
-  ingest: IngestResponse;
-  /** Patient corrections by field path. */
-  corrections: Record<string, string | null>;
-  /** Paths the patient confirmed as printed. */
-  confirmedPaths: string[];
-  /** Whether the patient acknowledged that printed totals don't add up. */
-  ackTotals: boolean;
-  /** Whether the server locked the confirmation. */
-  confirmed: boolean;
-  /** Messages that blocked the last confirmation attempt. */
-  blocking: string[];
-}
-
-/**
- * Lists every field in an extraction with its path, in document order.
- *
- * @param r - Extraction result (bill or EOB).
- * @returns Path/field pairs; empty for unsupported documents.
- */
-function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
-  const out: Array<[string, Field<unknown>]> = [];
-  if (r.kind === "bill") {
-    for (const [k, f] of Object.entries(r.bill.header))
-      out.push([`header.${k}`, f]);
-    r.bill.lines.forEach((l, i) =>
-      Object.entries(l).forEach(([k, f]) =>
-        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
-      ),
-    );
-  } else if (r.kind === "eob") {
-    const { insurer, claimNumber, provider, totalPatientResponsibility } =
-      r.eob;
-    out.push(
-      ["insurer", insurer],
-      ["claimNumber", claimNumber],
-      ["provider", provider],
-      ["totalPatientResponsibility", totalPatientResponsibility],
-    );
-    r.eob.lines.forEach((l, i) =>
-      Object.entries(l).forEach(([k, f]) =>
-        out.push([`lines.${i}.${k}`, f as Field<unknown>]),
-      ),
-    );
-  }
-  return out;
-}
 
 /**
  * Sends JSON to an API route and returns the parsed reply or throws with the server's message.
@@ -118,6 +71,19 @@ async function fetchCase(id: string): Promise<CaseView> {
  * @returns The current screen.
  */
 export default function BillAuditApp() {
+  /** Latest explicit setup choices; saved before intake can advance. */
+  const [preferences, setPreferences] = useState<CasePreferencesInput>({
+    goal: "Review my medical bill",
+    noPayments: true,
+    pauseContact: false,
+  });
+  /** Whether setup choices are safely persisted for the current case. */
+  const [preferencesSaved, setPreferencesSaved] = useState(false);
+  /** Current file request and the last failed file retained for an explicit retry. */
+  const [processingFile, setProcessingFile] = useState<string | null>(null);
+  const [retryFile, setRetryFile] = useState<File | null>(null);
+  /** Synchronous lock prevents double submissions before React updates disabled controls. */
+  const running = useRef(false);
   const [step, setStep] = useState<Step>("start");
   const [bill, setBill] = useState<DocState | null>(null);
   const [eob, setEob] = useState<DocState | null>(null);
@@ -138,6 +104,8 @@ export default function BillAuditApp() {
    * @param fn - Action to run.
    */
   async function run(fn: () => Promise<void>) {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -145,6 +113,7 @@ export default function BillAuditApp() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      running.current = false;
       setBusy(false);
     }
   }
@@ -164,6 +133,10 @@ export default function BillAuditApp() {
       blocking: [],
     };
     const r = ingest.result;
+    if (r.kind === "denial")
+      throw new Error(
+        "Denial letters need the appeal review flow. Add a bill or EOB here.",
+      );
     if (r.kind === "unsupported") throw new Error(r.reason);
     if (r.kind === "eob") setEob(state);
     else setBill(state);
@@ -175,10 +148,22 @@ export default function BillAuditApp() {
    * @param view - The case as loaded from the server.
    */
   function applyCase(view: CaseView) {
+    const saved = view.state.preferences;
+    setPreferences({
+      goal: saved.goal ?? "Review my medical bill",
+      noPayments: saved.noPayments,
+      pauseContact: saved.pauseContact,
+    });
+    setPreferencesSaved(Boolean(saved.version));
     for (const d of view.documents) {
       const r = d.ingest.result;
       // Revised statements belong to case tracking, not the original bill slot.
-      if (r.kind === "bill" && r.bill.docType === "revised_statement") continue;
+      if (
+        r.kind === "denial" ||
+        r.kind === "unsupported" ||
+        (r.kind === "bill" && r.bill.docType === "revised_statement")
+      )
+        continue;
       const state: DocState = {
         ingest: d.ingest,
         corrections: {},
@@ -237,13 +222,25 @@ export default function BillAuditApp() {
   /** Uploads a file through Gemini extraction. */
   async function upload(file: File) {
     await run(async () => {
-      const form = new FormData();
-      form.append("file", file);
-      if (caseId) form.append("caseId", caseId);
-      const res = await fetch("/api/documents", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? "Upload failed");
-      accept(data as IngestResponse);
+      setProcessingFile(file.name);
+      setRetryFile(null);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        if (caseId) form.append("caseId", caseId);
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message ?? "Upload failed");
+        accept(data as IngestResponse);
+      } catch (err) {
+        setRetryFile(file);
+        throw err;
+      } finally {
+        setProcessingFile(null);
+      }
     });
   }
 
@@ -276,14 +273,37 @@ export default function BillAuditApp() {
     });
   }
 
+  /**
+   * Persists explicit preferences and blocks progression if the save fails.
+   * @param id - Current case ID.
+   * Side effects: records the patient's choices on the server; sends nothing.
+   */
+  async function savePreferences(id: string) {
+    const res = await fetch(`/api/cases/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preferences),
+    });
+    const data = await res.json();
+    if (!res.ok)
+      throw new Error(
+        data.message ?? "Your choices could not be saved. Please try again.",
+      );
+    setPreferencesSaved(true);
+  }
+
   /** Moves on from the start screen once a bill is present. */
-  function next() {
-    if (
-      bill?.ingest.result.kind === "bill" &&
-      bill.ingest.result.bill.docType === "balance_statement"
-    )
-      setStep("request");
-    else setStep("confirm");
+  async function next() {
+    if (!caseId) return;
+    await run(async () => {
+      await savePreferences(caseId);
+      if (
+        bill?.ingest.result.kind === "bill" &&
+        bill.ingest.result.bill.docType === "balance_statement"
+      )
+        setStep("request");
+      else setStep("confirm");
+    });
   }
 
   /**
@@ -314,6 +334,7 @@ export default function BillAuditApp() {
   async function confirmAndAudit() {
     await run(async () => {
       if (!bill) return;
+      if (!preferencesSaved && caseId) await savePreferences(caseId);
       const okBill = await confirmOne(bill, setBill);
       const okEob = eob ? await confirmOne(eob, setEob) : true;
       if (!okBill || !okEob) return;
@@ -358,6 +379,13 @@ export default function BillAuditApp() {
   /** Starts over. */
   function reset() {
     window.history.replaceState(null, "", window.location.pathname);
+    setPreferencesSaved(false);
+    setRetryFile(null);
+    setPreferences({
+      goal: "Review my medical bill",
+      noPayments: true,
+      pauseContact: false,
+    });
     setStep("start");
     setBill(null);
     setEob(null);
@@ -398,8 +426,8 @@ export default function BillAuditApp() {
       {usedSample && (
         <div className="paper-flow">
           <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-            Sample document (synthetic data), read without AI from a saved answer.
-            Same checks as a live upload.
+            Sample document (synthetic data), read without AI from a saved
+            answer. Same checks as a live upload.
           </p>
         </div>
       )}
@@ -412,6 +440,28 @@ export default function BillAuditApp() {
         </p>
       )}
 
+      {processingFile && <ProcessingStatus filename={processingFile} />}
+      {retryFile && !busy && (
+        <div className="paper-flow">
+          <button className="paper-secondary" onClick={() => upload(retryFile)}>
+            Retry reading {retryFile.name}
+          </button>
+          <p className="paper-copy">
+            Check your saved case before retrying if the connection dropped
+            after upload.
+          </p>
+        </div>
+      )}
+      {step === "start" && (
+        <CasePreferencesPanel
+          value={preferences}
+          disabled={busy}
+          onChange={(value) => {
+            setPreferences(value);
+            setPreferencesSaved(false);
+          }}
+        />
+      )}
       {step === "start" && (
         <StartScreen
           bill={bill}
@@ -458,7 +508,8 @@ export default function BillAuditApp() {
           </h2>
           <p className="text-sm text-[var(--paper-muted)]">
             Your statement shows a total, but we need individual charges to
-            review it. Prepare a request for an itemized bill from your provider.
+            review it. Prepare a request for an itemized bill from your
+            provider.
           </p>
           <p className="text-sm text-[var(--paper-muted)]">
             You can also download your EOB from your insurer’s website or app.
@@ -624,9 +675,7 @@ function UploadSlot({
           {busy ? "Reading document…" : ready ? "Document added" : label}
         </strong>
         <span>
-          {ready
-            ? "Choose another file to replace it"
-            : "PDF or a clear photo"}
+          {ready ? "Choose another file to replace it" : "PDF or a clear photo"}
         </span>
         <input
           type="file"
@@ -640,197 +689,6 @@ function UploadSlot({
           }}
         />
       </label>
-    </div>
-  );
-}
-
-/**
- * Confirm panel for one document: preview, flagged fields first, verified fields in one tap.
- *
- * @param props.title - Panel heading.
- * @param props.doc - Document state.
- * @param props.onChange - Updates the document state.
- * @returns The confirm panel.
- */
-function ConfirmPanel({
-  title,
-  doc,
-  onChange,
-}: {
-  title: string;
-  doc: DocState;
-  onChange: (d: DocState) => void;
-}) {
-  const fields = useMemo(
-    () => listFields(doc.ingest.result),
-    [doc.ingest.result],
-  );
-  const flagged = fields.filter(
-    ([, f]) => f.verification === "needs_attention",
-  );
-  const verified = fields.filter(
-    ([, f]) => f.verification === "verified" && f.status !== "absent",
-  );
-  const r = doc.ingest.result;
-  const docIssues =
-    r.kind === "bill"
-      ? r.bill.documentIssues
-      : r.kind === "eob"
-        ? r.eob.documentIssues
-        : [];
-  const [showVerified, setShowVerified] = useState(false);
-  const [previewPage, setPreviewPage] = useState(1);
-
-  /**
-   * Records a correction for a field.
-   *
-   * @param path - Field path.
-   * @param value - New raw value.
-   */
-  function correct(path: string, value: string) {
-    onChange({ ...doc, corrections: { ...doc.corrections, [path]: value } });
-  }
-
-  /**
-   * Toggles "confirmed as printed" for a flagged field.
-   *
-   * @param path - Field path.
-   */
-  function toggleConfirm(path: string) {
-    const has = doc.confirmedPaths.includes(path);
-    onChange({
-      ...doc,
-      confirmedPaths: has
-        ? doc.confirmedPaths.filter((p) => p !== path)
-        : [...doc.confirmedPaths, path],
-    });
-  }
-
-  return (
-    <div className="billless-document-card">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {doc.confirmed && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-            Confirmed and locked
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-xs text-[var(--paper-muted)]">
-        {r.meta.textLayerChecked
-          ? "Values were cross-checked against the PDF's own text."
-          : "Photo or scan: please check every value carefully."}
-      </p>
-      <iframe
-        title={`${title} preview`}
-        src={`/api/documents/${doc.ingest.documentId}/file#page=${previewPage}`}
-        className="mt-3 h-72 w-full rounded-md ring-1 ring-[var(--paper-border)]"
-      />
-
-      {docIssues.length > 0 && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
-          {docIssues.map((m) => (
-            <p key={m}>{m}</p>
-          ))}
-          <label className="mt-2 flex items-start gap-2">
-            <input
-              type="checkbox"
-              checked={doc.ackTotals}
-              onChange={(e) =>
-                onChange({ ...doc, ackTotals: e.target.checked })
-              }
-            />
-            <span>
-              I checked the document: the printed totals themselves don&apos;t
-              add up (this is how the bill is printed).
-            </span>
-          </label>
-        </div>
-      )}
-
-      <h3 className="mt-5 text-sm font-semibold">
-        Needs your attention ({flagged.length})
-      </h3>
-      {flagged.length === 0 && (
-        <p className="text-sm text-[var(--paper-muted)]">Nothing flagged.</p>
-      )}
-      <ul className="mt-2 space-y-3">
-        {flagged.map(([path, f]) => (
-          <li
-            key={path}
-            className="rounded-md bg-amber-50 p-3 ring-1 ring-amber-200"
-          >
-            <div className="flex items-center justify-between text-sm font-medium">
-              <span>{fieldLabel(path)}</span>
-              {f.page && (
-                <button
-                  className="text-xs text-[var(--paper-muted)] underline"
-                  onClick={() => setPreviewPage(f.page ?? 1)}
-                >
-                  page {f.page}
-                </button>
-              )}
-            </div>
-            {f.issues.map((m) => (
-              <p key={m} className="text-xs text-amber-900">
-                {m}
-              </p>
-            ))}
-            {f.snippet && (
-              <p className="mt-1 rounded bg-white px-2 py-1 font-mono text-xs text-[var(--paper-muted)]">
-                “{f.snippet}”
-              </p>
-            )}
-            <div className="billless-correction-row">
-              <input
-                className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
-                aria-label={`Correct ${fieldLabel(path)}`}
-                defaultValue={f.raw ?? ""}
-                placeholder="[to confirm]"
-                onChange={(e) => correct(path, e.target.value)}
-              />
-              <label className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={doc.confirmedPaths.includes(path)}
-                  onChange={() => toggleConfirm(path)}
-                />{" "}
-                matches the document
-              </label>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <button
-        className="paper-source-button mt-4"
-        aria-expanded={showVerified}
-        onClick={() => setShowVerified((s) => !s)}
-      >
-        {showVerified ? "Hide" : "Review"} {verified.length} verified values
-      </button>
-      {showVerified && (
-        <ul className="mt-2 divide-y divide-slate-100 text-sm">
-          {verified.map(([path, f]) => (
-            <li key={path} className="billless-verified-row">
-              <span className="text-[var(--paper-muted)]">
-                {fieldLabel(path)}
-              </span>
-              <span className="font-mono">{f.raw}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {doc.blocking.length > 0 && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
-          <p className="font-medium">
-            Still needs fixing before we can check the bill:
-          </p>
-          {doc.blocking.map((m) => (
-            <p key={m}>• {m}</p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1239,10 +1097,7 @@ function LetterScreen({
         {busy ? "Preparing PDF…" : "Download PDF"}
       </button>
       {onTrack && (
-        <button
-          onClick={onTrack}
-          className="paper-secondary w-full"
-        >
+        <button onClick={onTrack} className="paper-secondary w-full">
           Track this case →
         </button>
       )}
