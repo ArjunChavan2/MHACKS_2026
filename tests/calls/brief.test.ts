@@ -2,7 +2,7 @@
  * @file Proves Billy's per-call brief follows the live case: a billing-error case briefs a billing
  * office call with that patient's details, an insurer-only case briefs an insurer call, the brief
  * route requires the shared secret, and with no case Billy gets a no-details brief (never another
- * patient's).
+ * patient's). The case is the one that last pressed "Get Billy ready"; a running call stays on its case.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as briefRoute } from "@/app/api/calls/brief/route";
@@ -12,6 +12,7 @@ import {
   findInsurerDenials,
 } from "@/lib/audit/rules";
 import { buildCallBrief } from "@/lib/calls/brief";
+import { ACTIVE_CALL_MS, caseForActiveCall, caseForLiveCall } from "@/lib/cases/consent";
 import { memoryStore, type CaseStore } from "@/lib/cases/store";
 import type { ConfirmedBill, ConfirmedEob } from "@/lib/types";
 import { confirmedSampleBill, confirmedSampleEob } from "../helpers";
@@ -159,5 +160,27 @@ describe("brief route", () => {
     expect(body.conversation_config_override.agent.prompt.prompt).toContain(
       "Never make up",
     );
+  });
+});
+
+describe("which case a call is about", () => {
+  /** Proves "Get Billy ready" pins the next call to that case even when someone else uses the site after. */
+  it("prefers the armed case over later activity elsewhere", async () => {
+    const store = g.__mhStore!;
+    const marcusCase = await store.createCase(null);
+    const priyaCase = await store.createCase(null);
+    await store.addEvent(marcusCase, "call_armed", {});
+    await store.addEvent(priyaCase, "audit_run", {});
+    expect(await caseForLiveCall()).toBe(marcusCase);
+  });
+  /** Proves a call in progress stays on the case it was briefed for, and expires after the call cap. */
+  it("keeps a running call on its briefed case", async () => {
+    const store = g.__mhStore!;
+    const a = await store.createCase(null);
+    const b = await store.createCase(null);
+    await store.addEvent(a, "call_briefed", { mode: "insurer" });
+    await store.addEvent(b, "call_armed", {});
+    expect(await caseForActiveCall()).toBe(a);
+    expect(await caseForActiveCall(Date.now() + ACTIVE_CALL_MS + 1000)).toBe(b);
   });
 });

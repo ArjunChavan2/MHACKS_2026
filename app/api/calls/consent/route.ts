@@ -9,7 +9,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { approvedCallVariables } from "@/lib/calls/workspace";
 import {
-  caseForLiveCall,
+  caseForActiveCall,
   requestConsent,
   waitForConsent,
 } from "@/lib/cases/consent";
@@ -46,7 +46,7 @@ export async function POST(req: Request): Promise<Response> {
     sessionId?: string;
   };
   const caseId =
-    body.caseId && body.sessionId ? body.caseId : await caseForLiveCall();
+    body.caseId && body.sessionId ? body.caseId : await caseForActiveCall();
   if (body.caseId || body.sessionId) {
     if (!body.caseId || !body.sessionId)
       return Response.json({

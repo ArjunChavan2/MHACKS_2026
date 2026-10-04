@@ -104,6 +104,8 @@ export interface CaseState {
   callProposals: Record<string, CallOutcome>;
   /** The patient's decision per call outcome. */
   callDecisions: Record<string, "confirmed" | "rejected">;
+  /** When this case last pressed "Get Billy ready for a call", or null. */
+  callArmedAt: string | null;
 }
 
 /**
@@ -316,6 +318,8 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
     case "consent_requested":
       return `Billy asked for your consent on a call with ${String(data.counterparty ?? "the billing office")}`;
+    case "call_armed":
+      return "You got Billy ready to call about this case";
     case "consent_given":
       return `You consented to Billy representing you (by iMessage)`;
     default:
@@ -379,6 +383,8 @@ export function caseStateOf(c: StoredCase): CaseState {
     verification,
     calls: eventsOf<CallRecord>(c, "call_recorded"),
     consent: consentStateOf(c),
+    callArmedAt:
+      c.events.filter((e) => e.type === "call_armed").at(-1)?.createdAt ?? null,
     callDecisions: Object.fromEntries(
       eventsOf<{ conversationId: string; decision: "confirmed" | "rejected" }>(
         c,
