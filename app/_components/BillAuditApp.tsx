@@ -452,16 +452,16 @@ export default function BillAuditApp() {
         />
       )}
       {step === "request" && bill && (
-        <section className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
+        <section className="billless-request-screen space-y-4 rounded-xl bg-white p-5 ring-1 ring-[var(--paper-border)]">
           <h2 className="text-lg font-semibold">
-            This is a balance statement, not an itemized bill
+            Let’s get the itemized details
           </h2>
           <p className="text-sm text-[var(--paper-muted)]">
-            It shows a total but no individual charges, so there is nothing to
-            check yet. We never rebuild charges from a total. The next step is
-            to ask the provider for a fully itemized bill, and to get your
-            explanation of benefits (EOB) from your insurer&apos;s website or
-            app.
+            Your statement shows a total, but we need individual charges to
+            review it. Prepare a request for an itemized bill from your provider.
+          </p>
+          <p className="text-sm text-[var(--paper-muted)]">
+            You can also download your EOB from your insurer’s website or app.
           </p>
           <button
             disabled={busy}
