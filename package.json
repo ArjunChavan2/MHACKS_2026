@@ -9,7 +9,7 @@
     "lint": "eslint",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "test": "vitest run",
-    "eval:extraction": "tsx scripts/eval-extraction.ts",
+    "eval:extraction": "tsx --env-file-if-exists=.env.local scripts/eval-extraction.ts",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit"
   },

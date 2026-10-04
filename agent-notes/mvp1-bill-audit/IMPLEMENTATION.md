@@ -14,7 +14,7 @@ PLAN.md. **Next phases: run `prompts/AUDIT.md` and then `prompts/TEST.md` for ta
   five PDFs with real text layers (sample bill, EOB, balance statement, broken totals, prompt
   injection), the expected raw model reply for each, and synthetic records for two providers.
 - **`lib/llm/`:** only Gemini code; `generateJson` validates with zod, retries once, then throws.
-  Model pinned in `GEMINI_MODEL` (default `gemini-2.5-flash`, open decision).
+  Model set in `GEMINI_MODEL` (default `gemini-flash-latest`, decided 2026-10-03).
 - **`lib/extract/`:** classify → extract (one call per ≤4 pages, merged) → normalize → checks →
   text-layer cross-check → confirm. Saved-reply path (`extractFromSavedReply`) runs the identical
   normalization and checks for the labeled no-AI demo.
