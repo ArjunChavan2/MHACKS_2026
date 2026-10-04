@@ -38,7 +38,17 @@ export const CONNECT_POLL_MS = 2_000;
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /** Where records came from, shown to the user next to the evidence. */
-export type RecordsOrigin = "live-sandbox" | "demo-api" | "saved-snapshot" | "sample-fixture";
+export type RecordsOrigin = "live-sandbox" | "demo-api" | "saved-snapshot";
+
+/**
+ * Path of the saved demo-API response for the demo patient. A literal path, so Next.js traces only
+ * this file into the server bundle.
+ *
+ * @returns Absolute path under the project root.
+ */
+export function savedSnapshotPath(): string {
+  return join(process.cwd(), "fixtures", "finchnode", "multi-source-overlap.json");
+}
 
 /** Records plus provenance of the whole fetch. */
 export interface RecordsResult {
@@ -267,6 +277,6 @@ export async function loadLiveRecords(opts: { key?: string; subject?: string; ex
   } catch (err) {
     warnings.push(`Demo API unavailable: ${err instanceof Error ? err.message : String(err)} Using the saved snapshot.`);
   }
-  const saved = JSON.parse(readFileSync(join(process.cwd(), "fixtures", "finchnode", "multi-source-overlap.json"), "utf8"));
+  const saved = JSON.parse(readFileSync(savedSnapshotPath(), "utf8"));
   return finish(saved, "saved-snapshot", demoSubject);
 }

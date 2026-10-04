@@ -46,7 +46,7 @@ function lineAmount(line: ConfirmedBillLine): number {
  *
  * @param bill - Confirmed bill.
  * @returns One finding per duplicate group, questioning every copy after the first; empty if none.
- * @example findDuplicateCharges(bill) // lines 4 and 7 (80053, 09/14, $142.00) → one finding
+ * @example findDuplicateCharges(bill) // lines 3 and 5 (84443, 03/05, $68.00) → one finding
  */
 export function findDuplicateCharges(bill: ConfirmedBill): Finding[] {
   const groups = new Map<string, ConfirmedBillLine[]>();
@@ -129,25 +129,37 @@ function daysApart(a: string, b: string): number {
 }
 
 /**
- * Whether a record matches a billing code's expectation on a service date.
+ * Whether a record is the kind of record a billing code expects, ignoring dates.
  *
  * @param r - Verbatim record.
  * @param code - Billing code.
- * @param date - Service date (ISO).
- * @returns True when category matches, the date is within the window, and the code or text matches.
+ * @returns True when the category matches and the clinical code or text matches.
  */
-function recordMatches(r: VerbatimFact, code: string, date: string): boolean {
+function recordIsKind(r: VerbatimFact, code: string): boolean {
   const exp = RECORD_LOOKUP[code];
-  if (!exp || r.category !== exp.category || daysApart(r.recordedAt, date) > MATCH_WINDOW_DAYS) return false;
+  if (!exp || r.category !== exp.category) return false;
   if (r.code && exp.codes.includes(r.code)) return true;
   const text = r.text.toLowerCase();
   return exp.textMatches.some((words) => words.every((w) => text.includes(w)));
 }
 
 /**
+ * Whether a record matches a billing code's expectation on a service date.
+ *
+ * @param r - Verbatim record.
+ * @param code - Billing code.
+ * @param date - Service date (ISO).
+ * @returns True when the record is the right kind and dated within the match window.
+ */
+function recordMatches(r: VerbatimFact, code: string, date: string): boolean {
+  return recordIsKind(r, code) && daysApart(r.recordedAt, date) <= MATCH_WINDOW_DAYS;
+}
+
+/**
  * Finds lab and medication charges with no matching record (documentation gaps). Only codes in the
  * demo lookup are checked; a missing record is a reason to ask for documentation, not proof the
- * service didn't happen.
+ * service didn't happen. When a record of the same kind exists outside the date window (often at
+ * another provider), the closest one is cited verbatim, without saying what it means.
  *
  * @param bill - Confirmed bill.
  * @param records - The patient's records from every connected provider.
@@ -162,12 +174,20 @@ export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact
     if (!exp) continue;
     if (records.some((r) => recordMatches(r, line.code as string, line.serviceDate as string))) continue;
     const checked = records.filter((r) => r.category === exp.category).length;
+    const date = line.serviceDate;
+    const closest = records
+      .filter((r) => recordIsKind(r, line.code as string))
+      .sort((a, b) => daysApart(a.recordedAt, date) - daysApart(b.recordedAt, date))[0];
+    const days = closest ? daysApart(closest.recordedAt, date) : 0;
+    const closestText = closest
+      ? ` The closest ${exp.service} record is from ${closest.provider} on ${longDate(closest.recordedAt)}, ${days} day${days === 1 ? "" : "s"} ${closest.recordedAt < date ? "before" : "after"} the service date.`
+      : "";
     findings.push({
       id: `gap-${line.lineNumber}-${line.code}`,
       rule: "documentation_gap",
       status: "potential",
       title: `No matching record for line ${line.lineNumber} (${exp.service})`,
-      explanation: `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a ${exp.service} (${line.code}) on ${longDate(line.serviceDate)}, but none of your ${exp.category} records from ${providers.join(" or ")} within ${MATCH_WINDOW_DAYS} day of that date match it. This doesn't prove the service didn't happen; your records may be incomplete.`,
+      explanation: `Line ${line.lineNumber} charges ${usd(line.chargeCents)} for a ${exp.service} (${line.code}) on ${longDate(line.serviceDate)}, but none of your ${exp.category} records from ${providers.join(" or ")} within ${MATCH_WINDOW_DAYS} day of that date match it.${closestText} This doesn't prove the service didn't happen; your records may be incomplete.`,
       ask: `Ask ${bill.billingEntity} for documentation of this ${exp.service} (for example, the result or the order) before paying for line ${line.lineNumber}.`,
       amountQuestionedCents: lineAmount(line),
       lineNumbers: [line.lineNumber],
@@ -179,6 +199,7 @@ export function findDocumentationGaps(bill: ConfirmedBill, records: VerbatimFact
           searched: `${exp.category} records matching ${line.code} (${exp.service}) dated ${line.serviceDate} ± ${MATCH_WINDOW_DAYS} day`,
           recordsChecked: checked,
         },
+        ...(closest ? [{ kind: "record" as const, fact: closest }] : []),
       ],
     });
   }

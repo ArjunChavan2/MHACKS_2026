@@ -764,7 +764,6 @@ function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
   if (origin === "live-sandbox") return " (live FinchNode sandbox, synthetic)";
   if (origin === "demo-api") return " (FinchNode demo API, synthetic)";
   if (origin === "saved-snapshot") return " (saved FinchNode snapshot, synthetic)";
-  if (origin === "sample-fixture") return " (sample records)";
   return "";
 }
 

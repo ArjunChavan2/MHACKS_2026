@@ -9,30 +9,30 @@ import type { ConfirmedBill } from "@/lib/types";
 import { confirmedSampleBill, confirmedSampleEob } from "../helpers";
 
 describe("duplicate charges", () => {
-  /** Proves lines 4 and 7 (same code, date, amount) form one potential duplicate questioning line 7. */
-  it("finds the 80053 duplicate", async () => {
+  /** Proves lines 3 and 5 (same code, date, amount) form one potential duplicate questioning line 5. */
+  it("finds the 84443 duplicate", async () => {
     const [f, ...rest] = findDuplicateCharges(await confirmedSampleBill());
     expect(rest).toHaveLength(0);
     expect(f.status).toBe("potential");
-    expect(f.lineNumbers).toEqual([7]);
-    expect(f.amountQuestionedCents).toBe(14200);
-    expect(f.sources.map((s) => (s.kind === "bill_line" ? s.lineNumber : null))).toEqual([4, 7]);
+    expect(f.lineNumbers).toEqual([5]);
+    expect(f.amountQuestionedCents).toBe(6800);
+    expect(f.sources.map((s) => (s.kind === "bill_line" ? s.lineNumber : null))).toEqual([3, 5]);
     expect(f.title).not.toMatch(/error/i);
   });
   /** Proves a different quantity is not treated as a duplicate. */
   it("ignores lines with different quantities", async () => {
     const bill = await confirmedSampleBill();
-    const changed: ConfirmedBill = { ...bill, lines: bill.lines.map((l) => (l.lineNumber === 7 ? { ...l, quantity: 2 } : l)) };
+    const changed: ConfirmedBill = { ...bill, lines: bill.lines.map((l) => (l.lineNumber === 5 ? { ...l, quantity: 2 } : l)) };
     expect(findDuplicateCharges(changed)).toHaveLength(0);
   });
 });
 
 describe("bill exceeds EOB", () => {
-  /** Proves the $142 gap to the EOB is found and attributed to line 7, which the EOB lacks. */
+  /** Proves the $68 gap to the EOB is found and attributed to line 5, which the EOB lacks. */
   it("finds the difference and the unmatched line", async () => {
     const [f] = findBillExceedsEob(await confirmedSampleBill(), await confirmedSampleEob());
-    expect(f.amountQuestionedCents).toBe(14200);
-    expect(f.lineNumbers).toEqual([7]);
+    expect(f.amountQuestionedCents).toBe(6800);
+    expect(f.lineNumbers).toEqual([5]);
   });
   /** Proves no finding without an EOB. */
   it("does nothing without an EOB", async () => {
@@ -41,30 +41,38 @@ describe("bill exceeds EOB", () => {
 });
 
 describe("documentation gaps", () => {
-  /** Proves only the troponin (no matching record) is flagged, worded as a documentation request. */
-  it("flags line 8 only", async () => {
+  /**
+   * Proves only the free T4 (line 4) is flagged: Quillhaven's records show a TSH that day but no free
+   * T4. The closest free T4 (Northstar, 3 days earlier) is cited verbatim as cross-provider evidence.
+   */
+  it("flags line 4 only and cites the closest record from the other provider", async () => {
     const records = getRecords();
     const gaps = findDocumentationGaps(await confirmedSampleBill(), records, providersOf(records));
-    expect(gaps.map((g) => g.lineNumbers)).toEqual([[8]]);
+    expect(gaps.map((g) => g.lineNumbers)).toEqual([[4]]);
     expect(gaps[0].ask).toContain("documentation");
     expect(gaps[0].explanation).toContain("doesn't prove");
+    expect(gaps[0].explanation).toContain("Northstar Health System (Synthetic) on March 2, 2026, 3 days before");
     expect(gaps[0].sources[1].kind).toBe("records_searched");
+    const cited = gaps[0].sources[2];
+    expect(cited.kind === "record" && cited.fact.code).toBe("3024-7");
   });
   /** Proves a record dated outside the ±1 day window does not count as a match. */
   it("respects the date window", async () => {
-    const records = getRecords().map((r) => (r.recordId === "ns-lab-0914-cbc" ? { ...r, recordedAt: "2026-09-20" } : r));
+    const moved = (r: ReturnType<typeof getRecords>[number]) =>
+      r.provider.startsWith("Quillhaven") && r.code === "3016-3" ? { ...r, recordedAt: "2026-03-10" } : r;
+    const records = getRecords().map(moved);
     const gaps = findDocumentationGaps(await confirmedSampleBill(), records, providersOf(records));
-    expect(gaps.flatMap((g) => g.lineNumbers).sort()).toEqual([3, 8]);
+    expect(gaps.flatMap((g) => g.lineNumbers).sort()).toEqual([3, 4, 5]);
   });
 });
 
 describe("runAudit and verdict", () => {
-  /** Proves the verdict counts line 7 once even though two findings question it: $142 + $112. */
+  /** Proves the verdict counts line 5 once even though two findings question it: $68 + $54. */
   it("computes the questioned total without double counting", async () => {
     const records = getRecords();
     const { findings, verdict } = runAudit(await confirmedSampleBill(), await confirmedSampleEob(), records, providersOf(records));
     expect(findings.map((f) => f.rule)).toEqual(["duplicate_charge", "bill_exceeds_eob", "documentation_gap"]);
-    expect(verdict).toEqual({ totalBilledCents: 172400, questionedCents: 25400, offeredCents: null, confirmedCents: null });
+    expect(verdict).toEqual({ totalBilledCents: 45300, questionedCents: 12200, offeredCents: null, confirmedCents: null });
   });
   /** Proves the audit is deterministic. */
   it("returns identical results on repeated runs", async () => {

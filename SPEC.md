@@ -701,7 +701,7 @@ Status is current as of 2026-10-03 night; update the Status column whenever a ru
 |---|---|---|---|---|---|
 | 0 | Walking skeleton | H0–H2 | **Mostly done** (left: deploy, real FinchNode fixtures, CI) | Deployed URL with a seeded case and fixture evidence | — |
 | 1 | Cited bill audit | H2–H6 | **Built**; live eval passes on Gemini and Grok; Neon live (data persists, `?case=` reload); audit/test phases pending | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
-| 2 | Adaptive case with live records | H6–H11 | **Started**: live FinchNode client built (demo API answering; sandbox Connect stuck); fixtures not yet rebuilt around the sandbox patient | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
+| 2 | Adaptive case with live records | H6–H11 | **Started**: live FinchNode client built (demo API answering; sandbox Connect stuck); fixtures rebuilt around the FinchNode patient | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
 | 3 | Patient in the loop on iMessage | H11–H14 | Not started | MVP 2 driven from iMessage, with "why?" answers and approvals | Photon |
 | 4 | Live patient-controlled call (**core demo**) | H14–H19 | Not started | MVP 3 plus a live phone call with an unannounced obstacle, mid-call choices, Take over | ElevenLabs, MLH ElevenLabs |
 | 5 | Cross-provider denial appeal (stretch) | H19–H21 | Not started | Denial → criteria vs records from both providers → appeal or doctor request | Strengthens FinchNode |
@@ -890,9 +890,14 @@ codes and dates (TSH and free T4 at Northstar 2026-03-02; TSH at Quillhaven 2026
 and hemoglobin at Quillhaven 2025-11-20; hemoglobin at Northstar 2025-09-16), medications with
 RxNorm codes and start dates (status, no end dates), conditions, immunizations, and encounters.
 No claims and no documents in any scenario we checked, so claims-based case start stays simulated.
-The current sample bill (Jordan Rivera, ER 2026-09-14) matches none of these, so **the fixtures must
-be rebuilt around Priya** before live records give meaningful findings (CPT↔LOINC: 84443↔3016-3,
-84439↔3024-7, 82728↔2276-4, 85018↔718-7).
+**Fixtures rebuilt around Priya (2026-10-04, `scripts/fixture-data.ts`):** Quillhaven Medical Group
+bill for the 2026-03-05 endocrinology consult, $453.00 charged, $321.00 due. TSH (CPT 84443) is
+billed twice (lines 3 and 5) → potential duplicate; the EOB ($253.00 owed) lists it once → bill
+exceeds EOB by $68.00; free T4 (CPT 84439, line 4) has no Quillhaven record that day → documentation
+gap that cites the closest free T4, Northstar's on 2026-03-02 (the cross-provider moment). Verdict:
+$122.00 questioned. Mock mode now serves FinchNode's own saved records
+(`fixtures/finchnode/multi-source-overlap.json`); `fixtures/records.json` is gone. CPT↔LOINC lookup:
+84443↔3016-3, 84439↔3024-7, 82728↔2276-4, 85018↔718-7. Live eval on Grok: 226/226 fields.
 
 **Spike (Dev 1, by H3):** pull all 12 sandbox scenarios and save raw responses; inventory fields;
 pick the patient; write the mapping into `lib/types/`; only then write the bill, EOB, branch
@@ -905,15 +910,15 @@ questions to the FinchNode workshop.
 
 ### 8.1 Setup
 
-One synthetic patient with records at both providers; a $1,200-style bill with a potential
-duplicate and an unmatched lab charge; matching EOB; branch-specific supporting documents (confirms
+One synthetic patient with records at both providers (FinchNode's Priya Ramaswamy); a $321 Quillhaven
+bill with a potential duplicate TSH and a free T4 with no same-day record (Northstar has one 3 days earlier); matching EOB; branch-specific supporting documents (confirms
 error, disproves duplicate, needs more records); a revised statement; optional labeled new-claim
 event; step therapy denial fixture for MVP 5. Teammate plays billing (and the insurer clip). Saved
 sandbox data, a full screen recording, and a call recording as backups.
 
 ### 8.2 Flow (core, ~3 min; +45 s with MVP 5)
 
-1. **Hook:** "Help me resolve this $1,200 bill. Don't agree to pay anything."
+1. **Hook:** "Help me resolve this $321 bill. Don't agree to pay anything."
 2. **Investigate:** records from Northstar and Quillhaven; bill and EOB confirmed; missing documents
    become tasks.
 3. **Plan:** fixed rules find a potential duplicate and a documentation gap; the agent shows the

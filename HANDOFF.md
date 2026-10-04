@@ -44,8 +44,12 @@ Progress per rung is the Status column in SPEC.md §6.
 - **Live FinchNode client built** (`lib/finchnode/live.ts`, `npm run finchnode:check`): with
   `USE_MOCK=false` it tries sandbox Connect, then FinchNode's demo API, then a saved snapshot, and the
   audit screen labels the origin. Sandbox Connect is stuck on FinchNode's side (no `subject`), so the
-  demo API answers with 16 records from Northstar and Quillhaven. Next: rebuild the bill/EOB fixtures
-  around that patient (SPEC.md §7.2 spike results) so live records produce real findings.
+  demo API answers with 16 records from Northstar and Quillhaven.
+- **Fixtures rebuilt around the FinchNode patient** (Priya Ramaswamy, synthetic): $321 Quillhaven bill
+  with a duplicate TSH, $68 over the EOB, and a free T4 with no same-day record whose finding cites
+  Northstar's free T4 from 3 days earlier. Mock mode serves FinchNode's saved records. Details in
+  SPEC.md §7.2. Known rough edge: Grok's letter drafts paste whole findings into sentences; the
+  drafting prompt needs tightening.
 - **Grok is now the default AI provider** (when `XAI_API_KEY` is set); Gemini stays for the judged
   demo (`LLM_PROVIDER=gemini`, MLH Gemini prize). Grok passes the extraction eval 334/334; PDFs are
   rendered to page images for it. Gemini's free tier is only 20 requests/day per project.

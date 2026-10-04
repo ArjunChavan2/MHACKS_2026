@@ -6,8 +6,10 @@
  *   broken-totals bill, prompt-injection bill);
  * - `llm-output/*.json`: the raw-level output a correct extraction model should return for each
  *   PDF (used for the no-AI demo path, unit tests with a mocked model, and the extraction eval);
- * - `records.json`: synthetic FinchNode-shaped records for the same patient.
  *
+ * The patient's records are not generated: they are FinchNode's own synthetic records, saved in
+ * `fixtures/finchnode/multi-source-overlap.json` (refresh with `npm run finchnode:check` output or the
+ * demo API) and mapped by `lib/finchnode/live.ts`.
  * Run with `npm run fixtures`. Side effects: overwrites those files. Implements SPEC.md §6 MVP 0
  * (fixtures v1) and §5.7 (extraction test set, PDF variants).
  */
@@ -16,6 +18,7 @@ import { join } from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   BILL_LINES,
+  BILL_SUBTITLE,
   BILL_TOTALS,
   BROKEN_TOTAL_CHARGES,
   EOB,
@@ -93,7 +96,7 @@ async function makePdf(lines: string[]): Promise<Uint8Array> {
 function billHeaderLines(totalCharges: string): string[] {
   return [
     `#${VISIT.entity} - Itemized Statement`,
-    "Facility charges. SYNTHETIC DEMO DOCUMENT - NOT A REAL BILL.",
+    BILL_SUBTITLE,
     `Patient: ${VISIT.patient}`,
     `Account #: ${VISIT.account}`,
     `Encounter: ${VISIT.encounter}`,
@@ -121,7 +124,7 @@ function billOutput(totalCharges: string) {
     docType: "itemized_bill",
     header: {
       billingEntity: read(VISIT.entity, `${VISIT.entity} - Itemized Statement`),
-      providerType: read("facility", "Facility charges. SYNTHETIC DEMO DOCUMENT - NOT A REAL BILL."),
+      providerType: read("clinician", BILL_SUBTITLE),
       accountNumber: read(VISIT.account, `Account #: ${VISIT.account}`),
       patientName: read(VISIT.patient, `Patient: ${VISIT.patient}`),
       serviceStart: read(VISIT.serviceStart, `Service dates: ${VISIT.serviceStart} - ${VISIT.serviceEnd}`),
@@ -151,20 +154,6 @@ function billOutput(totalCharges: string) {
   };
 }
 
-/** Synthetic FinchNode-shaped records for the patient (labs and medications at two providers). */
-const RECORDS = {
-  _note: "SYNTHETIC. Shaped like our VerbatimFact type, not FinchNode's real schema (pending SPEC.md §7.2 spike).",
-  patient: VISIT.patient,
-  records: [
-    { recordId: "ns-lab-0914-cmp", category: "lab", text: "Comprehensive metabolic panel - Serum or Plasma", code: "24323-8", codeSystem: "LOINC", recordedAt: "2026-09-14", provider: "Northstar Health System" },
-    { recordId: "ns-lab-0914-cbc", category: "lab", text: "CBC panel - Blood by Automated count", code: "58410-2", codeSystem: "LOINC", recordedAt: "2026-09-14", provider: "Northstar Health System" },
-    { recordId: "ns-med-0914-ketorolac", category: "medication", text: "Ketorolac tromethamine 15 MG/ML Injectable Solution (administered)", code: null, codeSystem: null, recordedAt: "2026-09-14", provider: "Northstar Health System" },
-    { recordId: "qh-lab-0302-lipid", category: "lab", text: "Lipid panel with direct LDL - Serum or Plasma", code: "57698-3", codeSystem: "LOINC", recordedAt: "2026-03-02", provider: "Quillhaven Medical Group" },
-    { recordId: "qh-lab-0302-a1c", category: "lab", text: "Hemoglobin A1c/Hemoglobin.total in Blood", code: "4548-4", codeSystem: "LOINC", recordedAt: "2026-03-02", provider: "Quillhaven Medical Group" },
-    { recordId: "qh-med-2024-metformin", category: "medication", text: "metformin hydrochloride 500 MG Oral Tablet", code: null, codeSystem: null, recordedAt: "2024-05-10", provider: "Quillhaven Medical Group" },
-  ],
-};
-
 /**
  * Generates every fixture file.
  *
@@ -190,7 +179,7 @@ async function main(): Promise<void> {
         `Statement date: ${VISIT.statementDate}`,
         "",
         `Balance due: ${BILL_TOTALS.amountDue}`,
-        "Please remit payment by 10/28/2026.",
+        `Please remit payment by ${VISIT.dueDate}.`,
       ],
       output: {
         docType: "balance_statement",
@@ -249,8 +238,7 @@ async function main(): Promise<void> {
     writeFileSync(join(ROOT, "documents", `${name}.pdf`), await makePdf(d.lines));
     writeFileSync(join(ROOT, "llm-output", `${name}.json`), JSON.stringify(d.output, null, 2) + "\n");
   }
-  writeFileSync(join(ROOT, "records.json"), JSON.stringify(RECORDS, null, 2) + "\n");
-  console.log(`Wrote ${Object.keys(docs).length} documents, expected outputs, and records to fixtures/`);
+  console.log(`Wrote ${Object.keys(docs).length} documents and expected outputs to fixtures/`);
 }
 
 main().catch((err: unknown) => {

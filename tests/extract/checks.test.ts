@@ -15,19 +15,19 @@ describe("sample documents", () => {
     const bill = await extractedBill("sample-bill");
     expect(needsAttention(billFields(bill))).toEqual([]);
     expect(bill.documentIssues).toEqual([]);
-    expect(bill.header.amountDue.value).toBe(120000);
+    expect(bill.header.amountDue.value).toBe(32100);
   });
   /** Proves the EOB lines reconcile with its total. */
   it("verifies the sample EOB", async () => {
     const eob = await extractedEob();
     expect(eob.documentIssues).toEqual([]);
-    expect(eob.totalPatientResponsibility.value).toBe(105800);
+    expect(eob.totalPatientResponsibility.value).toBe(25300);
   });
   /** Proves broken totals flag the total and add a document issue (which later blocks the audit). */
   it("flags broken totals", async () => {
     const bill = await extractedBill("bill-broken-totals");
     expect(bill.header.totalCharges.verification).toBe("needs_attention");
-    expect(bill.documentIssues.join(" ")).toContain("add up to $1,724.00");
+    expect(bill.documentIssues.join(" ")).toContain("add up to $453.00");
   });
 });
 

@@ -14,7 +14,7 @@ describe("confirmBill", () => {
     const r = confirmBill(await extractedBill("sample-bill"), base);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.value.lines).toHaveLength(8);
+      expect(r.value.lines).toHaveLength(5);
       expect(Object.isFrozen(r.value)).toBe(true);
     }
   });
@@ -26,7 +26,7 @@ describe("confirmBill", () => {
   });
   /** Proves correcting a misread total unblocks confirmation. */
   it("unblocks when the patient corrects the total", async () => {
-    const r = confirmBill(await extractedBill("bill-broken-totals"), { ...base, corrections: { "header.totalCharges": "$1,724.00" } });
+    const r = confirmBill(await extractedBill("bill-broken-totals"), { ...base, corrections: { "header.totalCharges": "$453.00" } });
     expect(r.ok).toBe(true);
   });
   /** Proves acknowledging that the printed bill itself doesn't add up unblocks and is recorded. */

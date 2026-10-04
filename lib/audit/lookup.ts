@@ -26,6 +26,11 @@ export interface RecordExpectation {
  * - 84484 Troponin, quantitative → LOINC 10839-9 (troponin I) or 6598-7 (troponin T)
  * - 80061 Lipid panel → LOINC 57698-3
  * - J1885 Ketorolac injection, per 15 mg → medication record mentioning ketorolac
+ * - 84443 Thyroid stimulating hormone (TSH) → LOINC 3016-3 (thyrotropin, serum or plasma)
+ * - 84439 Thyroxine, free → LOINC 3024-7 (free T4, serum or plasma)
+ * - 82728 Ferritin → LOINC 2276-4
+ * - 85018 Hemoglobin → LOINC 718-7 (hemoglobin, blood)
+ * The last four cover the FinchNode demo patient's labs (SPEC.md §7.2 spike results).
  */
 export const RECORD_LOOKUP: Readonly<Record<string, RecordExpectation>> = Object.freeze({
   "80053": { service: "comprehensive metabolic panel", category: "lab", codes: ["24323-8"], textMatches: [["comprehensive", "metabolic"]] },
@@ -33,6 +38,10 @@ export const RECORD_LOOKUP: Readonly<Record<string, RecordExpectation>> = Object
   "84484": { service: "troponin test", category: "lab", codes: ["10839-9", "6598-7"], textMatches: [["troponin"]] },
   "80061": { service: "lipid panel", category: "lab", codes: ["57698-3"], textMatches: [["lipid"]] },
   J1885: { service: "ketorolac injection", category: "medication", codes: [], textMatches: [["ketorolac"]] },
+  "84443": { service: "TSH test", category: "lab", codes: ["3016-3"], textMatches: [["thyrotropin"]] },
+  "84439": { service: "free T4 test", category: "lab", codes: ["3024-7"], textMatches: [["thyroxine", "free"]] },
+  "82728": { service: "ferritin test", category: "lab", codes: ["2276-4"], textMatches: [["ferritin"]] },
+  "85018": { service: "hemoglobin test", category: "lab", codes: ["718-7"], textMatches: [["hemoglobin", "mass", "blood"]] },
 });
 
 /** How many days before or after the service date a record may be dated and still match. */

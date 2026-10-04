@@ -1,32 +1,17 @@
 /**
  * @file The only code that talks to FinchNode (SPEC.md §4.1, §5.3).
  *
- * `USE_MOCK=true` (default) serves the saved sample records in `fixtures/records.json`, which match
- * the sample bill. `USE_MOCK=false` loads real FinchNode synthetic records through `./live.ts`
- * (sandbox Connect, then the demo API, then a saved snapshot). This directory is the only place
- * `VerbatimFact` objects are created (SPEC.md §5.6).
+ * `USE_MOCK=true` (default) serves FinchNode's own synthetic records for the demo patient, saved in
+ * `fixtures/finchnode/multi-source-overlap.json` (the sample bill is written around them).
+ * `USE_MOCK=false` loads the same patient live through `./live.ts` (sandbox Connect, then the demo
+ * API, then the saved snapshot). This directory is the only place `VerbatimFact` objects are created
+ * (SPEC.md §5.6).
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { z } from "zod";
 import type { VerbatimFact } from "@/lib/types";
-import { loadLiveRecords, type RecordsResult } from "./live";
+import { loadLiveRecords, mapSnapshot, savedSnapshotPath, type RecordsResult } from "./live";
 
 export { FinchNodeError, loadLiveRecords, mapRecord, mapSnapshot, type RecordsOrigin, type RecordsResult } from "./live";
-
-/** Shape of one saved record in `fixtures/records.json`. */
-const RecordSchema = z.object({
-  recordId: z.string().min(1),
-  category: z.enum(["lab", "medication", "condition", "immunization", "other"]),
-  text: z.string().min(1),
-  code: z.string().nullable(),
-  codeSystem: z.string().nullable(),
-  recordedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  provider: z.string().min(1),
-});
-
-/** Shape of `fixtures/records.json`. */
-const RecordsFileSchema = z.object({ records: z.array(RecordSchema) });
 
 /**
  * Whether to serve saved sandbox data instead of calling FinchNode.
@@ -38,17 +23,15 @@ export function isMockMode(): boolean {
 }
 
 /**
- * Returns the saved sample records (matched to the sample bill) as verbatim facts.
+ * Returns the demo patient's saved FinchNode records as verbatim facts.
  *
- * Validates the saved file with zod and freezes each fact so downstream code cannot alter a health
- * fact. Side effects: reads `fixtures/records.json` from disk.
+ * Side effects: reads the saved snapshot from disk.
  *
- * @returns All sample records, in file order.
- * @throws {z.ZodError} When the saved records file does not match the expected shape.
+ * @returns Facts from both providers, in snapshot order (each frozen).
+ * @throws {import("./live").FinchNodeError} When the saved file is not a records snapshot.
  */
 export function getRecords(): VerbatimFact[] {
-  const file = JSON.parse(readFileSync(join(process.cwd(), "fixtures", "records.json"), "utf8"));
-  return RecordsFileSchema.parse(file).records.map((r) => Object.freeze({ ...r }));
+  return mapSnapshot(JSON.parse(readFileSync(savedSnapshotPath(), "utf8"))).records;
 }
 
 /**
@@ -64,7 +47,7 @@ export function providersOf(records: VerbatimFact[]): string[] {
 }
 
 /**
- * Loads the patient's records for an audit: the saved sample records in mock mode, otherwise real
+ * Loads the patient's records for an audit: the saved snapshot in mock mode, otherwise real
  * FinchNode synthetic records (see `loadLiveRecords` for the fallback order).
  *
  * Side effects: reads fixtures, or network calls to FinchNode when `USE_MOCK=false`.
@@ -75,5 +58,5 @@ export function providersOf(records: VerbatimFact[]): string[] {
 export async function loadRecords(externalId?: string): Promise<RecordsResult> {
   if (!isMockMode()) return loadLiveRecords({ externalId });
   const records = getRecords();
-  return { records, providers: providersOf(records), origin: "sample-fixture", subject: "sample", warnings: [] };
+  return { records, providers: providersOf(records), origin: "saved-snapshot", subject: "patient-demo-multi-source", warnings: [] };
 }

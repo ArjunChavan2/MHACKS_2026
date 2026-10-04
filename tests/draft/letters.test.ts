@@ -45,8 +45,8 @@ describe("dispute letter", () => {
     const d = await draftDisputeLetter(bill, findings, null);
     expect(d.author).toBe("template");
     const text = d.paragraphs.map((p) => p.text).join("\n");
-    expect(text).toContain("NHS-448812");
-    expect(text).toContain("$142.00");
+    expect(text).toContain("QMG-305518");
+    expect(text).toContain("$68.00");
     expect(d.paragraphs.at(-1)?.text).toBe(DISCLAIMER);
     expect(d.paragraphs.some((p) => p.sources.length > 0)).toBe(true);
   });
@@ -66,7 +66,7 @@ describe("dispute letter", () => {
     });
     const d = await draftDisputeLetter(bill, findings, fakeClient([good]).client);
     expect(d.author).toBe("llm");
-    expect(d.subject).toBe("Review of account NHS-448812");
+    expect(d.subject).toBe("Review of account QMG-305518");
   });
 });
 
@@ -74,12 +74,12 @@ describe("itemized bill request", () => {
   /** Proves the request is drafted from header values alone and never lists charges. */
   it("drafts a request from a balance statement header", () => {
     const d = draftItemizedBillRequest({
-      billingEntity: "Northstar Health System",
-      patientName: "Jordan Rivera",
-      accountNumber: "NHS-448812",
+      billingEntity: "Quillhaven Medical Group",
+      patientName: "Priya Ramaswamy",
+      accountNumber: "QMG-305518",
       serviceStart: null,
       serviceEnd: null,
-      amountDueCents: 120000,
+      amountDueCents: 32100,
     });
     expect(d.kind).toBe("itemized_bill_request");
     expect(d.paragraphs.map((p) => p.text).join(" ")).toContain("fully itemized bill");

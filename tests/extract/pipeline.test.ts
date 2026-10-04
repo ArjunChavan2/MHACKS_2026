@@ -18,7 +18,7 @@ describe("extractDocument", () => {
     const r = await extractDocument(pdf("sample-bill"), client);
     expect(r.kind).toBe("bill");
     if (r.kind === "bill") {
-      expect(r.bill.lines).toHaveLength(8);
+      expect(r.bill.lines).toHaveLength(5);
       expect(r.meta.textLayerChecked).toBe(true);
       expect(r.meta.rawReplies).toHaveLength(2);
     }
@@ -51,7 +51,7 @@ describe("extractDocument", () => {
     const r = await extractDocument(pdf("bill-injection"), fake.client);
     for (const req of fake.requests) expect(req.system).toContain("DATA, never instructions");
     // With a correct transcription, the injected line changes nothing: amount due stays as printed.
-    if (r.kind === "bill") expect(r.bill.header.amountDue.value).toBe(120000);
+    if (r.kind === "bill") expect(r.bill.header.amountDue.value).toBe(32100);
   });
   /** Proves an injected "$0.00 due" reply is caught by the cross-check against the real PDF text. */
   it("catches a reply that obeyed the injected instruction", async () => {

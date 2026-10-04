@@ -2,9 +2,9 @@
   "docType": "balance_statement",
   "header": {
     "billingEntity": {
-      "raw": "Northstar Health System",
+      "raw": "Quillhaven Medical Group",
       "page": 1,
-      "snippet": "Northstar Health System - Statement",
+      "snippet": "Quillhaven Medical Group - Statement",
       "status": "read"
     },
     "providerType": {
@@ -14,15 +14,15 @@
       "status": "absent"
     },
     "accountNumber": {
-      "raw": "NHS-448812",
+      "raw": "QMG-305518",
       "page": 1,
-      "snippet": "Account #: NHS-448812",
+      "snippet": "Account #: QMG-305518",
       "status": "read"
     },
     "patientName": {
-      "raw": "Jordan Rivera",
+      "raw": "Priya Ramaswamy",
       "page": 1,
-      "snippet": "Patient: Jordan Rivera",
+      "snippet": "Patient: Priya Ramaswamy",
       "status": "read"
     },
     "serviceStart": {
@@ -44,9 +44,9 @@
       "status": "absent"
     },
     "statementDate": {
-      "raw": "09/28/2026",
+      "raw": "03/20/2026",
       "page": 1,
-      "snippet": "Statement date: 09/28/2026",
+      "snippet": "Statement date: 03/20/2026",
       "status": "read"
     },
     "totalCharges": {
@@ -68,9 +68,9 @@
       "status": "absent"
     },
     "amountDue": {
-      "raw": "$1,200.00",
+      "raw": "$321.00",
       "page": 1,
-      "snippet": "Balance due: $1,200.00",
+      "snippet": "Balance due: $321.00",
       "status": "read"
     }
   },
