@@ -9,6 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import LetterEditor, { type LetterEdits } from "./LetterEditor";
 import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
 import type {
@@ -406,6 +407,17 @@ export default function BillAuditApp() {
     });
   }
 
+  /** Saves patient wording as a new unsent letter document; old approvals cannot cover it. */
+  async function saveLetterEdits(edits: LetterEdits) {
+    if (!caseId) throw new Error("No case is available for this letter.");
+    const view = await postJson<CaseView>(
+      `/api/cases/${encodeURIComponent(caseId)}/letter`,
+      edits,
+    );
+    applyCase(view);
+    setStep("letter");
+  }
+
   /** Requests the dispute letter. */
   async function makeLetter() {
     await run(async () => {
@@ -641,6 +653,7 @@ export default function BillAuditApp() {
       {step === "letter" && draft && (
         <LetterScreen
           draft={draft}
+          onSave={saveLetterEdits}
           onTrack={
             draft.kind === "dispute_letter" || draft.kind === "appeal_letter"
               ? () => setStep("case")
@@ -1221,10 +1234,15 @@ function AuditScreen({
 function LetterScreen({
   draft,
   onTrack,
+  onSave,
 }: {
   draft: Draft;
+  /** Persists patient wording and refreshes the current saved letter. */
+  onSave: (edits: LetterEdits) => Promise<void>;
   onTrack?: () => void;
 }) {
+  /** Editing blocks downloads and case navigation until saved or canceled. */
+  const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   /** Visible PDF failure; a failed request must never be downloaded as a document. */
@@ -1264,13 +1282,38 @@ function LetterScreen({
     }
   }
 
+  if (editing)
+    return (
+      <section className="paper-flow billless-letter-screen">
+        <LetterEditor
+          draft={draft}
+          onCancel={() => setEditing(false)}
+          onSave={async (edits) => {
+            await onSave(edits);
+            setSelected(null);
+            setEditing(false);
+          }}
+        />
+      </section>
+    );
+
   return (
     <section className="paper-flow billless-letter-screen space-y-4">
+      <button className="paper-secondary" onClick={() => setEditing(true)}>
+        Edit letter
+      </button>
+      {draft.patientEdited && (
+        <p role="status" className="paper-copy">
+          Your edits are saved. Review the final letter before sending.
+        </p>
+      )}
       <div className="billless-document-card">
         <p className="text-xs text-[var(--paper-muted)]">
-          {draft.author === "llm"
-            ? "Wording drafted by AI; every fact was filled in by code from your confirmed bill and findings."
-            : "Written from our standard template; every fact was filled in by code."}{" "}
+          {draft.patientEdited
+            ? "Document-backed facts are preserved. Your added wording is labeled separately."
+            : draft.author === "llm"
+              ? "Wording drafted by AI; every fact was filled in by code from your confirmed bill and findings."
+              : "Written from our standard template; every fact was filled in by code."}{" "}
           Tap a paragraph to see where its facts came from.
         </p>
         <h2 className="mt-3 font-semibold">Re: {draft.subject}</h2>
@@ -1284,6 +1327,11 @@ function LetterScreen({
               onClick={() => setSelected(selected === i ? null : i)}
               className={`block w-full text-left cursor-pointer whitespace-pre-line rounded p-2 ${selected === i ? "bg-[var(--paper-surface)] ring-1 ring-[var(--paper-border)]" : "hover:bg-[var(--paper-surface)]"} ${i === draft.paragraphs.length - 1 ? "text-sm text-[var(--paper-muted)]" : ""}`}
             >
+              {p.patientProvided && (
+                <span className="block text-xs text-[var(--paper-muted)]">
+                  Your wording
+                </span>
+              )}
               {p.text}
             </button>
           ))}
@@ -1300,7 +1348,11 @@ function LetterScreen({
                 ))}
               </ul>
             ) : (
-              <p>No facts from your documents in this paragraph.</p>
+              <p>
+                {draft.paragraphs[selected].patientProvided
+                  ? "This wording was added by you; it is not verified document evidence."
+                  : "No facts from your documents in this paragraph."}
+              </p>
             )}
           </div>
         )}

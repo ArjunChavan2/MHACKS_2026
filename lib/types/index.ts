@@ -369,6 +369,8 @@ export interface AuditResult {
 export interface DraftParagraph {
   /** Final text with all placeholders filled by code. */
   text: string;
+  /** True for wording supplied by the patient, rather than verified document facts. */
+  patientProvided?: boolean;
   /** Sources for the facts in this paragraph (for click-to-source). */
   sources: Source[];
 }
@@ -380,6 +382,12 @@ export interface Draft {
   subject: string;
   /** Body paragraphs in order. */
   paragraphs: DraftParagraph[];
+  /** Original generated paragraphs retained for reset and server-side fact protection. */
+  originalParagraphs?: DraftParagraph[];
+  /** Patient-added explanation, stored separately from sourced facts. */
+  personalNote?: string;
+  /** Whether the patient has saved personalized wording. */
+  patientEdited?: boolean;
   /** Whether Gemini wrote the prose (`llm`) or the deterministic template was used (`template`). */
   author: "llm" | "template";
 }
