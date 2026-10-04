@@ -1,0 +1,295 @@
+{
+  "docType": "eob",
+  "insurer": {
+    "raw": "Wolverine Mutual Health",
+    "page": 1,
+    "snippet": "Wolverine Mutual Health - Explanation of Benefits",
+    "status": "read"
+  },
+  "claimNumber": {
+    "raw": "CLM-2026-0914-5531",
+    "page": 1,
+    "snippet": "Claim #: CLM-2026-0914-5531",
+    "status": "read"
+  },
+  "provider": {
+    "raw": "Northstar Health System",
+    "page": 1,
+    "snippet": "Provider: Northstar Health System",
+    "status": "read"
+  },
+  "totalPatientResponsibility": {
+    "raw": "$1,058.00",
+    "page": 1,
+    "snippet": "Total you owe: $1,058.00",
+    "status": "read"
+  },
+  "lines": [
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "99284",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$980.00",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$640.00",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$640.00",
+        "page": 1,
+        "snippet": "09/14/2026  99284     $980.00    $640.00     $0.00    $640.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "36415",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$18.00",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$12.00",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$12.00",
+        "page": 1,
+        "snippet": "09/14/2026  36415      $18.00     $12.00     $0.00     $12.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "85025",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$96.00",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$58.00",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$58.00",
+        "page": 1,
+        "snippet": "09/14/2026  85025      $96.00     $58.00     $0.00     $58.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "80053",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$142.00",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$88.00",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$88.00",
+        "page": 1,
+        "snippet": "09/14/2026  80053     $142.00     $88.00     $0.00     $88.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "71046",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$210.00",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$140.00",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$140.00",
+        "page": 1,
+        "snippet": "09/14/2026  71046     $210.00    $140.00     $0.00    $140.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "J1885",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$24.00",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$16.00",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$16.00",
+        "page": 1,
+        "snippet": "09/14/2026  J1885      $24.00     $16.00     $0.00     $16.00",
+        "status": "read"
+      }
+    },
+    {
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "84484",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      },
+      "billed": {
+        "raw": "$112.00",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      },
+      "allowed": {
+        "raw": "$104.00",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      },
+      "planPaid": {
+        "raw": "$0.00",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      },
+      "patientResponsibility": {
+        "raw": "$104.00",
+        "page": 1,
+        "snippet": "09/14/2026  84484     $112.00    $104.00     $0.00    $104.00",
+        "status": "read"
+      }
+    }
+  ]
+}

@@ -1,0 +1,575 @@
+{
+  "docType": "itemized_bill",
+  "header": {
+    "billingEntity": {
+      "raw": "Northstar Health System",
+      "page": 1,
+      "snippet": "Northstar Health System - Itemized Statement",
+      "status": "read"
+    },
+    "providerType": {
+      "raw": "facility",
+      "page": 1,
+      "snippet": "Facility charges. SYNTHETIC DEMO DOCUMENT - NOT A REAL BILL.",
+      "status": "read"
+    },
+    "accountNumber": {
+      "raw": "NHS-448812",
+      "page": 1,
+      "snippet": "Account #: NHS-448812",
+      "status": "read"
+    },
+    "patientName": {
+      "raw": "Jordan Rivera",
+      "page": 1,
+      "snippet": "Patient: Jordan Rivera",
+      "status": "read"
+    },
+    "serviceStart": {
+      "raw": "09/14/2026",
+      "page": 1,
+      "snippet": "Service dates: 09/14/2026 - 09/14/2026",
+      "status": "read"
+    },
+    "serviceEnd": {
+      "raw": "09/14/2026",
+      "page": 1,
+      "snippet": "Service dates: 09/14/2026 - 09/14/2026",
+      "status": "read"
+    },
+    "encounter": {
+      "raw": "ENC-20260914-07",
+      "page": 1,
+      "snippet": "Encounter: ENC-20260914-07",
+      "status": "read"
+    },
+    "statementDate": {
+      "raw": "09/28/2026",
+      "page": 1,
+      "snippet": "Statement date: 09/28/2026",
+      "status": "read"
+    },
+    "totalCharges": {
+      "raw": "$1,824.00",
+      "page": 1,
+      "snippet": "Total charges: $1,824.00",
+      "status": "read"
+    },
+    "totalAdjustments": {
+      "raw": "-$524.00",
+      "page": 1,
+      "snippet": "Adjustments: -$524.00",
+      "status": "read"
+    },
+    "totalPayments": {
+      "raw": "$0.00",
+      "page": 1,
+      "snippet": "Payments: $0.00",
+      "status": "read"
+    },
+    "amountDue": {
+      "raw": "$1,200.00",
+      "page": 1,
+      "snippet": "Amount due: $1,200.00",
+      "status": "read"
+    }
+  },
+  "lines": [
+    {
+      "lineNumber": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "99284",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Emergency dept visit, high severity",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$980.00",
+        "page": 1,
+        "snippet": "1   09/14/2026  99284  Emergency dept visit, high severity      1    $980.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "2",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "36415",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Routine venipuncture",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$18.00",
+        "page": 1,
+        "snippet": "2   09/14/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "3",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "85025",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Complete blood count w/ auto diff",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$96.00",
+        "page": 1,
+        "snippet": "3   09/14/2026  85025  Complete blood count w/ auto diff        1     $96.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "4",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "80053",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Comprehensive metabolic panel",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$142.00",
+        "page": 1,
+        "snippet": "4   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "5",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "71046",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Chest x-ray, 2 views",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$210.00",
+        "page": 1,
+        "snippet": "5   09/14/2026  71046  Chest x-ray, 2 views                     1    $210.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "6",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "J1885",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "HCPCS",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Ketorolac tromethamine inj, 15 mg",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$24.00",
+        "page": 1,
+        "snippet": "6   09/14/2026  J1885  Ketorolac tromethamine inj, 15 mg        1     $24.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "7",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "80053",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Comprehensive metabolic panel",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$142.00",
+        "page": 1,
+        "snippet": "7   09/14/2026  80053  Comprehensive metabolic panel            1    $142.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "8",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "09/14/2026",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "84484",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Troponin, quantitative",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$112.00",
+        "page": 1,
+        "snippet": "8   09/14/2026  84484  Troponin, quantitative                   1    $112.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "docType": "balance_statement",
+  "header": {
+    "billingEntity": {
+      "raw": "Northstar Health System",
+      "page": 1,
+      "snippet": "Northstar Health System - Statement",
+      "status": "read"
+    },
+    "providerType": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "accountNumber": {
+      "raw": "NHS-448812",
+      "page": 1,
+      "snippet": "Account #: NHS-448812",
+      "status": "read"
+    },
+    "patientName": {
+      "raw": "Jordan Rivera",
+      "page": 1,
+      "snippet": "Patient: Jordan Rivera",
+      "status": "read"
+    },
+    "serviceStart": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "serviceEnd": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "encounter": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "statementDate": {
+      "raw": "09/28/2026",
+      "page": 1,
+      "snippet": "Statement date: 09/28/2026",
+      "status": "read"
+    },
+    "totalCharges": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "totalAdjustments": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "totalPayments": {
+      "raw": null,
+      "page": null,
+      "snippet": null,
+      "status": "absent"
+    },
+    "amountDue": {
+      "raw": "$1,200.00",
+      "page": 1,
+      "snippet": "Balance due: $1,200.00",
+      "status": "read"
+    }
+  },
+  "lines": []
+}

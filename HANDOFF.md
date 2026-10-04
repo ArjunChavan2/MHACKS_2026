@@ -33,7 +33,9 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 
 ## State right now
 
-- **No application code exists yet.** The repo has only the spec, pointers, prompts, and this file.
+- **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 42 tests pass; build, lint, and types are clean.
+  Live Gemini and Neon are untested (no keys yet). Next for MVP 1: run the audit and test phases.
 - SPEC.md (including the full extraction spec in §4.2) is complete through: product, rules, agent model, capabilities, engineering rules and
   docstrings, MVP ladder (MVP 0–6), obstacle register (O1–O13) with the call orchestrator design
   (§7.1) and FinchNode data-fit plan (§7.2), demo plan, prize targets, research, open decisions.
@@ -48,7 +50,8 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 2. **Kick off the early spikes** (SPEC.md §6 MVP 0 and §7): FinchNode data fit (O5, Dev 1, by H3),
    Photon iMessage credentials (O3; Photon had no engineer on site, only a marketing officer, so
    setup is self-serve), call orchestrator spike (O1/O2).
-3. **Scaffold MVP 0** (offered to the user, not started): Next.js app, Neon + Drizzle schema per
+3. **MVP 0 scaffold: mostly done as part of MVP 1** (remaining: real FinchNode data-fit fixtures,
+   docstring/lint enforcement in CI). Original MVP 0 list: Next.js app, Neon + Drizzle schema per
    SPEC.md §4.6 relationships, `lib/types/` contract, `lib/llm/` Gemini smoke call,
    `lib/finchnode/` mock, fixtures v1, lint/Prettier/Vitest, `.env.example`.
 4. **Write design docs** (offered, not started): call orchestrator (SPEC.md §7.1, with sequence
