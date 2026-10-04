@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Back navigation stays in the shared content column and clears the workflow heading. */
+.billless-back-navigation { padding: 16px 0 24px; }
+.billless-back-navigation .paper-source-button { display: inline-flex; align-items: center; min-height: 44px; }
+
 /* Readiness and confirmation progress sit beside their primary action, stacking on phones. */
 .billless-confirm-action { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px; border-radius: 16px; background: var(--paper-surface); }
 .billless-action-progress { flex: 1; min-width: 0; max-width: 420px; }

@@ -194,7 +194,8 @@ export default function BillAuditApp() {
     setAudit(view.audit);
     setDraft(view.draft);
     const tracking =
-      (view.draft?.kind === "dispute_letter" || view.draft?.kind === "appeal_letter") &&
+      (view.draft?.kind === "dispute_letter" ||
+        view.draft?.kind === "appeal_letter") &&
       view.state.phase !== "audited" &&
       view.state.phase !== "intake";
     setStep(
@@ -414,6 +415,45 @@ export default function BillAuditApp() {
     });
   }
 
+  /** Goes to the preceding screen without clearing local values or changing confirmed case facts.
+   * Tracking reloads the current saved draft so it never reopens an outdated local letter.
+   */
+  async function goBack() {
+    setError(null);
+    if (step === "case" && caseId) {
+      await run(async () => {
+        const view = await fetchCase(caseId);
+        applyCase(view);
+        setStep(view.draft ? "letter" : view.audit ? "audit" : "start");
+      });
+      return;
+    }
+    if (step === "letter")
+      setStep(
+        draft?.kind === "itemized_bill_request"
+          ? "request"
+          : audit
+            ? "audit"
+            : "confirm",
+      );
+    else if (step === "audit") setStep("confirm");
+    else setStep("start");
+  }
+
+  /** Destination labels make each backward action clear without implying a reset. */
+  const backLabel =
+    step === "confirm" || step === "request"
+      ? "Back to upload"
+      : step === "audit"
+        ? "Back to details"
+        : step === "case"
+          ? "Back to letter"
+          : draft?.kind === "itemized_bill_request"
+            ? "Back to request"
+            : audit
+              ? "Back to findings"
+              : "Back to details";
+
   /** Starts over. */
   function reset() {
     window.history.replaceState(null, "", window.location.pathname);
@@ -451,6 +491,25 @@ export default function BillAuditApp() {
           </button>
         )}
       </header>
+      <nav
+        className="paper-flow billless-back-navigation"
+        aria-label="Previous screen"
+      >
+        {step === "start" ? (
+          <Link href="/" className="paper-source-button">
+            ← Back to home
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="paper-source-button"
+            disabled={busy}
+            onClick={goBack}
+          >
+            ← {backLabel}
+          </button>
+        )}
+      </nav>
       {step !== "case" && <ReviewProgress step={step} />}
       {step !== "case" && (
         <BillyGuide
@@ -581,7 +640,9 @@ export default function BillAuditApp() {
         <LetterScreen
           draft={draft}
           onTrack={
-            draft.kind === "dispute_letter" || draft.kind === "appeal_letter" ? () => setStep("case") : undefined
+            draft.kind === "dispute_letter" || draft.kind === "appeal_letter"
+              ? () => setStep("case")
+              : undefined
           }
         />
       )}
@@ -811,7 +872,8 @@ function AuditScreen({
   /** Server-produced monetary verdict and evidence-backed findings. */
   const { verdict, findings } = audit;
   // Every issue is the insurer's (e.g. a line it paid $0 for): point the patient to the insurer.
-  const insurerOnly = findings.length > 0 && findings.every((f) => f.contact === "insurer");
+  const insurerOnly =
+    findings.length > 0 && findings.every((f) => f.contact === "insurer");
   /** Maps bill lines to server findings for inspection, without calculating flags. */
   const flaggedLines = new Map<number, Finding[]>();
   for (const finding of findings) {
@@ -996,7 +1058,11 @@ function AuditScreen({
               disabled={busy}
               onClick={onLetter}
             >
-              {busy ? "Preparing your draft…" : insurerOnly ? "Prepare my letter to the insurer →" : "Prepare my dispute draft →"}
+              {busy
+                ? "Preparing your draft…"
+                : insurerOnly
+                  ? "Prepare my letter to the insurer →"
+                  : "Prepare my dispute draft →"}
             </button>
           )}
           <a
