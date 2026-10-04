@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* The single-action balance-statement screen keeps explanatory text comfortably narrow. */
+.billless-request-screen {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 /* Existing MVP screens: readable document cards and responsive case actions. */
 .billless-document-card { background: white; border: 1px solid var(--paper-border); border-radius: 20px; padding: 28px; min-width: 0; }
 .billless-document-card h2 { font-family: var(--font-heading); font-size: 22px; line-height: 1.4; }
