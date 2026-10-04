@@ -72,6 +72,9 @@ Progress per rung is the Status column in SPEC.md §6.
   URLs require a Vercel login. Env vars set in Vercel: XAI_API_KEY, GEMINI_API_KEY, GEMINI_MODEL,
   DATABASE_URL(_UNPOOLED), NEON_BRANCH, FINCHNODE_API_KEY, USE_MOCK=false (live FinchNode demo API records), FINCHNODE_CONNECT=off. Deploy:
   `npx vercel deploy --prod`. Live checks passed: full case flow on Neon, Grok upload 56/56 fields.
+- **Billy asks the patient by text** (`ask_patient` tool → `/api/calls/ask`, `lib/cases/patientQuestions.ts`):
+  the reply is read back verbatim; SSN/card/bank/password questions are refused in code. The tool must be
+  added to both ElevenLabs agents (setup in `agent-notes/mvp4-call/NOTES.md`).
 - **MVP 3 iMessage built** (`agent-notes/mvp3-imessage/IMPLEMENTATION.md`): `lib/messaging/`,
   `/api/messaging/{inbound,outbox,ack}` (Bearer `MESSAGING_SECRET`), case screen panel with a
   `LINK <code>`, and `workers/photon/` (`npm run worker:photon`, or `-- --local <handle>` to test

@@ -93,7 +93,16 @@ it("fits text without cutting lines", () => {
   expect(text.startsWith("Title\n")).toBe(true);
   expect(text.endsWith(`Open your case: ${LINK}`)).toBe(true);
   expect(text).toMatch(/\(\d+ more in the app\)/);
-  for (const l of text.split("\n").slice(1, -2)) expect(lines).toContain(l);
+  for (const l of text.split("\n")) expect(lines.includes(l) || l === "" || /more in the app|Open your case/.test(l)).toBe(true);
+});
+
+/** Proves reply options are never trimmed away, even when the body overflows. */
+it("always keeps the reply options", () => {
+  const lines = ["Title", ...Array.from({ length: 40 }, (_, i) => `Line ${i} ${"x".repeat(40)}`)];
+  const footer = ["Reply with:", "A → Approve: Send the dispute letter", "B → Hold for now (nothing is sent)"];
+  const text = fit(lines, LINK, footer);
+  for (const l of footer) expect(text).toContain(l);
+  expect(text.indexOf("Reply with:")).toBeLessThan(text.indexOf("Open your case"));
 });
 
 describe("composers", () => {
@@ -101,11 +110,13 @@ describe("composers", () => {
   it("asks for approval only when the card's action needs it", () => {
     const u = composeUpdate(drafted, LINK);
     expect(u.text).toContain(drafted.state.next.title);
-    expect(u.text).toContain("Reply A to approve");
+    expect(u.text).toContain("Reply with:");
+    expect(u.text).toContain("A → Approve: Send the dispute letter");
+    expect(u.text).toContain("B → Hold for now");
     expect(u.prompt).toEqual({ actionId: "send_dispute", target: drafted.state.next.target });
     const w = composeUpdate(sent, LINK);
     expect(w.prompt).toBeUndefined();
-    expect(w.text).not.toContain("Reply A");
+    expect(w.text).not.toContain("A → Approve");
   });
 
   /** Proves STATUS numbers every issue so WHY <n> can refer to it. */
@@ -121,9 +132,9 @@ describe("composers", () => {
   it("builds why answers only from the finding's strings and sources", () => {
     for (const f of drafted.audit?.findings ?? []) {
       const text = composeWhy(drafted, f.id, LINK);
-      const allowed = new Set([f.explanation, f.statusNote, ...[...(f.statusSources ?? []), ...f.sources].map((s) => `- ${describeSource(s)}`), "Evidence:", `Open your case: ${LINK}`]);
+      const allowed = new Set(["", f.title, "Status: potential issue", f.explanation, f.statusNote, ...[...(f.statusSources ?? []), ...f.sources].map((src) => `• ${describeSource(src)}`), "Evidence:", `Open your case: ${LINK}`]);
       const [head, ...rest] = text.split("\n");
-      expect(head).toBe(`Why "${f.title}" (potential issue):`);
+      expect(head).toBe("BillLess · Why this was flagged");
       for (const line of rest) expect(allowed.has(line) || /^\(\d+ more in the app\)$/.test(line)).toBe(true);
     }
   });

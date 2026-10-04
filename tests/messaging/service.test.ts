@@ -131,7 +131,8 @@ describe.each([
 
     const status = await handleInbound(me, "status", BASE);
     expect(status).toContain("1. ");
-    expect(status).toContain("Reply A to approve");
+    expect(status).toContain("A → Approve:");
+    expect(status).toContain("Issues:");
 
     const approved = await handleInbound(me, "A", BASE);
     expect(approved).toMatch(/^Done: Send the dispute letter/);
