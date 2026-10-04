@@ -6,18 +6,20 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runAudit } from "@/lib/audit";
+import { computeVerdict, runAudit } from "@/lib/audit";
 import { draftDisputeLetter, draftItemizedBillRequest } from "@/lib/draft/letters";
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
+import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
+import { mergeFindings } from "./responses";
 import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
 
 /** Names of the saved sample documents available for the labeled no-AI path. */
-export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection"] as const;
+export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection", "revised-statement"] as const;
 
 /** A sample document name. */
 export type SampleName = (typeof SAMPLE_NAMES)[number];
@@ -50,6 +52,8 @@ export interface CaseView {
   audit: AuditResponse | null;
   /** The latest drafted letter or request, or `null`. */
   draft: Draft | null;
+  /** Adaptive case state (MVP 2): phase, next action, allowed actions, tasks, savings, timeline. */
+  state: CaseState;
 }
 
 /** Thrown for bad client input; routes map it to HTTP 400. */
@@ -163,6 +167,8 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
     confirmedAsPrinted: input.confirmedPaths,
     totalsMismatchAcknowledged: input.acknowledgeTotalsMismatch,
   });
+  // A confirmed revised statement is checked against the original bill (MVP 2 verification).
+  if (doc.docType === "revised_statement") await verifyRevisedStatement(doc.caseId, documentId);
   return { ok: true };
 }
 
@@ -198,8 +204,12 @@ export async function auditCase(
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
   const { records, providers, origin, warnings } = await loadRecords(caseId);
-  const result = runAudit(bill, eob, records, providers);
+  const fresh = runAudit(bill, eob, records, providers);
   const store = getStore();
+  // Merge so a rerun never erases a status set by a response or verification (MVP 2).
+  const previous = (await store.getCase(caseId))?.findings ?? [];
+  const findings = mergeFindings(previous, fresh.findings);
+  const result = { findings, verdict: computeVerdict(bill, findings) };
   await store.saveFindings(caseId, result.findings);
   await store.setCaseStatus(caseId, "audited");
   await store.addEvent(caseId, "audit_run", { billId, eobId, findings: result.findings.map((f) => f.id), verdict: result.verdict, providers, recordsOrigin: origin, recordWarnings: warnings });
@@ -220,7 +230,11 @@ export async function draftLetter(caseId: string, billId: string, eobId: string 
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
   const { records, providers } = await loadRecords(caseId);
-  const { findings } = runAudit(bill, eob, records, providers);
+  const previous = (await getStore().getCase(caseId))?.findings ?? [];
+  const merged = mergeFindings(previous, runAudit(bill, eob, records, providers).findings);
+  await getStore().saveFindings(caseId, merged);
+  // The letter covers only issues still in question (withdrawn ones stay out).
+  const findings = merged.filter((f) => f.status !== "withdrawn");
   if (!findings.length) throw new BadRequestError("No potential issues were found, so there is nothing to dispute.");
   const draft = await draftDisputeLetter(bill, findings, llmConfigured() ? undefined : null);
   const documentId = await saveDraft(caseId, draft);
@@ -319,5 +333,5 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     audit = { findings: ordered, verdict: lastAudit.verdict, providers: lastAudit.providers ?? [], recordsOrigin: lastAudit.recordsOrigin, recordWarnings: lastAudit.recordWarnings };
   }
   const lastDraft = c.documents.filter((d) => d.direction === "outgoing" && d.draft).at(-1);
-  return { caseId: c.id, status: c.status, documents, audit, draft: (lastDraft?.draft as Draft | undefined) ?? null };
+  return { caseId: c.id, status: c.status, documents, audit, draft: (lastDraft?.draft as Draft | undefined) ?? null, state: caseStateOf(c) };
 }

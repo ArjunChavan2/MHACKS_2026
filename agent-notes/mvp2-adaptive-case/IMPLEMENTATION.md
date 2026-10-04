@@ -1,7 +1,18 @@
-# IMPLEMENTATION: mvp2-adaptive-case (steps 1–2 of PLAN.md)
+# IMPLEMENTATION: mvp2-adaptive-case (steps 1, 2, 4, 5 of PLAN.md)
 
-Status: **steps 1 and 2 done** (pure core + verification). Steps 3–9 not started. Nothing here
-touches the database, routes, or UI yet; the MVP 1 flow is unchanged.
+Status: **steps 1, 2, 4, 5 done** (pure core, verification, branch fixtures, service + API). Step 3
+is **not needed as planned** (see deviation). Steps 6–9 (case screen, operator console, optional LLM
+pick, docs) not started. The MVP 1 UI flow is unchanged.
+
+## Deviation from PLAN.md: no migration
+
+Tasks, approvals, sends, responses, and verifications are stored as **case events** in the existing
+`case_events` table instead of new `documents.meta` / `deadlines.details` columns. The latest
+`tasks_updated` event holds the task list; `approval_recorded`, `dispute_sent`, `response_recorded`,
+`correspondence_attached`, `document_requested`, `follow_up_sent`, `handoff`, `revised_verified`
+carry the rest. Finding statuses live in `findings.body` (already JSON). Result: **no change to the
+shared Neon database** and the timeline comes for free. The `approvals` and `deadlines` tables stay
+unused; mirror approvals into `approvals` later if judges should see it in Neon.
 
 ## What was built
 
@@ -34,6 +45,32 @@ touches the database, routes, or UI yet; the MVP 1 flow is unchanged.
   approved; the service must call it before performing an action (step 5).
 - **Dates** are passed in (`today`, `receivedAt`) so everything stays pure and testable.
 
+## Steps 4–5 (fixtures, service, API)
+
+| File | What |
+|---|---|
+| `scripts/fixture-data.ts`, `scripts/make-fixtures.ts` | `REVISED` statement (old line 5 removed, reprinted 1–4, $253.00 due) with expected output; `CORRESPONDENCE`: `response-confirms`, `lab-result-ft4`, `response-incomplete` PDFs (undated, labeled synthetic, never read by a model) |
+| `scripts/eval-extraction.ts` | adds `revised-statement.pdf`; Grok 52/52 |
+| `lib/cases/caseflow.ts` | `snapshotOf`, `caseStateOf` (phase, next card, allowed actions, tasks, savings, verification, timeline), `runCaseAction` (approval recorded before any send; refuses anything not allowed), `recordResponse` (operator), `attachCorrespondence`, `verifyRevisedStatement`, `today()` (`DEMO_TODAY` pins it), `CORRESPONDENCE_SAMPLES` |
+| `lib/cases/service.ts` | `auditCase`/`draftLetter` merge findings (statuses survive reruns); letters skip withdrawn findings; `confirmDocument` verifies a revised statement on confirm; `loadCase` returns `state`; `revised-statement` added to `SAMPLE_NAMES` |
+| `app/api/cases/[id]/actions/route.ts` | `POST { actionId, target?, approve? }`; 409 `not_allowed` when refused |
+| `app/api/cases/[id]/responses/route.ts` | `POST CounterpartyResponse + attachSample?` (operator console, simulated) |
+| `lib/http/index.ts` | `CaseRuleError` → 400, `ActionRefusedError` → 409 |
+| `tests/cases/caseflow.test.ts` | 6 scenarios × memory and PGlite stores: approval gate, confirms → revised → verified $68, disproves → withdrawn, incomplete → wait → resume, overdue follow-up + take over, bad input changes nothing, reload equality |
+
+### API for the case screen and operator console (steps 6–7)
+
+- `GET /api/cases/[id]` → existing view plus `state: CaseState` (`phase`, `next` card, `allowed`
+  actions with `needsApproval`/`approved`/`target`, `tasks`, `savings` {questioned, offered,
+  confirmed}, `verification`, `timeline` of {at, type, summary}).
+- Approve button: `POST /api/cases/[id]/actions { actionId: next.actionId, target: next.target, approve: true }`.
+- "I'll do this myself": `{ actionId: "patient_takes_over", target: taskId }`.
+- Operator presets (finding IDs from `view.audit.findings` by `rule`):
+  - Confirms: `{ from, perFinding: [{dup, confirms_error}, {eob, confirms_error}], attachSample: "response-confirms" }`, then upload sample `revised-statement` to the case (`/api/documents/sample` with `caseId`) and have the patient confirm it.
+  - Disproves: `{ from, perFinding: [{gap, provides_documentation}], attachSample: "lab-result-ft4" }`.
+  - Incomplete: `{ from, perFinding: [{gap, will_send_later, neededDocument, responsibleParty, promisedBy: today+7}], attachSample: "response-incomplete" }`; later the lab sends `lab-result-ft4` as `provides_documentation`.
+- Dates: `receivedAt` is today; set `DEMO_TODAY` for rehearsals with fixed dates.
+
 ## Notes for the next steps
 
 - Step 3 (store): `CaseSnapshot` is what the service must assemble: `dispute` from the outgoing
@@ -48,4 +85,6 @@ touches the database, routes, or UI yet; the MVP 1 flow is unchanged.
 
 ## Checks
 
-`npx tsc --noEmit`, `npm run lint`, `npx vitest run` (79 tests), `npm run build`: all clean.
+`npx tsc --noEmit`, `npm run lint`, `npx vitest run` (91 tests), `npm run build`: all clean.
+Live eval on Grok: 278/278 fields across 6 documents. HTTP smoke on `next start`: unknown case → 400,
+invalid action → 400.

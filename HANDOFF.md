@@ -36,7 +36,7 @@ Michigan template copied from the user's EECS 445 write-up (headings Montserrat 
 Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
-  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 67 tests pass; build, lint, and types are clean.
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 91 tests pass; build, lint, and types are clean.
 - **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
   `gemini-3.5-flash` (including the prompt-injection bill), now the pinned default; the
@@ -52,6 +52,10 @@ Progress per rung is the Status column in SPEC.md §6.
 - **Letters read like letters now:** each finding carries a first-person `letterText` written by
   code; the model may only place `{{finding:<id>:letter}}` at the start of a sentence (else retry,
   then template); greeting and sign-off are added by code.
+- **MVP 2 backend done** (`agent-notes/mvp2-adaptive-case/`): case state machine, approvals,
+  three outcome branches, wait/resume, revised-statement verification, savings trio, timeline, and
+  the `/api/cases/[id]/actions` and `/responses` endpoints. No DB migration (events). Next: the
+  case screen and the operator console (PLAN.md steps 6–7).
 - **Demo switch:** `FINCHNODE_CONNECT=off` skips the stuck sandbox Connect (no 45 s wait) and uses
   FinchNode's demo API directly.
 - **Grok is now the default AI provider** (when `XAI_API_KEY` is set); Gemini stays for the judged

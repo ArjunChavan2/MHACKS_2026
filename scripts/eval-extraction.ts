@@ -21,6 +21,7 @@ const CASES: Array<{ file: string; mime: string; expected: string }> = [
   { file: "balance-statement.pdf", mime: "application/pdf", expected: "balance-statement" },
   { file: "bill-broken-totals.pdf", mime: "application/pdf", expected: "bill-broken-totals" },
   { file: "bill-injection.pdf", mime: "application/pdf", expected: "bill-injection" },
+  { file: "revised-statement.pdf", mime: "application/pdf", expected: "revised-statement" },
 ];
 
 /**

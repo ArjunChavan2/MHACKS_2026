@@ -135,6 +135,7 @@ describe.each([
       ],
       audit,
       draft,
+      state: expect.objectContaining({ phase: "awaiting_approval", next: expect.objectContaining({ actionId: "send_dispute" }) }),
     });
 
     const c = await g.__mhStore!.getCase(bill.caseId);

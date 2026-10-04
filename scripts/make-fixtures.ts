@@ -21,7 +21,10 @@ import {
   BILL_SUBTITLE,
   BILL_TOTALS,
   BROKEN_TOTAL_CHARGES,
+  CORRESPONDENCE,
   EOB,
+  REVISED,
+  type BillVariant,
   INJECTION_TEXT,
   VISIT,
 } from "./fixture-data";
@@ -92,24 +95,33 @@ async function makePdf(lines: string[]): Promise<Uint8Array> {
   return pdf.save();
 }
 
-/** Header label lines for a bill, as printed. */
-function billHeaderLines(totalCharges: string): string[] {
+/** The original itemized bill as a variant. */
+const ORIGINAL: BillVariant = { title: "Itemized Statement", statementDate: VISIT.statementDate, lines: BILL_LINES, totals: BILL_TOTALS };
+
+/**
+ * Printed lines of a bill.
+ *
+ * @param totalCharges - Total charges as printed (differs in the broken-totals variant).
+ * @param v - Bill variant (original or revised statement).
+ * @returns Text lines top to bottom.
+ */
+function billHeaderLines(totalCharges: string, v: BillVariant = ORIGINAL): string[] {
   return [
-    `#${VISIT.entity} - Itemized Statement`,
+    `#${VISIT.entity} - ${v.title}`,
     BILL_SUBTITLE,
     `Patient: ${VISIT.patient}`,
     `Account #: ${VISIT.account}`,
     `Encounter: ${VISIT.encounter}`,
     `Service dates: ${VISIT.serviceStart} - ${VISIT.serviceEnd}`,
-    `Statement date: ${VISIT.statementDate}`,
+    `Statement date: ${v.statementDate}`,
     "",
     `Ln  Date        Code   Description                            Qty     Charge`,
-    ...BILL_LINES.map(billRow),
+    ...v.lines.map(billRow),
     "",
     `Total charges: ${totalCharges}`,
-    `Adjustments: ${BILL_TOTALS.totalAdjustments}`,
-    `Payments: ${BILL_TOTALS.totalPayments}`,
-    `Amount due: ${BILL_TOTALS.amountDue}`,
+    `Adjustments: ${v.totals.totalAdjustments}`,
+    `Payments: ${v.totals.totalPayments}`,
+    `Amount due: ${v.totals.amountDue}`,
   ];
 }
 
@@ -117,26 +129,27 @@ function billHeaderLines(totalCharges: string): string[] {
  * Builds the expected raw-level model output for a bill.
  *
  * @param totalCharges - Total charges as printed (differs in the broken-totals variant).
- * @returns The expected extraction object for an itemized bill.
+ * @param v - Bill variant; the revised statement reports `docType: "revised_statement"`.
+ * @returns The expected extraction object for the bill.
  */
-function billOutput(totalCharges: string) {
+function billOutput(totalCharges: string, v: BillVariant = ORIGINAL) {
   return {
-    docType: "itemized_bill",
+    docType: v === ORIGINAL ? "itemized_bill" : "revised_statement",
     header: {
-      billingEntity: read(VISIT.entity, `${VISIT.entity} - Itemized Statement`),
+      billingEntity: read(VISIT.entity, `${VISIT.entity} - ${v.title}`),
       providerType: read("clinician", BILL_SUBTITLE),
       accountNumber: read(VISIT.account, `Account #: ${VISIT.account}`),
       patientName: read(VISIT.patient, `Patient: ${VISIT.patient}`),
       serviceStart: read(VISIT.serviceStart, `Service dates: ${VISIT.serviceStart} - ${VISIT.serviceEnd}`),
       serviceEnd: read(VISIT.serviceEnd, `Service dates: ${VISIT.serviceStart} - ${VISIT.serviceEnd}`),
       encounter: read(VISIT.encounter, `Encounter: ${VISIT.encounter}`),
-      statementDate: read(VISIT.statementDate, `Statement date: ${VISIT.statementDate}`),
+      statementDate: read(v.statementDate, `Statement date: ${v.statementDate}`),
       totalCharges: read(totalCharges, `Total charges: ${totalCharges}`),
-      totalAdjustments: read(BILL_TOTALS.totalAdjustments, `Adjustments: ${BILL_TOTALS.totalAdjustments}`),
-      totalPayments: read(BILL_TOTALS.totalPayments, `Payments: ${BILL_TOTALS.totalPayments}`),
-      amountDue: read(BILL_TOTALS.amountDue, `Amount due: ${BILL_TOTALS.amountDue}`),
+      totalAdjustments: read(v.totals.totalAdjustments, `Adjustments: ${v.totals.totalAdjustments}`),
+      totalPayments: read(v.totals.totalPayments, `Payments: ${v.totals.totalPayments}`),
+      amountDue: read(v.totals.amountDue, `Amount due: ${v.totals.amountDue}`),
     },
-    lines: BILL_LINES.map((l) => {
+    lines: v.lines.map((l) => {
       const row = billRow(l);
       return {
         lineNumber: read(l.line, row),
@@ -165,6 +178,7 @@ async function main(): Promise<void> {
 
   const docs: Record<string, { lines: string[]; output: unknown }> = {
     "sample-bill": { lines: billHeaderLines(BILL_TOTALS.totalCharges), output: billOutput(BILL_TOTALS.totalCharges) },
+    "revised-statement": { lines: billHeaderLines(REVISED.totals.totalCharges, REVISED), output: billOutput(REVISED.totals.totalCharges, REVISED) },
     "bill-broken-totals": { lines: billHeaderLines(BROKEN_TOTAL_CHARGES), output: billOutput(BROKEN_TOTAL_CHARGES) },
     "bill-injection": {
       lines: [...billHeaderLines(BILL_TOTALS.totalCharges), "", INJECTION_TEXT],
@@ -238,7 +252,10 @@ async function main(): Promise<void> {
     writeFileSync(join(ROOT, "documents", `${name}.pdf`), await makePdf(d.lines));
     writeFileSync(join(ROOT, "llm-output", `${name}.json`), JSON.stringify(d.output, null, 2) + "\n");
   }
-  console.log(`Wrote ${Object.keys(docs).length} documents and expected outputs to fixtures/`);
+  for (const [name, c] of Object.entries(CORRESPONDENCE)) {
+    writeFileSync(join(ROOT, "documents", `${name}.pdf`), await makePdf(c.lines));
+  }
+  console.log(`Wrote ${Object.keys(docs).length} documents with expected outputs and ${Object.keys(CORRESPONDENCE).length} correspondence PDFs to fixtures/`);
 }
 
 main().catch((err: unknown) => {

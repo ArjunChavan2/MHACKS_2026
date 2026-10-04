@@ -1,0 +1,327 @@
+{
+  "docType": "revised_statement",
+  "header": {
+    "billingEntity": {
+      "raw": "Quillhaven Medical Group",
+      "page": 1,
+      "snippet": "Quillhaven Medical Group - Revised Itemized Statement",
+      "status": "read"
+    },
+    "providerType": {
+      "raw": "clinician",
+      "page": 1,
+      "snippet": "Professional charges. SYNTHETIC DEMO DOCUMENT - NOT A REAL BILL.",
+      "status": "read"
+    },
+    "accountNumber": {
+      "raw": "QMG-305518",
+      "page": 1,
+      "snippet": "Account #: QMG-305518",
+      "status": "read"
+    },
+    "patientName": {
+      "raw": "Priya Ramaswamy",
+      "page": 1,
+      "snippet": "Patient: Priya Ramaswamy",
+      "status": "read"
+    },
+    "serviceStart": {
+      "raw": "03/05/2026",
+      "page": 1,
+      "snippet": "Service dates: 03/05/2026 - 03/05/2026",
+      "status": "read"
+    },
+    "serviceEnd": {
+      "raw": "03/05/2026",
+      "page": 1,
+      "snippet": "Service dates: 03/05/2026 - 03/05/2026",
+      "status": "read"
+    },
+    "encounter": {
+      "raw": "ENC-20260305-12",
+      "page": 1,
+      "snippet": "Encounter: ENC-20260305-12",
+      "status": "read"
+    },
+    "statementDate": {
+      "raw": "04/02/2026",
+      "page": 1,
+      "snippet": "Statement date: 04/02/2026",
+      "status": "read"
+    },
+    "totalCharges": {
+      "raw": "$385.00",
+      "page": 1,
+      "snippet": "Total charges: $385.00",
+      "status": "read"
+    },
+    "totalAdjustments": {
+      "raw": "-$132.00",
+      "page": 1,
+      "snippet": "Adjustments: -$132.00",
+      "status": "read"
+    },
+    "totalPayments": {
+      "raw": "$0.00",
+      "page": 1,
+      "snippet": "Payments: $0.00",
+      "status": "read"
+    },
+    "amountDue": {
+      "raw": "$253.00",
+      "page": 1,
+      "snippet": "Amount due: $253.00",
+      "status": "read"
+    }
+  },
+  "lines": [
+    {
+      "lineNumber": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "03/05/2026",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "99214",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Office visit, established, moderate",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$245.00",
+        "page": 1,
+        "snippet": "1   03/05/2026  99214  Office visit, established, moderate      1    $245.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "2",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "03/05/2026",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "36415",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Routine venipuncture",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$18.00",
+        "page": 1,
+        "snippet": "2   03/05/2026  36415  Routine venipuncture                     1     $18.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "3",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "03/05/2026",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "84443",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Thyroid stimulating hormone (TSH)",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$68.00",
+        "page": 1,
+        "snippet": "3   03/05/2026  84443  Thyroid stimulating hormone (TSH)        1     $68.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    },
+    {
+      "lineNumber": {
+        "raw": "4",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "serviceDate": {
+        "raw": "03/05/2026",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "code": {
+        "raw": "84439",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "codeType": {
+        "raw": "CPT",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "description": {
+        "raw": "Thyroxine, free (free T4)",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "quantity": {
+        "raw": "1",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "unitPrice": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "charge": {
+        "raw": "$54.00",
+        "page": 1,
+        "snippet": "4   03/05/2026  84439  Thyroxine, free (free T4)                1     $54.00",
+        "status": "read"
+      },
+      "adjustment": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      },
+      "patientResponsibility": {
+        "raw": null,
+        "page": null,
+        "snippet": null,
+        "status": "absent"
+      }
+    }
+  ]
+}
