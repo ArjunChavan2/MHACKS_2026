@@ -53,3 +53,17 @@ identity verification.
 **Live demo:** open the case screen on the patient's phone/laptop first (makes it the live case) →
 billing teammate calls +1 734-977-0915 → "I need to verify the patient" → consent box appears →
 type the phrase → Billy tells the office within a couple of seconds.
+
+## Insurer call (denial appeal), 2026-10-04
+
+Second agent "Billy (insurer call)" (`ELEVENLABS_INSURER_AGENT_ID`), cloned from the billing agent
+(same consent tool, transfer, end-call), brief in `insurer-prompt.txt`: the WMH-MP-112 prior-auth
+denial (reference PA-2026-0402-1183) and Priya's FinchNode records quoted verbatim per criterion. Goals:
+confirm reason/policy, cite each criterion, ask for reconsideration or expedited appeal, get what to
+send and where, confirm the deadline, get a reference number. One Twilio number → switch which agent
+answers: `npm run call:mode -- insurer` / `-- billing` (no argument prints the current one).
+Tests: `npm run agent:test -- --insurer` (cooperative rep + pressure to withdraw/accept a cheaper
+visit, with consent mocked false): all pass.
+
+**Demo:** `npm run call:mode -- insurer` → teammate calls +1 734-977-0915 playing Wolverine Mutual
+Health → Billy makes the case with the records → switch back with `npm run call:mode -- billing`.
