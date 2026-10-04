@@ -28,6 +28,7 @@ import {
 import { CaseRuleError, REVISED_STATEMENT, applyResponse, applyVerification, computeSavings, type Savings } from "./responses";
 import { getStore, newId, type StoredCase, type StoredDocument } from "./store";
 import { compareRevised } from "./verify";
+import { fetchCall, latestFinishedCallId, type CallRecord } from "@/lib/calls/history";
 
 /** Correspondence samples the operator console can attach (`fixtures/documents/<name>.pdf`). */
 export const CORRESPONDENCE_SAMPLES: Record<string, string> = {
@@ -61,6 +62,8 @@ export interface CaseState {
   savings: Savings | null;
   verification: RevisedComparison | null;
   timeline: TimelineEntry[];
+  /** Calls saved to this case, oldest first, with transcripts as recorded. */
+  calls: CallRecord[];
 }
 
 /**
@@ -157,6 +160,7 @@ function summarize(type: string, data: Record<string, unknown>): string {
     case "handoff": return `You took over: ${String(data.documentNeeded)}`;
     case "revised_verified": return `Revised statement checked: ${usd(Number((data.comparison as RevisedComparison | undefined)?.confirmedSavingsCents ?? 0))} confirmed`;
     case "tasks_updated": return "Tasks updated";
+    case "call_recorded": return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
     case "imessage_linked": return "iMessage updates turned on";
     case "imessage_unlinked": return "iMessage updates turned off";
     case "imessage_sent": return "Update sent by iMessage";
@@ -182,6 +186,7 @@ export function caseStateOf(c: StoredCase): CaseState {
     tasks,
     savings: orig && snapshot.audited ? computeSavings(orig.bill, c.findings, verification) : null,
     verification,
+    calls: eventsOf<CallRecord>(c, "call_recorded"),
     timeline: c.events
       .filter((e) => !HIDDEN_EVENTS.has(e.type))
       .map((e) => ({ at: e.createdAt, type: e.type, summary: summarize(e.type, (e.data ?? {}) as Record<string, unknown>) })),
@@ -389,4 +394,25 @@ export async function verifyRevisedStatement(caseId: string, documentId: string)
  */
 export function statusLabel(f: Finding): string {
   return f.status === "confirmed" ? (f.verified ? "confirmed, verified" : "confirmed, awaiting revised statement") : f.status;
+}
+
+/**
+ * Saves a finished call (transcript as recorded by ElevenLabs) to the case. The same call can't be
+ * saved twice.
+ *
+ * Side effects: reads ElevenLabs; appends a `call_recorded` event.
+ *
+ * @param caseId - Case ID.
+ * @param conversationId - ElevenLabs conversation ID, or omitted for the agent's latest finished call.
+ * @returns The new case state.
+ * @throws {CaseRuleError} When the case is unknown or the call is already saved.
+ * @throws {import("@/lib/calls").CallError} When ElevenLabs can't provide the call.
+ */
+export async function addCallToCase(caseId: string, conversationId?: string): Promise<CaseState> {
+  const c = await load(caseId);
+  const id = conversationId ?? (await latestFinishedCallId());
+  if (eventsOf<CallRecord>(c, "call_recorded").some((r) => r.conversationId === id)) throw new CaseRuleError("That call is already saved to this case.");
+  const record = await fetchCall(id);
+  await getStore().addEvent(caseId, "call_recorded", record);
+  return caseStateOf(await load(caseId));
 }

@@ -2,6 +2,7 @@
  * @file Shared helpers for API route handlers: input validation and error mapping (SPEC.md §5.4).
  */
 import { z } from "zod";
+import { CallError } from "@/lib/calls";
 import { ActionRefusedError } from "@/lib/cases/caseflow";
 import { CaseRuleError } from "@/lib/cases/responses";
 import { BadRequestError } from "@/lib/cases/service";
@@ -37,6 +38,7 @@ export async function parseBody<T>(req: Request, schema: z.ZodType<T>): Promise<
 export function errorResponse(err: unknown): Response {
   if (err instanceof BadRequestError) return Response.json({ error: "bad_request", message: err.message }, { status: 400 });
   if (err instanceof CaseRuleError) return Response.json({ error: "bad_request", message: err.message }, { status: 400 });
+  if (err instanceof CallError) return Response.json({ error: "call_error", message: err.message }, { status: 400 });
   if (err instanceof ActionRefusedError) return Response.json({ error: "not_allowed", message: err.message }, { status: 409 });
   if (err instanceof LlmUnavailableError) {
     return Response.json(
