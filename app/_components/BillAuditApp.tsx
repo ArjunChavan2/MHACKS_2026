@@ -511,9 +511,9 @@ function StartScreen(props: {
     <section className="paper-flow billless-upload-flow">
       <div className="billless-upload-grid">
         <UploadSlot
-          title="Your itemized bill"
+          title="Your bill"
           label="Add your bill"
-          description="The bill from your hospital or provider, with individual charges."
+          description="Upload your bill. We’ll help you request itemized details if needed."
           ready={Boolean(bill)}
           busy={busy}
           onUpload={props.onUpload}
