@@ -149,3 +149,31 @@ export const CORRESPONDENCE: Record<string, { label: string; lines: string[] }> 
     ],
   },
 };
+
+/**
+ * Prior-authorization denial for MVP 5 (SPEC.md §4.10). Wolverine Mutual Health denies Priya's
+ * planned endocrinology follow-up as not medically necessary under a policy with three criteria,
+ * each of which her FinchNode records at Northstar and Quillhaven satisfy. Printed values only;
+ * `criteria` lines are printed on the letter but checked by code from the policy lookup.
+ */
+export const DENIAL = {
+  insurer: "Wolverine Mutual Health",
+  memberName: VISIT.patient,
+  memberId: "WMH-88214567",
+  referenceNumber: "PA-2026-0402-1183",
+  letterDate: "04/02/2026",
+  deniedService: "Endocrinology follow-up visit",
+  serviceCode: "99214",
+  plannedDate: "04/16/2026",
+  provider: VISIT.entity,
+  denialReason: "Not medically necessary",
+  policyId: "WMH-MP-112",
+  policyTitle: "Specialist care for thyroid disorders",
+  criteria: [
+    "1. A documented diagnosis of a thyroid disorder.",
+    "2. Current thyroid hormone treatment.",
+    "3. A thyroid function test within 60 days before the request.",
+  ],
+  appealDeadline: "06/01/2026",
+  appealAddress: "Wolverine Mutual Health Appeals, P.O. Box 4410, Ann Arbor, MI 48106",
+} as const;

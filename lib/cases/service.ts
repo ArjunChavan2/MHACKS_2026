@@ -10,16 +10,17 @@ import { computeVerdict, runAudit } from "@/lib/audit";
 import { draftDisputeLetter, draftItemizedBillRequest } from "@/lib/draft/letters";
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
+import { confirmDenial, denialFields } from "@/lib/extract/denial";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
 import { mergeFindings } from "./responses";
-import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedEob, Finding, Verdict } from "@/lib/types";
+import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedDenial, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
 
 /** Names of the saved sample documents available for the labeled no-AI path. */
-export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection", "revised-statement"] as const;
+export const SAMPLE_NAMES = ["sample-bill", "sample-eob", "balance-statement", "bill-broken-totals", "bill-injection", "revised-statement", "denial-letter"] as const;
 
 /** A sample document name. */
 export type SampleName = (typeof SAMPLE_NAMES)[number];
@@ -73,6 +74,7 @@ export class BadRequestError extends Error {
 function attentionOf(result: ExtractionResult): string[] {
   if (result.kind === "bill") return needsAttention(billFields(result.bill));
   if (result.kind === "eob") return needsAttention(eobFields(result.eob));
+  if (result.kind === "denial") return needsAttention(denialFields(result.denial));
   return [];
 }
 
@@ -90,7 +92,7 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
   if (caseId && !(await store.getCase(caseId))) throw new BadRequestError("Unknown case");
   const cid = caseId ?? (await store.createCase(null));
   const documentId = newId("doc");
-  const docType = result.kind === "bill" ? result.bill.docType : result.kind === "eob" ? "eob" : result.docType;
+  const docType = result.kind === "bill" ? result.bill.docType : result.kind === "eob" ? "eob" : result.kind === "denial" ? "denial_letter" : result.docType;
   await store.saveDocument({
     id: documentId,
     caseId: cid,
@@ -99,7 +101,7 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
     status: "received",
     fileName,
     storageKey,
-    extraction: result.kind === "bill" ? result.bill : result.kind === "eob" ? result.eob : null,
+    extraction: result.kind === "bill" ? result.bill : result.kind === "eob" ? result.eob : result.kind === "denial" ? result.denial : null,
     extractionMeta: result.meta,
     confirmed: null,
     draft: null,
@@ -158,7 +160,12 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
   if (doc.confirmed) throw new BadRequestError("This document is already confirmed and locked");
   if (!doc.extraction) throw new BadRequestError("This document type can't be confirmed");
   const full = { ...input, documentId };
-  const r = doc.docType === "eob" ? confirmEob(doc.extraction as ExtractedEob, full) : confirmBill(doc.extraction as ExtractedBill, full);
+  const r =
+    doc.docType === "eob"
+      ? confirmEob(doc.extraction as ExtractedEob, full)
+      : doc.docType === "denial_letter"
+        ? confirmDenial(doc.extraction as ExtractedDenial, full)
+        : confirmBill(doc.extraction as ExtractedBill, full);
   if (!r.ok) return r;
   await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
   await store.addEvent(doc.caseId, "fields_confirmed", {
@@ -303,7 +310,11 @@ function ingestOf(doc: StoredDocument): IngestResponse | null {
   if (doc.direction !== "incoming" || !doc.extraction) return null;
   const meta = doc.extractionMeta as ExtractionResult["meta"];
   const result: ExtractionResult =
-    doc.docType === "eob" ? { kind: "eob", eob: doc.extraction as ExtractedEob, meta } : { kind: "bill", bill: doc.extraction as ExtractedBill, meta };
+    doc.docType === "eob"
+      ? { kind: "eob", eob: doc.extraction as ExtractedEob, meta }
+      : doc.docType === "denial_letter"
+        ? { kind: "denial", denial: doc.extraction as ExtractedDenial, meta }
+        : { kind: "bill", bill: doc.extraction as ExtractedBill, meta };
   return { caseId: doc.caseId, documentId: doc.id, result, attention: attentionOf(result) };
 }
 

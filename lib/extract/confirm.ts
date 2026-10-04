@@ -41,7 +41,7 @@ export type ConfirmResult<T> = { ok: true; value: T } | { ok: false; blocking: s
  * @param corrections - Patient corrections.
  * @returns The raw field to rebuild from.
  */
-function rawOf(f: Field<unknown>, path: string, corrections: Record<string, string | null>): RawField {
+export function rawOf(f: Field<unknown>, path: string, corrections: Record<string, string | null>): RawField {
   if (path in corrections) {
     const v = corrections[path];
     return v === null
@@ -58,7 +58,7 @@ function rawOf(f: Field<unknown>, path: string, corrections: Record<string, stri
  * @param input - Patient actions.
  * @returns Blocking messages (empty when everything is resolved).
  */
-function blockingFields(fields: Array<[string, Field<unknown>]>, input: ConfirmInput): string[] {
+export function blockingFields(fields: Array<[string, Field<unknown>]>, input: ConfirmInput): string[] {
   const totalsPaths = new Set(["header.totalCharges", "header.amountDue", "totalPatientResponsibility"]);
   return fields
     .filter(([p, f]) => f.verification === "needs_attention" && !input.confirmedPaths.includes(p))

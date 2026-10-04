@@ -345,7 +345,7 @@ export interface DraftParagraph {
 
 /** A finished draft (dispute letter or itemized-bill request). */
 export interface Draft {
-  kind: "dispute_letter" | "itemized_bill_request";
+  kind: "dispute_letter" | "itemized_bill_request" | "appeal_letter" | "documentation_request";
   /** Letter subject line. */
   subject: string;
   /** Body paragraphs in order. */
@@ -420,4 +420,37 @@ export interface RevisedComparison {
   resolvedFindingIds: string[];
   /** Finding IDs (confirmed by the office) whose lines are still billed. */
   notReflectedFindingIds: string[];
+}
+
+/** Field names read from an insurance denial letter (MVP 5). */
+export type DenialKey =
+  | "insurer" | "memberName" | "memberId" | "referenceNumber" | "letterDate" | "deniedService" | "serviceCode"
+  | "plannedDate" | "provider" | "denialReason" | "policyId" | "appealDeadline" | "appealAddress";
+
+/** A denial letter as extracted (SPEC.md §4.10); dates are ISO, everything else text. */
+export interface ExtractedDenial {
+  docType: "denial_letter";
+  fields: Record<DenialKey, Field<string>>;
+  /** Whole-document problems (e.g. deadline before the letter date). */
+  documentIssues: string[];
+}
+
+/** A denial letter the patient confirmed field by field. Only this type feeds the criteria engine. */
+export interface ConfirmedDenial {
+  readonly confirmed: true;
+  documentId: string;
+  insurer: string | null;
+  memberName: string | null;
+  memberId: string | null;
+  referenceNumber: string | null;
+  /** ISO date the letter was issued (criteria windows count back from it). */
+  letterDate: IsoDate | null;
+  deniedService: string | null;
+  serviceCode: string | null;
+  plannedDate: IsoDate | null;
+  provider: string | null;
+  denialReason: string | null;
+  policyId: string | null;
+  appealDeadline: IsoDate | null;
+  appealAddress: string | null;
 }

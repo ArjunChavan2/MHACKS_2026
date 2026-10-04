@@ -34,9 +34,11 @@ describe("extractDocument", () => {
     await expect(extractDocument(pdf("sample-bill"), client)).rejects.toBeInstanceOf(LlmInvalidOutputError);
   });
   /** Proves denial letters and unknown documents are routed out, not forced into a bill schema. */
-  it("routes denial letters and unknown documents to unsupported", async () => {
-    const denial = await extractDocument(pdf("sample-bill"), fakeClient([classification("denial_letter")]).client);
-    expect(denial.kind).toBe("unsupported");
+  it("reads denial letters and routes unknown documents to unsupported", async () => {
+    const saved = JSON.stringify(fixtureReply("denial-letter"));
+    const denial = await extractDocument(pdf("denial-letter"), fakeClient([classification("denial_letter", []), saved]).client);
+    expect(denial.kind).toBe("denial");
+    if (denial.kind === "denial") expect(denial.denial.fields.policyId.value).toBe("WMH-MP-112");
     const unknown = await extractDocument(pdf("sample-bill"), fakeClient([classification("unknown")]).client);
     expect(unknown.kind).toBe("unsupported");
   });

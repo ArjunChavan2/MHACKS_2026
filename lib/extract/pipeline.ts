@@ -16,8 +16,9 @@ import {
   type FilePart,
   type LlmClient,
 } from "@/lib/llm";
-import type { DocType, ExtractedBill, ExtractedEob } from "@/lib/types";
+import type { DocType, ExtractedBill, ExtractedDenial, ExtractedEob } from "@/lib/types";
 import { buildBill, buildEob } from "./build";
+import { buildDenial, RAW_DENIAL_JSON_SCHEMA, RawDenialSchema, type RawDenial } from "./denial";
 import {
   CLASSIFICATION_JSON_SCHEMA,
   ClassificationSchema,
@@ -54,6 +55,7 @@ export interface ExtractionMeta {
 export type ExtractionResult =
   | { kind: "bill"; bill: ExtractedBill; meta: ExtractionMeta }
   | { kind: "eob"; eob: ExtractedEob; meta: ExtractionMeta }
+  | { kind: "denial"; denial: ExtractedDenial; meta: ExtractionMeta }
   | { kind: "unsupported"; docType: DocType; reason: string; meta: ExtractionMeta };
 
 /**
@@ -162,7 +164,26 @@ export async function extractDocument(file: FilePart, client?: LlmClient): Promi
   const { docType, billingEntities } = c.value;
 
   if (docType === "denial_letter") {
-    return { kind: "unsupported", docType, reason: "Denial appeals are a later stage (SPEC.md §4.10).", meta: meta() };
+    // Denial letters are short; one call reads the whole letter (MVP 5).
+    const r = await generateJson(
+      {
+        system: DOCUMENT_SYSTEM_INSTRUCTION,
+        prompt: [
+          "This document is an insurance denial letter. Transcribe each field exactly as printed; never interpret or summarize.",
+          "Each field is only the value itself, without its label or neighboring values:",
+          "deniedService = the service name only (no code, no date); serviceCode = the billing code digits only (no 'CPT');",
+          "plannedDate = the date the service was planned for; letterDate = the letter's own date;",
+          "denialReason = the reason only (not the word DENIED); policyId = the policy or guideline code the insurer cites;",
+          "appealDeadline = the last date to appeal; appealAddress = where to send the appeal.",
+        ].join(" "),
+        files: [file],
+        jsonSchema: RAW_DENIAL_JSON_SCHEMA,
+        validator: RawDenialSchema,
+      },
+      client,
+    );
+    rawReplies.push(r.rawText);
+    return { kind: "denial", denial: buildDenial(r.value as RawDenial, layer), meta: meta() };
   }
   if (docType === "unknown") {
     return { kind: "unsupported", docType, reason: "This doesn't look like a medical bill or an EOB. Try another file.", meta: meta() };
@@ -229,5 +250,7 @@ export async function extractFromSavedReply(raw: unknown, pdfBytes: Uint8Array):
   };
   const eob = RawEobSchema.safeParse(raw);
   if (eob.success) return { kind: "eob", eob: buildEob(eob.data, layer), meta };
+  const denial = RawDenialSchema.safeParse(raw);
+  if (denial.success) return { kind: "denial", denial: buildDenial(denial.data as RawDenial, layer), meta };
   return { kind: "bill", bill: buildBill(RawBillSchema.parse(raw), layer), meta };
 }

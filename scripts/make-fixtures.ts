@@ -22,6 +22,7 @@ import {
   BILL_TOTALS,
   BROKEN_TOTAL_CHARGES,
   CORRESPONDENCE,
+  DENIAL,
   EOB,
   REVISED,
   type BillVariant,
@@ -168,6 +169,59 @@ function billOutput(totalCharges: string, v: BillVariant = ORIGINAL) {
 }
 
 /**
+ * The prior-authorization denial letter (MVP 5) and its expected raw reply.
+ *
+ * @returns Printed lines and expected output.
+ */
+function denialDoc(): { lines: string[]; output: unknown } {
+  const D = DENIAL;
+  const L = {
+    title: `${D.insurer} - Prior Authorization Decision`,
+    member: `Member: ${D.memberName}   Member ID: ${D.memberId}`,
+    ref: `Reference #: ${D.referenceNumber}   Date: ${D.letterDate}`,
+    service: `Service requested: ${D.deniedService} (CPT ${D.serviceCode}) on ${D.plannedDate}`,
+    provider: `Provider: ${D.provider}`,
+    decision: `Decision: DENIED - ${D.denialReason}`,
+    policy: `Policy: ${D.policyId} - ${D.policyTitle}. This policy requires:`,
+    deadline: `You may appeal by ${D.appealDeadline}. Send your appeal to:`,
+  };
+  const lines = [
+    `#${L.title}`,
+    "SYNTHETIC DEMO DOCUMENT - NOT A REAL DECISION.",
+    L.member,
+    L.ref,
+    "",
+    L.service,
+    L.provider,
+    L.decision,
+    "",
+    L.policy,
+    ...D.criteria,
+    "Our review did not find documentation that these criteria are met.",
+    "",
+    L.deadline,
+    D.appealAddress,
+  ];
+  const output = {
+    docType: "denial_letter",
+    insurer: read(D.insurer, L.title),
+    memberName: read(D.memberName, L.member),
+    memberId: read(D.memberId, L.member),
+    referenceNumber: read(D.referenceNumber, L.ref),
+    letterDate: read(D.letterDate, L.ref),
+    deniedService: read(D.deniedService, L.service),
+    serviceCode: read(D.serviceCode, L.service),
+    plannedDate: read(D.plannedDate, L.service),
+    provider: read(D.provider, L.provider),
+    denialReason: read(D.denialReason, L.decision),
+    policyId: read(D.policyId, L.policy),
+    appealDeadline: read(D.appealDeadline, L.deadline),
+    appealAddress: read(D.appealAddress, D.appealAddress),
+  };
+  return { lines, output };
+}
+
+/**
  * Generates every fixture file.
  *
  * @returns Resolves when all files are written.
@@ -178,6 +232,7 @@ async function main(): Promise<void> {
 
   const docs: Record<string, { lines: string[]; output: unknown }> = {
     "sample-bill": { lines: billHeaderLines(BILL_TOTALS.totalCharges), output: billOutput(BILL_TOTALS.totalCharges) },
+    "denial-letter": denialDoc(),
     "revised-statement": { lines: billHeaderLines(REVISED.totals.totalCharges, REVISED), output: billOutput(REVISED.totals.totalCharges, REVISED) },
     "bill-broken-totals": { lines: billHeaderLines(BROKEN_TOTAL_CHARGES), output: billOutput(BROKEN_TOTAL_CHARGES) },
     "bill-injection": {

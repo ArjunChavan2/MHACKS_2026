@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractDocument } from "../lib/extract/pipeline";
 import { billFields, eobFields } from "../lib/extract/checks";
+import { denialFields } from "../lib/extract/denial";
 import { parseCodeType, parseProviderType } from "../lib/extract/normalize";
 
 /** Fixture documents and the expected reply each should produce. */
@@ -22,6 +23,7 @@ const CASES: Array<{ file: string; mime: string; expected: string }> = [
   { file: "bill-broken-totals.pdf", mime: "application/pdf", expected: "bill-broken-totals" },
   { file: "bill-injection.pdf", mime: "application/pdf", expected: "bill-injection" },
   { file: "revised-statement.pdf", mime: "application/pdf", expected: "revised-statement" },
+  { file: "denial-letter.pdf", mime: "application/pdf", expected: "denial-letter" },
 ];
 
 /**
@@ -85,7 +87,9 @@ async function main(): Promise<void> {
       failures++;
       continue;
     }
-    const fields = r.kind === "bill" ? billFields(r.bill) : eobFields(r.eob);
+    // Denial paths are "fields.<key>" while the expected reply is flat; strip the prefix.
+    const fields =
+      r.kind === "bill" ? billFields(r.bill) : r.kind === "denial" ? denialFields(r.denial).map(([p, f]): [string, typeof f] => [p.replace(/^fields\./, ""), f]) : eobFields(r.eob);
     const got = Object.fromEntries(fields.map(([p, f]) => [p, f]));
     const keys = Object.keys(expected);
     // Labels (code type, provider type) aren't printed text, so compare normalized values for them.

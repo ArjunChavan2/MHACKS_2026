@@ -1,0 +1,81 @@
+{
+  "docType": "denial_letter",
+  "insurer": {
+    "raw": "Wolverine Mutual Health",
+    "page": 1,
+    "snippet": "Wolverine Mutual Health - Prior Authorization Decision",
+    "status": "read"
+  },
+  "memberName": {
+    "raw": "Priya Ramaswamy",
+    "page": 1,
+    "snippet": "Member: Priya Ramaswamy   Member ID: WMH-88214567",
+    "status": "read"
+  },
+  "memberId": {
+    "raw": "WMH-88214567",
+    "page": 1,
+    "snippet": "Member: Priya Ramaswamy   Member ID: WMH-88214567",
+    "status": "read"
+  },
+  "referenceNumber": {
+    "raw": "PA-2026-0402-1183",
+    "page": 1,
+    "snippet": "Reference #: PA-2026-0402-1183   Date: 04/02/2026",
+    "status": "read"
+  },
+  "letterDate": {
+    "raw": "04/02/2026",
+    "page": 1,
+    "snippet": "Reference #: PA-2026-0402-1183   Date: 04/02/2026",
+    "status": "read"
+  },
+  "deniedService": {
+    "raw": "Endocrinology follow-up visit",
+    "page": 1,
+    "snippet": "Service requested: Endocrinology follow-up visit (CPT 99214) on 04/16/2026",
+    "status": "read"
+  },
+  "serviceCode": {
+    "raw": "99214",
+    "page": 1,
+    "snippet": "Service requested: Endocrinology follow-up visit (CPT 99214) on 04/16/2026",
+    "status": "read"
+  },
+  "plannedDate": {
+    "raw": "04/16/2026",
+    "page": 1,
+    "snippet": "Service requested: Endocrinology follow-up visit (CPT 99214) on 04/16/2026",
+    "status": "read"
+  },
+  "provider": {
+    "raw": "Quillhaven Medical Group",
+    "page": 1,
+    "snippet": "Provider: Quillhaven Medical Group",
+    "status": "read"
+  },
+  "denialReason": {
+    "raw": "Not medically necessary",
+    "page": 1,
+    "snippet": "Decision: DENIED - Not medically necessary",
+    "status": "read"
+  },
+  "policyId": {
+    "raw": "WMH-MP-112",
+    "page": 1,
+    "snippet": "Policy: WMH-MP-112 - Specialist care for thyroid disorders. This policy requires:",
+    "status": "read"
+  },
+  "appealDeadline": {
+    "raw": "06/01/2026",
+    "page": 1,
+    "snippet": "You may appeal by 06/01/2026. Send your appeal to:",
+    "status": "read"
+  },
+  "appealAddress": {
+    "raw": "Wolverine Mutual Health Appeals, P.O. Box 4410, Ann Arbor, MI 48106",
+    "page": 1,
+    "snippet": "Wolverine Mutual Health Appeals, P.O. Box 4410, Ann Arbor, MI 48106",
+    "status": "read"
+  }
+}
