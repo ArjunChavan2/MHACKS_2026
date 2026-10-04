@@ -682,17 +682,18 @@ Two different things share the word "agent" in this project; keep them separate.
 Each MVP is a **working demo on its own** and **builds on the previous one**. If time runs out, we
 demo the highest completed MVP. Hours are from hacking start (H0 = Sat 12:00 PM); check the exact
 Devpost deadline and keep the last 2–3 hours for freeze, video, and submission.
+Status is current as of 2026-10-03 night; update the Status column whenever a rung changes (details in `HANDOFF.md`).
 
-| MVP | Name | Target | Demo on its own | Main prizes it unlocks |
-|---|---|---|---|---|
-| 0 | Walking skeleton | H0–H2 | Deployed URL with a seeded case and fixture evidence | — |
-| 1 | Cited bill audit | H2–H6 | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
-| 2 | Adaptive case with live records | H6–H11 | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
-| 3 | Patient in the loop on iMessage | H11–H14 | MVP 2 driven from iMessage, with "why?" answers and approvals | Photon |
-| 4 | Live patient-controlled call (**core demo**) | H14–H19 | MVP 3 plus a live phone call with an unannounced obstacle, mid-call choices, Take over | ElevenLabs, MLH ElevenLabs |
-| 5 | Cross-provider denial appeal (stretch) | H19–H21 | Denial → criteria vs records from both providers → appeal or doctor request | Strengthens FinchNode |
-| 6 | Polish and extra entries (parallel, as time allows) | any | PWA, Neon Auth, .tech, Notability, proactive claim start, Fetch.ai | Neon, .tech, Notability, Fetch.ai |
-| — | Freeze | last 2–3 h | Recordings, Devpost, submission steps (§9) | — |
+| MVP | Name | Target | Status | Demo on its own | Main prizes it unlocks |
+|---|---|---|---|---|---|
+| 0 | Walking skeleton | H0–H2 | **Mostly done** (left: deploy, real FinchNode fixtures, CI) | Deployed URL with a seeded case and fixture evidence | — |
+| 1 | Cited bill audit | H2–H6 | **Built**; live Gemini eval passes; Neon untested; audit/test phases pending | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
+| 2 | Adaptive case with live records | H6–H11 | Not started | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
+| 3 | Patient in the loop on iMessage | H11–H14 | Not started | MVP 2 driven from iMessage, with "why?" answers and approvals | Photon |
+| 4 | Live patient-controlled call (**core demo**) | H14–H19 | Not started | MVP 3 plus a live phone call with an unannounced obstacle, mid-call choices, Take over | ElevenLabs, MLH ElevenLabs |
+| 5 | Cross-provider denial appeal (stretch) | H19–H21 | Not started | Denial → criteria vs records from both providers → appeal or doctor request | Strengthens FinchNode |
+| 6 | Polish and extra entries (parallel, as time allows) | any | Not started | PWA, Neon Auth, .tech, Notability, proactive claim start, Fetch.ai | Neon, .tech, Notability, Fetch.ai |
+| — | Freeze | last 2–3 h | — | Recordings, Devpost, submission steps (§9) | — |
 
 ### MVP 0 — Walking skeleton (H0–H2)
 

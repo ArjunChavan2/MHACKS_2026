@@ -1,4 +1,4 @@
-# HANDOFF.md — session handoff (2026-10-03)
+# HANDOFF.md — session handoff (2026-10-03, updated night)
 
 For the next Claude session (or teammate) picking up this project. **Read `SPEC.md` first; it is
 the single source of truth.** This file only records where things live, what state they are in,
@@ -31,16 +31,28 @@ The team deleted the tabs for tracks we skip. Formatting convention for anything
 Michigan template copied from the user's EECS 445 write-up (headings Montserrat bold, blue
 #00274C, maize #FFCB05 underline on H1; body Lato 10.5; light maize shading for banners).
 
-## State right now
+## State right now (updated 2026-10-03 night)
+
+Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
-  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 42 tests pass; build, lint, and types are clean.
-  Live Gemini and Neon are untested (no keys yet). Next for MVP 1: run the audit and test phases.
-- SPEC.md (including the full extraction spec in §4.2) is complete through: product, rules, agent model, capabilities, engineering rules and
-  docstrings, MVP ladder (MVP 0–6), obstacle register (O1–O13) with the call orchestrator design
-  (§7.1) and FinchNode data-fit plan (§7.2), demo plan, prize targets, research, open decisions.
-- Audit and test prompts were just updated with the agent-core checks (three outcome branches,
-  waiting and resuming, verification, assertion-is-not-proof, binding constraints, labeling).
+  `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 46 tests pass; build, lint, and types are clean.
+- **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
+- **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
+  `gemini-3.5-flash` (including the prompt-injection bill). The `gemini-flash-latest` default
+  repeatedly failed with 503/429 during the eval; set `GEMINI_MODEL=gemini-3.5-flash` in
+  `.env.local` until the team decides whether to change the default (`lib/llm/index.ts`).
+  `gemini-2.5-flash` returns 404 for new keys.
+- **Fixed tonight** (`23b4728`): Gemini calls now time out (60 s) and retry overload, rate limits,
+  dropped connections, and timeouts, then return API 503 `ai_busy`; the classifier no longer
+  rejects EOBs by counting the insurer as a billing entity; code type is inferred from code format.
+  Logged in CLAUDE.md "Known critical errors and fixes".
+- **Still untested:** Neon (`drizzle-kit push` against a real database). Next for MVP 1: run the
+  audit and test phases, then start MVP 2.
+- SPEC.md is complete through: product, rules, agent model, capabilities (full extraction spec in
+  §4.2), engineering rules and docstrings, MVP ladder (MVP 0–6, with status), obstacle register
+  (O1–O13) with the call orchestrator design (§7.1) and FinchNode data-fit plan (§7.2), demo plan,
+  prize targets, research, open decisions.
 
 ## Next steps (in order)
 
