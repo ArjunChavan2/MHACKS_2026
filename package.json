@@ -18,6 +18,7 @@
     "db:check": "tsx scripts/db-check.ts",
     "db:studio": "drizzle-kit studio",
     "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts",
+    "worker:photon": "tsx --env-file-if-exists=.env.local workers/photon/index.ts",
     "call:test": "tsx --env-file-if-exists=.env.local scripts/call-test.ts"
   },
   "dependencies": {
@@ -27,6 +28,8 @@
     "@neon/env": "^1.5.0",
     "@neondatabase/serverless": "^1.2.0",
     "@react-pdf/renderer": "^4.9.0",
+    "@spectrum-ts/core": "^12.10.1",
+    "@spectrum-ts/imessage": "^12.10.1",
     "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "pdf-lib": "^1.17.1",
