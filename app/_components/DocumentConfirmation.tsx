@@ -53,6 +53,11 @@ function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
       ),
     );
   }
+  if (r.kind === "denial")
+    return Object.entries(r.denial.fields).map(([key, field]) => [
+      `fields.${key}`,
+      field,
+    ]);
   return out;
 }
 
@@ -196,6 +201,7 @@ export default function ConfirmPanel({
             <div className="billless-correction-row">
               <input
                 className="min-w-0 flex-1 rounded border border-[var(--paper-border)] px-2 py-2 text-base"
+                disabled={doc.confirmed}
                 aria-label={`Correct ${fieldLabel(path)}`}
                 value={doc.corrections[path] ?? f.raw ?? ""}
                 placeholder="[to confirm]"
@@ -204,6 +210,7 @@ export default function ConfirmPanel({
               <label className="flex items-center gap-1 text-xs">
                 <input
                   type="checkbox"
+                  disabled={doc.confirmed}
                   checked={doc.confirmedPaths.includes(path)}
                   onChange={() => toggleConfirm(path)}
                 />{" "}
@@ -228,7 +235,18 @@ export default function ConfirmPanel({
               <span className="text-[var(--paper-muted)]">
                 {fieldLabel(path)}
               </span>
-              <span className="font-mono">{f.raw}</span>
+              {r.kind === "denial" && !doc.confirmed ? (
+                <input
+                  aria-label={`Correct ${fieldLabel(path)}`}
+                  className="rounded border border-[var(--paper-border)] p-2 min-w-0"
+                  value={doc.corrections[path] ?? f.raw ?? ""}
+                  onChange={(e) => correct(path, e.target.value)}
+                />
+              ) : (
+                <span className="font-mono">
+                  {doc.corrections[path] ?? f.raw}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -236,7 +254,7 @@ export default function ConfirmPanel({
       {doc.blocking.length > 0 && (
         <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
           <p className="font-medium">
-            Still needs fixing before we can check the bill:
+            Still needs fixing before we can check the document:
           </p>
           {doc.blocking.map((m) => (
             <p key={m}>• {m}</p>

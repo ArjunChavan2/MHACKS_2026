@@ -15,6 +15,7 @@ import { usd } from "@/lib/format";
 import type {
   CaseTask,
   ConfirmedBill,
+  ConfirmedDenial,
   CounterpartyResponse,
   Draft,
   Finding,
@@ -222,6 +223,7 @@ export function snapshotOf(c: StoredCase): {
 
 /** Bookkeeping events kept off the timeline (task snapshots and iMessage delivery state). */
 const HIDDEN_EVENTS: ReadonlySet<string> = new Set([
+  "call_session_updated",
   "tasks_updated",
   "imessage_link_code",
   "imessage_prompt",
@@ -289,6 +291,12 @@ function summarize(type: string, data: Record<string, unknown>): string {
       return "Update sent by iMessage";
     case "imessage_reply":
       return `You texted ${IMESSAGE_REPLY_LABEL[String(data.intent)] ?? String(data.intent)}${data.result === "approved" ? " (approved)" : data.result === "declined" ? " (holding)" : ""}`;
+    case "call_review_approved":
+      return `You approved a ${data.mode === "rehearsal" ? "synthetic rehearsal" : "call"} plan for ${String(data.recipient)}`;
+    case "call_outcome_reviewed":
+      return `You reviewed the call outcome: ${String(data.nextStep).replaceAll("_", " ")}${data.dueDate ? `, follow-up proposed for ${String(data.dueDate)}` : ""}`;
+    case "appeal_evaluated":
+      return "Denial criteria checked; correspondence prepared for your review";
     case "call_recorded":
       return `Call saved: ${Math.round(Number(data.durationSecs ?? 0) / 60) || "<1"} min, ${(data.transcript as unknown[] | undefined)?.length ?? 0} turns`;
     case "consent_requested":
@@ -310,11 +318,44 @@ export function caseStateOf(c: StoredCase): CaseState {
   const { snapshot, tasks, verification } = snapshotOf(c);
   const d = today();
   const orig = originalBill(c);
+  /** Denial-only cases have correspondence review steps, rather than billing intake actions. */
+  const denialDoc = !c.documents.some(
+    (doc) => doc.direction === "incoming" && doc.docType !== "denial_letter",
+  )
+    ? c.documents.find(
+        (doc) =>
+          doc.direction === "incoming" && doc.docType === "denial_letter",
+      )
+    : undefined;
+  const denial = denialDoc?.confirmed as ConfirmedDenial | undefined;
+  const evaluated = c.events.some((event) => event.type === "appeal_evaluated");
+  const denialNext: NextAction | null = denialDoc
+    ? {
+        actionId: "wait",
+        title: evaluated
+          ? "Review your denial correspondence"
+          : denial
+            ? "Check the named policy criteria"
+            : "Confirm your denial notice",
+        why: evaluated
+          ? "Your notice and original records support a prepared appeal or documentation request. Review it before using it; nothing has been sent."
+          : "The confirmed notice is needed before the fixed policy rules can be checked. Unsupported policies require human review.",
+        needed: evaluated
+          ? "Your review of the saved draft and its citations"
+          : "Confirmed notice and supported policy",
+        responsibleParty: "You",
+        deadline: denial?.appealDeadline ?? "unconfirmed",
+        overdue: Boolean(denial?.appealDeadline && denial.appealDeadline < d),
+        needsApproval: false,
+        citedFindingIds: [],
+      }
+    : null;
   return {
     preferences: preferencesOf(c),
-    phase: derivePhase(snapshot),
-    next: recommendAction(snapshot, d),
-    allowed: allowedActions(snapshot, d),
+    phase:
+      denialNext && evaluated ? "awaiting_approval" : derivePhase(snapshot),
+    next: denialNext ?? recommendAction(snapshot, d),
+    allowed: denialNext ? [] : allowedActions(snapshot, d),
     tasks,
     savings:
       orig && snapshot.audited

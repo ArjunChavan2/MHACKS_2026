@@ -7,7 +7,12 @@
  * consent arrived. Authenticated with `x-billy-secret` = `MESSAGING_SECRET` (set on the tool).
  */
 import { timingSafeEqual } from "node:crypto";
-import { caseForLiveCall, requestConsent, waitForConsent } from "@/lib/cases/consent";
+import { approvedCallVariables } from "@/lib/calls/workspace";
+import {
+  caseForLiveCall,
+  requestConsent,
+  waitForConsent,
+} from "@/lib/cases/consent";
 
 /** Long enough to wait for the patient's reply. */
 export const maxDuration = 60;
@@ -33,16 +38,63 @@ function authorized(given: string | null): boolean {
  * @returns `{ consented, message }` for Billy to act on.
  */
 export async function POST(req: Request): Promise<Response> {
-  if (!authorized(req.headers.get("x-billy-secret"))) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { counterparty?: string };
-  const caseId = await caseForLiveCall();
-  if (!caseId) return Response.json({ consented: false, message: "No active case found. Tell the office the patient will call back to verify." });
-  const counterparty = (body.counterparty ?? "the billing office").slice(0, 120);
-  const requestId = await requestConsent(caseId, counterparty);
+  if (!authorized(req.headers.get("x-billy-secret")))
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  const body = (await req.json().catch(() => ({}))) as {
+    counterparty?: string;
+    caseId?: string;
+    sessionId?: string;
+  };
+  const caseId =
+    body.caseId && body.sessionId ? body.caseId : await caseForLiveCall();
+  if (body.caseId || body.sessionId) {
+    if (!body.caseId || !body.sessionId)
+      return Response.json({
+        consented: false,
+        message:
+          "Both approved case and session references are required. Hand back to the patient.",
+      });
+    try {
+      await approvedCallVariables(body.caseId, body.sessionId);
+    } catch {
+      return Response.json({
+        consented: false,
+        message:
+          "Call approval is no longer active. End the call and hand back to the patient.",
+      });
+    }
+  }
+  if (!caseId)
+    return Response.json({
+      consented: false,
+      message:
+        "No active case found. Tell the office the patient will call back to verify.",
+    });
+  const counterparty = (body.counterparty ?? "the billing office").slice(
+    0,
+    120,
+  );
+  let requestId: string;
+  try {
+    requestId = await requestConsent(caseId, counterparty);
+  } catch {
+    return Response.json({
+      consented: false,
+      message: "Patient contact is on hold. Hand back to the patient.",
+    });
+  }
   const consented = await waitForConsent(caseId, requestId);
   return Response.json(
     consented
-      ? { consented: true, message: "The patient just confirmed in writing (by text) that she consents to Billy representing her on this account." }
-      : { consented: false, message: "The patient has not replied yet. Tell the office the patient will verify directly and call back." },
+      ? {
+          consented: true,
+          message:
+            "The patient just confirmed in writing (by text) that she consents to Billy representing her on this account.",
+        }
+      : {
+          consented: false,
+          message:
+            "The patient has not replied yet. Tell the office the patient will verify directly and call back.",
+        },
   );
 }

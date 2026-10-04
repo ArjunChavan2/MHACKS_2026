@@ -14,6 +14,9 @@ import type { CaseView } from "@/lib/cases/service";
 import type { ImessageStatus } from "@/lib/messaging/service";
 import { longDate, usd } from "@/lib/format";
 import type { ExtractedBill, Finding } from "@/lib/types";
+import CallWorkspace from "./CallWorkspace";
+import DenialFlow from "./DenialFlow";
+import type { DocState } from "./DocumentConfirmation";
 import CaseDocumentFlow from "./CaseDocumentFlow";
 import CasePreferencesPanel from "./CasePreferencesPanel";
 import type { CasePreferencesInput } from "@/lib/cases/preferences";
@@ -138,6 +141,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [denialReview, setDenialReview] = useState<DocState | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
   const [consentText, setConsentText] = useState("");
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
@@ -444,6 +448,12 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             representing you. Reply by iMessage, or type the phrase here
             exactly:
           </p>
+          {s.consent.pendingRequest.expired && (
+            <p role="status">
+              The consent window expired. Nothing was approved. Arrange direct
+              patient verification or a callback.
+            </p>
+          )}
           <p className="my-2 font-mono text-sm font-semibold">
             I consent to Billy representing me
           </p>
@@ -463,7 +473,12 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             />
             <button
               className="paper-primary"
-              disabled={busy || !consentText.trim()}
+              disabled={
+                busy ||
+                Boolean(preferences) ||
+                !consentText.trim() ||
+                s.consent.pendingRequest.expired
+              }
               type="submit"
             >
               Send
@@ -738,6 +753,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             view={view}
             onUpdated={refresh}
             onBusyChange={setBusy}
+            onDenial={setDenialReview}
           />
         </div>
       )}
@@ -772,6 +788,42 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
         </ul>
       </section>
 
+      {view.documents
+        .filter((d) => d.ingest.result.kind === "denial")
+        .map((d) => (
+          <button
+            key={d.ingest.documentId}
+            className="paper-secondary"
+            onClick={() =>
+              setDenialReview({
+                ingest: d.ingest,
+                confirmed: d.confirmed,
+                corrections: d.confirmedValues ?? {},
+                confirmedPaths: [],
+                ackTotals: false,
+                blocking: [],
+              })
+            }
+          >
+            Review denial notice
+          </button>
+        ))}
+      {denialReview && (
+        <DenialFlow
+          doc={denialReview}
+          onChange={setDenialReview}
+          onTrack={() => {
+            setDenialReview(null);
+            void refresh();
+          }}
+        />
+      )}
+      <CallWorkspace
+        caseId={caseId}
+        consent={s.consent}
+        disabled={busy || Boolean(preferences)}
+        onChange={refresh}
+      />
       <div className="paper-findings">
         <h3>Calls</h3>
         <p className="paper-copy text-sm">

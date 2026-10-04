@@ -7,6 +7,7 @@
  * DEMO ONLY: typed consent is not identity verification; real offices may still require the patient
  * on the line or a signed authorization form.
  */
+import { preferencesOf } from "./preferences";
 import { newId, getStore, type StoredCase } from "./store";
 
 /** The exact phrase the patient must type. */
@@ -25,7 +26,11 @@ const POLL_MS = 1500;
  * @returns Normalized text.
  */
 function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  return s
+    .toLowerCase()
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
@@ -41,7 +46,7 @@ export function isConsentPhrase(text: string): boolean {
 /** Consent state of a case, for the case screen. */
 export interface ConsentState {
   /** An open request (no consent after it yet), or null. */
-  pendingRequest: { requestId: string; at: string } | null;
+  pendingRequest: { requestId: string; at: string; expired: boolean } | null;
   /** When consent was last given, or null. */
   givenAt: string | null;
   via: "imessage" | "web" | null;
@@ -58,8 +63,31 @@ export function consentStateOf(c: StoredCase): ConsentState {
   const given = c.events.filter((e) => e.type === "consent_given");
   const lastReq = requests.at(-1);
   const lastGiven = given.at(-1);
-  const pending = lastReq && (!lastGiven || lastGiven.createdAt < lastReq.createdAt) ? { requestId: (lastReq.data as { requestId: string }).requestId, at: lastReq.createdAt } : null;
-  return { pendingRequest: pending, givenAt: lastGiven?.createdAt ?? null, via: (lastGiven?.data as { via?: "imessage" | "web" } | undefined)?.via ?? null };
+  const matchingGiven =
+    lastReq &&
+    given.some(
+      (event) =>
+        (event.data as { requestId?: string }).requestId ===
+          (lastReq.data as { requestId: string }).requestId ||
+        (!(event.data as { requestId?: string }).requestId &&
+          event.createdAt >= lastReq.createdAt),
+    );
+  const pending =
+    lastReq && !matchingGiven
+      ? {
+          requestId: (lastReq.data as { requestId: string }).requestId,
+          at: lastReq.createdAt,
+          expired:
+            Date.now() >= Date.parse(lastReq.createdAt) + CONSENT_WAIT_MS,
+        }
+      : null;
+  return {
+    pendingRequest: pending,
+    givenAt: lastGiven?.createdAt ?? null,
+    via:
+      (lastGiven?.data as { via?: "imessage" | "web" } | undefined)?.via ??
+      null,
+  };
 }
 
 /**
@@ -69,10 +97,19 @@ export function consentStateOf(c: StoredCase): ConsentState {
  * @param counterparty - Who is asking (e.g. "Quillhaven Medical Group's billing office").
  * @returns The request ID.
  */
-export async function requestConsent(caseId: string, counterparty: string): Promise<string> {
+export async function requestConsent(
+  caseId: string,
+  counterparty: string,
+): Promise<string> {
   const store = getStore();
+  const c = await store.getCase(caseId);
+  if (!c || preferencesOf(c).pauseContact)
+    throw new Error("Contact is on hold or the case is unavailable.");
   const requestId = newId("cns");
-  await store.addEvent(caseId, "consent_requested", { requestId, counterparty });
+  await store.addEvent(caseId, "consent_requested", {
+    requestId,
+    counterparty,
+  });
   await store.addEvent(caseId, "imessage_direct", {
     messageId: newId("msg"),
     text: `Billy is on a call with ${counterparty} about your bill. To let Billy represent you, reply exactly:\n${CONSENT_PHRASE}`,
@@ -88,9 +125,27 @@ export async function requestConsent(caseId: string, counterparty: string): Prom
  * @param via - Where it came from.
  * @returns True when recorded; false when the text isn't the phrase.
  */
-export async function recordConsent(caseId: string, text: string, via: "imessage" | "web"): Promise<boolean> {
+export async function recordConsent(
+  caseId: string,
+  text: string,
+  via: "imessage" | "web",
+): Promise<boolean> {
   if (!isConsentPhrase(text)) return false;
-  await getStore().addEvent(caseId, "consent_given", { via, phrase: CONSENT_PHRASE });
+  const store = getStore();
+  const c = await store.getCase(caseId);
+  const pending = c ? consentStateOf(c).pendingRequest : null;
+  if (
+    !c ||
+    !pending ||
+    preferencesOf(c).pauseContact ||
+    Date.now() >= Date.parse(pending.at) + CONSENT_WAIT_MS
+  )
+    return false;
+  await store.addEvent(caseId, "consent_given", {
+    via,
+    phrase: CONSENT_PHRASE,
+    requestId: pending.requestId,
+  });
   return true;
 }
 
@@ -104,12 +159,32 @@ export async function recordConsent(caseId: string, text: string, via: "imessage
  * @param timeoutMs - How long to wait.
  * @returns True if consent arrived in time.
  */
-export async function waitForConsent(caseId: string, requestId: string, timeoutMs = CONSENT_WAIT_MS): Promise<boolean> {
+export async function waitForConsent(
+  caseId: string,
+  requestId: string,
+  timeoutMs = CONSENT_WAIT_MS,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const c = await getStore().getCase(caseId);
-    const req = c?.events.find((e) => e.type === "consent_requested" && (e.data as { requestId?: string }).requestId === requestId);
-    if (c && req && c.events.some((e) => e.type === "consent_given" && e.createdAt >= req.createdAt)) return true;
+    const req = c?.events.find(
+      (e) =>
+        e.type === "consent_requested" &&
+        (e.data as { requestId?: string }).requestId === requestId,
+    );
+    if (c && preferencesOf(c).pauseContact) return false;
+    if (
+      c &&
+      req &&
+      c.events.some(
+        (e) =>
+          e.type === "consent_given" &&
+          (e.data as { requestId?: string }).requestId === requestId &&
+          e.createdAt >= req.createdAt &&
+          Date.parse(e.createdAt) < Date.parse(req.createdAt) + CONSENT_WAIT_MS,
+      )
+    )
+      return true;
     if (Date.now() >= deadline) return false;
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
@@ -128,7 +203,8 @@ export async function caseForLiveCall(): Promise<string | null> {
   for (const type of ["imessage_linked", "imessage_link_code"]) {
     for (const id of await store.findCasesByEvent(type, {})) {
       const c = await store.getCase(id);
-      const at = c?.events.filter((e) => e.type === type).at(-1)?.createdAt ?? "";
+      const at =
+        c?.events.filter((e) => e.type === type).at(-1)?.createdAt ?? "";
       if (!best || at > best.at) best = { id, at };
     }
   }

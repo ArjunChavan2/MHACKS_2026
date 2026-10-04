@@ -44,11 +44,14 @@ export default function CaseDocumentFlow({
   view,
   onUpdated,
   onBusyChange,
+  onDenial,
 }: {
   /** Current saved case and resumable incoming documents. */
   view: CaseView;
   /** Reloads server state after a document operation. */
   onUpdated: () => Promise<void>;
+  /** Routes a denial into its dedicated review without fulfilling a billing-paperwork task. */
+  onDenial: (doc: DocState) => void;
   /** Holds other case buttons while document work is running. */
   onBusyChange: (busy: boolean) => void;
 }) {
@@ -67,7 +70,8 @@ export default function CaseDocumentFlow({
   const pending = view.documents.filter(
     (d) =>
       !d.confirmed &&
-      (d.ingest.result.kind === "eob" ||
+      (d.ingest.result.kind === "denial" ||
+        d.ingest.result.kind === "eob" ||
         (d.ingest.result.kind === "bill" &&
           d.ingest.result.bill.docType !== "balance_statement")),
   );
@@ -125,6 +129,20 @@ export default function CaseDocumentFlow({
     const saved = view.documents.find(
       (d) => d.ingest.documentId === ingest.documentId,
     );
+    if (ingest.result.kind === "denial") {
+      setDoc(null);
+      setError(null);
+      setRetryFile(null);
+      onDenial({
+        ingest,
+        confirmed: confirmed || Boolean(saved?.confirmed),
+        corrections: saved?.confirmedValues ?? {},
+        confirmedPaths: [],
+        ackTotals: false,
+        blocking: [],
+      });
+      return;
+    }
     if (saved?.taskId) setTaskId(saved.taskId);
     setDoc({
       ingest,
@@ -167,6 +185,11 @@ export default function CaseDocumentFlow({
         throw err;
       }
       const result = ingest.result;
+      if (result.kind === "denial") {
+        openDocument(ingest);
+        await onUpdated();
+        return;
+      }
       if (!(
         result.kind === "eob" ||
         (result.kind === "bill" &&
@@ -232,9 +255,9 @@ export default function CaseDocumentFlow({
     >
       <h3 className="text-lg font-semibold">Add a document to your case</h3>
       <p className="paper-copy">
-        Add an arrived itemized bill, EOB or revised statement. You’ll confirm
-        the details before we check it. Lab reports and other supporting records
-        need human handling.
+        Add an arrived itemized bill, EOB, revised statement or denial notice.
+        You’ll confirm the details before we check it. Lab reports and other
+        supporting records need human handling.
       </p>
       <label className="billless-goal-label">
         Which request is this for?

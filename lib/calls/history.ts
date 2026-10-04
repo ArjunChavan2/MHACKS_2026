@@ -38,7 +38,11 @@ const ConversationSchema = z.object({
   conversation_id: z.string(),
   status: z.string(),
   metadata: z
-    .object({ start_time_unix_secs: z.number().optional(), call_duration_secs: z.number().optional(), termination_reason: z.string().nullish() })
+    .object({
+      start_time_unix_secs: z.number().optional(),
+      call_duration_secs: z.number().optional(),
+      termination_reason: z.string().nullish(),
+    })
     .passthrough()
     .default({}),
   transcript: z
@@ -48,7 +52,9 @@ const ConversationSchema = z.object({
           role: z.string(),
           message: z.string().nullish(),
           time_in_call_secs: z.number().nullish(),
-          tool_calls: z.array(z.object({ tool_name: z.string().nullish() }).passthrough()).nullish(),
+          tool_calls: z
+            .array(z.object({ tool_name: z.string().nullish() }).passthrough())
+            .nullish(),
         })
         .passthrough(),
     )
@@ -57,7 +63,15 @@ const ConversationSchema = z.object({
 
 /** Conversation list item. */
 const ListSchema = z.object({
-  conversations: z.array(z.object({ conversation_id: z.string(), status: z.string(), start_time_unix_secs: z.number().optional() }).passthrough()),
+  conversations: z.array(
+    z
+      .object({
+        conversation_id: z.string(),
+        status: z.string(),
+        start_time_unix_secs: z.number().optional(),
+      })
+      .passthrough(),
+  ),
 });
 
 /**
@@ -69,7 +83,10 @@ const ListSchema = z.object({
 function settings(): { key: string; agentId: string } {
   const key = process.env.ELEVENLABS_API_KEY;
   const agentId = process.env.ELEVENLABS_AGENT_ID;
-  if (!key || !agentId) throw new CallError("Call history isn't configured (ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID).");
+  if (!key || !agentId)
+    throw new CallError(
+      "Call history isn't configured (ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID).",
+    );
   return { key, agentId };
 }
 
@@ -82,8 +99,15 @@ function settings(): { key: string; agentId: string } {
  * @throws {CallError} On a non-2xx response.
  */
 async function get(path: string, key: string): Promise<unknown> {
-  const res = await fetch(`https://api.elevenlabs.io${path}`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new CallError(`ElevenLabs returned HTTP ${res.status} for call history.`, res.status);
+  const res = await fetch(`https://api.elevenlabs.io${path}`, {
+    headers: { "xi-api-key": key },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok)
+    throw new CallError(
+      `ElevenLabs returned HTTP ${res.status} for call history.`,
+      res.status,
+    );
   return res.json();
 }
 
@@ -96,20 +120,36 @@ async function get(path: string, key: string): Promise<unknown> {
  */
 export async function fetchCall(conversationId: string): Promise<CallRecord> {
   const { key } = settings();
-  const c = ConversationSchema.parse(await get(`/v1/convai/conversations/${encodeURIComponent(conversationId)}`, key));
-  if (c.status !== "done") throw new CallError("That call hasn't finished yet. Try again after it ends.");
+  const c = ConversationSchema.parse(
+    await get(
+      `/v1/convai/conversations/${encodeURIComponent(conversationId)}`,
+      key,
+    ),
+  );
+  if (c.status !== "done")
+    throw new CallError(
+      "That call hasn't finished yet. Try again after it ends.",
+    );
   const start = c.metadata.start_time_unix_secs;
   return {
     conversationId: c.conversation_id,
-    startedAt: start ? new Date(start * 1000).toISOString() : new Date().toISOString(),
+    startedAt: start
+      ? new Date(start * 1000).toISOString()
+      : new Date().toISOString(),
     durationSecs: c.metadata.call_duration_secs ?? 0,
     endedBy: c.metadata.termination_reason ?? null,
     transcript: c.transcript
       .filter((t) => t.role === "agent" || t.role === "user")
       .map((t) => {
-        const action = (t.tool_calls ?? []).map((tc) => ACTIONS[tc.tool_name ?? ""]).find(Boolean);
+        const action = (t.tool_calls ?? [])
+          .map((tc) => ACTIONS[tc.tool_name ?? ""])
+          .find(Boolean);
         const text = (t.message ?? "").trim();
-        return { role: t.role as "agent" | "user", message: text || action || "", atSecs: t.time_in_call_secs ?? 0 };
+        return {
+          role: t.role as "agent" | "user",
+          message: text || action || "",
+          atSecs: t.time_in_call_secs ?? 0,
+        };
       })
       .filter((t) => t.message),
   };
@@ -123,8 +163,93 @@ export async function fetchCall(conversationId: string): Promise<CallRecord> {
  */
 export async function latestFinishedCallId(): Promise<string> {
   const { key, agentId } = settings();
-  const list = ListSchema.parse(await get(`/v1/convai/conversations?page_size=10&agent_id=${encodeURIComponent(agentId)}`, key));
-  const done = list.conversations.filter((c) => c.status === "done").sort((a, b) => (b.start_time_unix_secs ?? 0) - (a.start_time_unix_secs ?? 0));
+  const list = ListSchema.parse(
+    await get(
+      `/v1/convai/conversations?page_size=10&agent_id=${encodeURIComponent(agentId)}`,
+      key,
+    ),
+  );
+  const done = list.conversations
+    .filter((c) => c.status === "done")
+    .sort(
+      (a, b) => (b.start_time_unix_secs ?? 0) - (a.start_time_unix_secs ?? 0),
+    );
   if (!done.length) throw new CallError("No finished calls yet.");
   return done[0].conversation_id;
+}
+
+/** Conversation metadata and verbatim turns for an exact Twilio call, including unfinished calls. */
+export interface LiveConversation {
+  conversationId: string;
+  status: string;
+  transcript: CallTurn[];
+  record: CallRecord | null;
+}
+
+/**
+ * Looks up a conversation only when ElevenLabs metadata matches the case-owned Twilio SID.
+ * @param sid - Twilio call created for this case. No global latest-call fallback is allowed here.
+ * @param conversationId - Previously verified association, avoiding repeated list requests.
+ * @returns Original provider turns, or null while registration/transcript publication is pending.
+ * Side effects: bounded ElevenLabs reads. Never guesses which case a call belongs to.
+ */
+export async function conversationForCall(
+  sid: string,
+  conversationId?: string | null,
+): Promise<LiveConversation | null> {
+  const { key, agentId } = settings();
+  const ids = conversationId
+    ? [conversationId]
+    : ListSchema.parse(
+        await get(
+          `/v1/convai/conversations?page_size=10&agent_id=${encodeURIComponent(agentId)}`,
+          key,
+        ),
+      ).conversations.map((c) => c.conversation_id);
+  const fetched = await Promise.allSettled(
+    ids.map(async (id) =>
+      ConversationSchema.parse(
+        await get(`/v1/convai/conversations/${encodeURIComponent(id)}`, key),
+      ),
+    ),
+  );
+  for (const result of fetched) {
+    if (result.status !== "fulfilled") continue;
+    const c = result.value;
+    const phone = c.metadata.phone_call as { call_sid?: string } | undefined;
+    if (phone?.call_sid !== sid) continue;
+    const transcript = c.transcript
+      .filter((t) => t.role === "agent" || t.role === "user")
+      .map((t) => ({
+        role: t.role as "agent" | "user",
+        message: t.message ?? "",
+        atSecs: t.time_in_call_secs ?? 0,
+      }))
+      .filter((t) => t.message);
+    return {
+      conversationId: c.conversation_id,
+      status: c.status,
+      transcript,
+      record:
+        c.status === "done"
+          ? {
+              conversationId: c.conversation_id,
+              startedAt: c.metadata.start_time_unix_secs
+                ? new Date(c.metadata.start_time_unix_secs * 1000).toISOString()
+                : new Date().toISOString(),
+              durationSecs: c.metadata.call_duration_secs ?? 0,
+              endedBy: c.metadata.termination_reason ?? null,
+              transcript,
+            }
+          : null,
+    };
+  }
+  if (
+    fetched.length > 0 &&
+    fetched.every((result) => result.status === "rejected")
+  )
+    throw new CallError(
+      "The provider could not return call transcript details.",
+    );
+  return null;
 }

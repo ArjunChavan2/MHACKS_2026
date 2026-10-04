@@ -347,7 +347,8 @@ export async function handleInbound(
   if (!caseId)
     return "This number isn't linked to a case yet. Open your case on the web and text the LINK code it shows, e.g. LINK 4F7K2Q.";
   if (isConsentPhrase(text)) {
-    await recordConsent(caseId, text, "imessage");
+    if (!(await recordConsent(caseId, text, "imessage")))
+      return "No active consent request is available, or contact is on hold. Nothing was approved. Open your case to review the call.";
     await store.addEvent(caseId, "imessage_reply", {
       intent: "consent",
       result: "recorded",

@@ -18,7 +18,7 @@ import {
   confirmEob,
   type ConfirmInput,
 } from "@/lib/extract/confirm";
-import { confirmDenial, denialFields } from "@/lib/extract/denial";
+import { confirmDenial, denialFields, DENIAL_KEYS } from "@/lib/extract/denial";
 import { evaluateDenial, type DenialEvaluation } from "@/lib/appeals/criteria";
 import {
   draftAppealLetter,
@@ -97,11 +97,15 @@ export interface CaseView {
     fileName?: string | null;
     /** Patient-selected paperwork task, retained across reload for pending confirmation. */
     taskId?: string;
+    /** Patient-confirmed denial values for locked display after reload. Original PDF stays unchanged. */
+    confirmedValues?: Record<string, string | null>;
   }>;
   /** The latest audit, or `null` if none has run. */
   audit: AuditResponse | null;
   /** The latest drafted letter or request, or `null`. */
   draft: Draft | null;
+  /** Latest saved denial evaluation; verbatim evidence survives reload. */
+  appeal: (AppealResponse & { documentId: string }) | null;
   /** Adaptive case state (MVP 2): phase, next action, allowed actions, tasks, savings, timeline. */
   state: CaseState;
 }
@@ -536,6 +540,8 @@ async function saveDraft(caseId: string, draft: Draft): Promise<string> {
 
 /** What `/api/appeals` returns: the criteria check and the drafted letter (MVP 5). */
 export interface AppealResponse {
+  /** Patient-confirmed notice values used by the deterministic evaluation and draft. */
+  notice: ConfirmedDenial;
   evaluation: DenialEvaluation;
   draft: Draft;
   providers: string[];
@@ -582,8 +588,16 @@ export async function appealDenial(
     allMet: evaluation.allMet,
     draftId,
     recordsOrigin: origin,
+    response: {
+      notice: denial,
+      evaluation,
+      draft,
+      providers: evaluation.providers,
+      recordsOrigin: origin,
+    },
   });
   return {
+    notice: denial,
     evaluation,
     draft,
     providers: evaluation.providers,
@@ -637,6 +651,16 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
           {
             ingest,
             confirmed: d.confirmed != null,
+            ...(d.docType === "denial_letter" && d.confirmed
+              ? {
+                  confirmedValues: Object.fromEntries(
+                    DENIAL_KEYS.map((key) => [
+                      `fields.${key}`,
+                      (d.confirmed as ConfirmedDenial)[key],
+                    ]),
+                  ),
+                }
+              : {}),
             fileName: d.fileName,
             ...(attachment?.taskId ? { taskId: attachment.taskId } : {}),
           },
@@ -674,6 +698,13 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     documents,
     audit,
     draft: (lastDraft?.draft as Draft | undefined) ?? null,
+    appeal: (() => {
+      const event = c.events.filter((e) => e.type === "appeal_evaluated").at(-1)
+        ?.data as { documentId: string; response?: AppealResponse } | undefined;
+      return event?.response
+        ? { ...event.response, documentId: event.documentId }
+        : null;
+    })(),
     state: caseStateOf(c),
   };
 }
