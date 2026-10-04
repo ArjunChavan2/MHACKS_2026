@@ -11,7 +11,7 @@ import { draftDisputeLetter, draftItemizedBillRequest } from "@/lib/draft/letter
 import { billFields, eobFields, needsAttention } from "@/lib/extract/checks";
 import { confirmBill, confirmEob, type ConfirmInput } from "@/lib/extract/confirm";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
-import { getRecords, providersOf } from "@/lib/finchnode";
+import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import type { AuditResult, ConfirmedBill, ConfirmedEob, Draft, ExtractedBill, ExtractedEob, Finding, Verdict } from "@/lib/types";
 import { getStore, newId, type StoredDocument } from "./store";
@@ -31,8 +31,14 @@ export interface IngestResponse {
   attention: string[];
 }
 
-/** Audit result plus the providers whose records were searched. */
-export type AuditResponse = AuditResult & { providers: string[] };
+/** Audit result plus the providers whose records were searched and where those records came from. */
+export type AuditResponse = AuditResult & {
+  providers: string[];
+  /** Origin of the records (live sandbox, FinchNode demo API, saved snapshot, or the sample fixture). */
+  recordsOrigin?: RecordsOrigin;
+  /** Fallbacks taken or records skipped while loading records. */
+  recordWarnings?: string[];
+};
 
 /** A saved case as the app reloads it (SPEC.md §4.6 timeline). */
 export interface CaseView {
@@ -181,20 +187,23 @@ async function loadConfirmed<K extends "bill" | "eob">(id: string, kind: K): Pro
  * @param caseId - Case ID.
  * @param billId - Confirmed bill document ID.
  * @param eobId - Confirmed EOB document ID, or `null`.
- * @returns Findings, verdict, and the providers searched.
+ * @returns Findings, verdict, the providers searched, and where the records came from (`recordsOrigin`).
  * @throws {BadRequestError} When a document isn't confirmed.
  */
-export async function auditCase(caseId: string, billId: string, eobId: string | null): Promise<AuditResult & { providers: string[] }> {
+export async function auditCase(
+  caseId: string,
+  billId: string,
+  eobId: string | null,
+): Promise<AuditResponse> {
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
-  const records = getRecords();
-  const providers = providersOf(records);
+  const { records, providers, origin, warnings } = await loadRecords(caseId);
   const result = runAudit(bill, eob, records, providers);
   const store = getStore();
   await store.saveFindings(caseId, result.findings);
   await store.setCaseStatus(caseId, "audited");
-  await store.addEvent(caseId, "audit_run", { billId, eobId, findings: result.findings.map((f) => f.id), verdict: result.verdict, providers });
-  return { ...result, providers };
+  await store.addEvent(caseId, "audit_run", { billId, eobId, findings: result.findings.map((f) => f.id), verdict: result.verdict, providers, recordsOrigin: origin, recordWarnings: warnings });
+  return { ...result, providers, recordsOrigin: origin, recordWarnings: warnings };
 }
 
 /**
@@ -210,8 +219,8 @@ export async function auditCase(caseId: string, billId: string, eobId: string | 
 export async function draftLetter(caseId: string, billId: string, eobId: string | null): Promise<Draft> {
   const bill = await loadConfirmed(billId, "bill");
   const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
-  const records = getRecords();
-  const { findings } = runAudit(bill, eob, records, providersOf(records));
+  const { records, providers } = await loadRecords(caseId);
+  const { findings } = runAudit(bill, eob, records, providers);
   if (!findings.length) throw new BadRequestError("No potential issues were found, so there is nothing to dispute.");
   const draft = await draftDisputeLetter(bill, findings, llmConfigured() ? undefined : null);
   const documentId = await saveDraft(caseId, draft);
@@ -301,13 +310,13 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     return ingest ? [{ ingest, confirmed: d.confirmed != null }] : [];
   });
   const lastAudit = c.events.filter((e) => e.type === "audit_run").at(-1)?.data as
-    | { findings: string[]; verdict: Verdict; providers?: string[] }
+    | { findings: string[]; verdict: Verdict; providers?: string[]; recordsOrigin?: RecordsOrigin; recordWarnings?: string[] }
     | undefined;
   let audit: AuditResponse | null = null;
   if (lastAudit) {
     const byId = new Map(c.findings.map((f): [string, Finding] => [f.id, f]));
     const ordered = lastAudit.findings.flatMap((id) => byId.get(id) ?? []);
-    audit = { findings: ordered, verdict: lastAudit.verdict, providers: lastAudit.providers ?? [] };
+    audit = { findings: ordered, verdict: lastAudit.verdict, providers: lastAudit.providers ?? [], recordsOrigin: lastAudit.recordsOrigin, recordWarnings: lastAudit.recordWarnings };
   }
   const lastDraft = c.documents.filter((d) => d.direction === "outgoing" && d.draft).at(-1);
   return { caseId: c.id, status: c.status, documents, audit, draft: (lastDraft?.draft as Draft | undefined) ?? null };

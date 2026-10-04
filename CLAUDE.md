@@ -43,4 +43,8 @@ don't rediscover them. Add an entry whenever a bug costs more than a few minutes
 - **`The API version "6.4.299" does not match the Worker version "6.1.200"`** when rendering PDFs
   for Grok. `unpdf` bundles PDF.js 6.1.200; a newer `pdfjs-dist` clashes. Fix: `pdfjs-dist` pinned
   to exactly the version `unpdf` expects (check `node_modules/unpdf/package.json` before upgrading).
+- **FinchNode sandbox simulate never finishes**: session stays `system-selected`, sync `partial`,
+  `subject` null, `GET /users` empty (every attempt 2026-10-04). Not our bug. Workaround:
+  `lib/finchnode/live.ts` falls back to the demo API, then the saved snapshot; failed Connect is
+  cached for 10 min so audits don't each wait 45 s.
 - **New Gemini keys start with `AQ.`**, not `AIza`; that's Google's new format, not a wrong key.

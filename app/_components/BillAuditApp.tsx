@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { AuditResponse, CaseView, IngestResponse } from "@/lib/cases/service";
+import type { RecordsOrigin } from "@/lib/finchnode/live";
 import { fieldLabel, usd } from "@/lib/format";
 import type {
   Draft,
@@ -754,6 +755,20 @@ function ConfirmPanel({
 }
 
 /**
+ * Labels where the searched records came from, so live and saved data are never confused.
+ *
+ * @param origin - Records origin from the audit, if known.
+ * @returns A short parenthetical, or "" when unknown.
+ */
+function recordsOriginLabel(origin: RecordsOrigin | undefined): string {
+  if (origin === "live-sandbox") return " (live FinchNode sandbox, synthetic)";
+  if (origin === "demo-api") return " (FinchNode demo API, synthetic)";
+  if (origin === "saved-snapshot") return " (saved FinchNode snapshot, synthetic)";
+  if (origin === "sample-fixture") return " (sample records)";
+  return "";
+}
+
+/**
  * Describes a source for the evidence view.
  *
  * @param s - Source.
@@ -895,7 +910,8 @@ function AuditScreen({
               <p className="paper-copy">
                 Potential issues are things to ask about, not proven errors.
                 Records searched:{" "}
-                {audit.providers.join(" and ") || "No connected providers"}.
+                {audit.providers.join(" and ") || "No connected providers"}
+                {recordsOriginLabel(audit.recordsOrigin)}.
               </p>
               {findings.map((finding, index) => (
                 <article className="paper-finding" key={finding.id}>
@@ -974,7 +990,8 @@ function AuditScreen({
                 available, and documentation gaps.
                 <br />
                 Records searched:{" "}
-                {audit.providers.join(" and ") || "No connected providers"}.
+                {audit.providers.join(" and ") || "No connected providers"}
+                {recordsOriginLabel(audit.recordsOrigin)}.
               </div>
               <a
                 className="paper-source-button inline-flex items-center min-h-11"

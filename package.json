@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "finchnode:check": "tsx --env-file-if-exists=.env.local scripts/finchnode-check.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",

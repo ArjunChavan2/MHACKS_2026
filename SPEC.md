@@ -258,6 +258,17 @@ Hosted Connect flow; server-side client in `lib/finchnode/` returning our own ty
 switch to saved sandbox snapshots. Show live sandbox records in the demo when the network allows.
 See §11.
 
+**Built (2026-10-04, `lib/finchnode/live.ts`):** `USE_MOCK=false` loads records in this order, and
+the audit screen labels which one answered: (1) live sandbox: `POST /connect/sessions` →
+`/simulate` with scenario `multi-source-overlap` → poll for `subject` → `GET /users/{subject}/records`
+(set `FINCHNODE_SUBJECT` to skip Connect); (2) FinchNode's public demo API (same normalized format,
+no key); (3) the saved snapshot `fixtures/finchnode/multi-source-overlap.json`. A failed Connect is
+not retried for 10 minutes. Records map to `VerbatimFact` (labs, medications, conditions,
+immunizations) with FinchNode's text, LOINC/RxNorm/CVX code, date, source name, and record ID;
+records missing provenance are skipped with a warning. `npm run finchnode:check` runs the loader.
+**Known issue:** sandbox simulations import records but stay at `system-selected` with no `subject`
+(seen on every attempt 2026-10-04), so the demo API currently answers. Ask FinchNode at their booth.
+
 ### 4.2 Document intake and extraction
 
 - **Entry points:** upload or one-tap share (PWA share target; iMessage thread as fallback) of an
@@ -690,7 +701,7 @@ Status is current as of 2026-10-03 night; update the Status column whenever a ru
 |---|---|---|---|---|---|
 | 0 | Walking skeleton | H0–H2 | **Mostly done** (left: deploy, real FinchNode fixtures, CI) | Deployed URL with a seeded case and fixture evidence | — |
 | 1 | Cited bill audit | H2–H6 | **Built**; live eval passes on Gemini and Grok; Neon live (data persists, `?case=` reload); audit/test phases pending | Bill + EOB in → confirmed fields → cited findings → dispute letter | MLH Gemini, Neon (partial) |
-| 2 | Adaptive case with live records | H6–H11 | Not started | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
+| 2 | Adaptive case with live records | H6–H11 | **Started**: live FinchNode client built (demo API answering; sandbox Connect stuck); fixtures not yet rebuilt around the sandbox patient | Full adaptive dispute, three branches, wait/resume, verified outcome (operator console plays billing) | **FinchNode**, AI or FinTech track |
 | 3 | Patient in the loop on iMessage | H11–H14 | Not started | MVP 2 driven from iMessage, with "why?" answers and approvals | Photon |
 | 4 | Live patient-controlled call (**core demo**) | H14–H19 | Not started | MVP 3 plus a live phone call with an unannounced obstacle, mid-call choices, Take over | ElevenLabs, MLH ElevenLabs |
 | 5 | Cross-provider denial appeal (stretch) | H19–H21 | Not started | Denial → criteria vs records from both providers → appeal or doctor request | Strengthens FinchNode |
@@ -872,6 +883,16 @@ call instead of ElevenLabs owning it.
 | Provenance on every record (provider, date, record ID) | All citations | Field names unknown | Map in `lib/finchnode/`; fail visibly if absent |
 | Sync timing after Connect | MVP 2 | Asynchronous arrival | "Syncing" state; saved data if slow |
 | Response schema | All | Unknown until called | zod validation; save real responses as test fixtures |
+
+**Spike results (2026-10-04, from the demo API and sandbox):** only `multi-source-overlap`
+(patient "Priya Ramaswamy (synthetic)") has both Northstar and Quillhaven. It has labs with LOINC
+codes and dates (TSH and free T4 at Northstar 2026-03-02; TSH at Quillhaven 2026-03-05; ferritin
+and hemoglobin at Quillhaven 2025-11-20; hemoglobin at Northstar 2025-09-16), medications with
+RxNorm codes and start dates (status, no end dates), conditions, immunizations, and encounters.
+No claims and no documents in any scenario we checked, so claims-based case start stays simulated.
+The current sample bill (Jordan Rivera, ER 2026-09-14) matches none of these, so **the fixtures must
+be rebuilt around Priya** before live records give meaningful findings (CPT↔LOINC: 84443↔3016-3,
+84439↔3024-7, 82728↔2276-4, 85018↔718-7).
 
 **Spike (Dev 1, by H3):** pull all 12 sandbox scenarios and save raw responses; inventory fields;
 pick the patient; write the mapping into `lib/types/`; only then write the bill, EOB, branch
