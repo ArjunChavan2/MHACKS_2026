@@ -33,7 +33,7 @@ import {
 import { readTextLayer, type TextLayer } from "./textLayer";
 
 /** Schema version stored with each extraction; bump when `schemas.ts` changes shape. */
-export const SCHEMA_VERSION = "raw-v1";
+export const SCHEMA_VERSION = "raw-v2";
 
 /** Maximum pages sent to the model in one extraction call (SPEC.md §4.2 step 3). */
 export const PAGES_PER_CALL = 4;

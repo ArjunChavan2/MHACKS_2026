@@ -78,6 +78,9 @@ export function eobFields(eob: ExtractedEob): Array<[string, Field<unknown>]> {
     ["insurer", eob.insurer],
     ["claimNumber", eob.claimNumber],
     ["provider", eob.provider],
+    // Absent on EOBs extracted before schema raw-v2.
+    ...(eob.patientName ? [["patientName", eob.patientName] as [string, Field<unknown>]] : []),
+    ...(eob.accountNumber ? [["accountNumber", eob.accountNumber] as [string, Field<unknown>]] : []),
     ["totalPatientResponsibility", eob.totalPatientResponsibility],
   ];
   eob.lines.forEach((line, i) => {

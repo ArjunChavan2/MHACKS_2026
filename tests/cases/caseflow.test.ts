@@ -670,7 +670,6 @@ describe.each([
     const upload = await ingestUpload(
       c.caseId,
       "retry.pdf",
-      "application/pdf",
       fixturePdf("sample-bill"),
     );
     expect(upload.documentId).toBe(c.billId);

@@ -34,6 +34,7 @@ import {
   extractFromSavedReply,
   type ExtractionResult,
 } from "@/lib/extract/pipeline";
+import { prepareUpload } from "@/lib/extract/upload";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import {
@@ -191,52 +192,39 @@ async function save(
 }
 
 /**
- * Ingests an uploaded file: stores it privately, extracts it with Gemini, and saves the result.
+ * Ingests an uploaded file: checks it, stores it privately, extracts it with the AI provider, and
+ * saves the result.
+ *
+ * The type is detected from the bytes (the browser's label is ignored), PDFs over the page limit are
+ * refused, and HEIC photos are stored and extracted as JPEG (`prepareUpload`). Nothing is stored or
+ * sent to a model for a refused file.
  *
  * @param caseId - Existing case ID or `null`.
  * @param fileName - Original file name.
- * @param mimeType - MIME type (PDF, JPEG, PNG, HEIC, WEBP).
  * @param bytes - File bytes.
  * @returns The ingest response; identical bytes already on a known case reuse its document.
  * Sequential retries are idempotent within an existing case; first uploads without a case ID are not.
- * @throws {BadRequestError} For unsupported file types or unknown cases.
+ * @throws {import("@/lib/extract/upload").UploadRejectedError} For an unrecognized, unreadable, or oversized file.
+ * @throws {BadRequestError} For an unknown case.
  * @throws {import("@/lib/llm").LlmUnavailableError} When the active AI provider's key is not set.
  */
-export async function ingestUpload(
-  caseId: string | null,
-  fileName: string,
-  mimeType: string,
-  bytes: Uint8Array,
-): Promise<IngestResponse> {
-  const allowed = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/heic",
-  ];
-  if (!allowed.includes(mimeType))
-    throw new BadRequestError(
-      `Unsupported file type ${mimeType}. Upload a PDF or a photo.`,
-    );
+export async function ingestUpload(caseId: string | null, fileName: string, bytes: Uint8Array): Promise<IngestResponse> {
+  const file = await prepareUpload(bytes);
   if (caseId) {
     const existing = await getStore().getCase(caseId);
     if (!existing) throw new BadRequestError("Unknown case");
-    const digest = createHash("sha256").update(bytes).digest("hex");
+    const digest = createHash("sha256").update(file.bytes).digest("hex");
     for (const doc of existing.documents) {
       if (doc.direction !== "incoming" || !doc.storageKey) continue;
-      const file = await getStore().getFile(doc.storageKey);
-      if (
-        file?.mimeType === mimeType &&
-        createHash("sha256").update(file.bytes).digest("hex") === digest
-      ) {
+      const stored = await getStore().getFile(doc.storageKey);
+      if (stored?.mimeType === file.mimeType && createHash("sha256").update(stored.bytes).digest("hex") === digest) {
         const prior = ingestOf(doc);
         if (prior) return prior;
       }
     }
   }
-  const result = await extractDocument({ mimeType, bytes });
-  const key = await getStore().putFile(bytes, mimeType);
+  const result = await extractDocument({ mimeType: file.mimeType, bytes: file.bytes });
+  const key = await getStore().putFile(file.bytes, file.mimeType);
   return save(caseId, fileName, key, result);
 }
 
@@ -271,10 +259,12 @@ export async function ingestSample(
 }
 
 /**
- * Confirms a document's fields (SPEC.md §4.2 step 7).
+ * Confirms a document's fields (SPEC.md §4.2 step 7). A revised statement for a different account
+ * than the original bill is refused (GitHub issue #5), and any doubts the type checks raised must
+ * have been acknowledged.
  *
  * @param documentId - Document to confirm.
- * @param input - Corrections, explicit confirmations, totals acknowledgement.
+ * @param input - Corrections, explicit confirmations, totals and document-type acknowledgements.
  * @returns `{ ok: true }` when locked, or `{ ok: false, blocking }`.
  * @throws {BadRequestError} When the document is unknown, already confirmed, or not a bill/EOB.
  */
@@ -321,6 +311,8 @@ export async function confirmDocument(
         ],
       };
   }
+  // Confirmation only got here with any type doubts acknowledged; record which ones.
+  const typeIssues = (doc.extraction as ExtractedBill | ExtractedEob).typeIssues ?? [];
   const c = await store.getCase(doc.caseId);
   if (!c) throw new BadRequestError("Unknown case");
   const attached = c.events.some(
@@ -347,6 +339,7 @@ export async function confirmDocument(
     corrected: Object.keys(input.corrections),
     confirmedAsPrinted: input.confirmedPaths,
     totalsMismatchAcknowledged: input.acknowledgeTotalsMismatch,
+    ...(typeIssues.length ? { docTypeAcknowledged: typeIssues } : {}),
   });
   // A confirmed revised statement is checked against the original bill (MVP 2 verification).
   if (doc.docType === "revised_statement")
@@ -373,6 +366,9 @@ function correctedExtraction(
         insurer: rawOf(e.insurer, "insurer", corrections),
         claimNumber: rawOf(e.claimNumber, "claimNumber", corrections),
         provider: rawOf(e.provider, "provider", corrections),
+        // Absent on EOBs extracted before these fields existed.
+        patientName: e.patientName ? rawOf(e.patientName, "patientName", corrections) : { raw: null, page: null, snippet: null, status: "absent" },
+        accountNumber: e.accountNumber ? rawOf(e.accountNumber, "accountNumber", corrections) : { raw: null, page: null, snippet: null, status: "absent" },
         totalPatientResponsibility: rawOf(
           e.totalPatientResponsibility,
           "totalPatientResponsibility",
@@ -550,24 +546,20 @@ export async function reopenReview(caseId: string): Promise<CaseView> {
 }
 
 /**
- * Loads a confirmed document of the expected kind.
+ * Loads a confirmed document of the expected kind from a case.
  *
+ * @param caseId - Case the document must belong to (so documents from other cases, never matched
+ *   against this one at confirmation, can't be audited together).
  * @param id - Document ID.
  * @param kind - "bill" or "eob".
  * @returns The confirmed value.
- * @throws {BadRequestError} When missing or not yet confirmed.
+ * @throws {BadRequestError} When missing, on another case, or not yet confirmed.
  */
-async function loadConfirmed<K extends "bill" | "eob">(
-  id: string,
-  kind: K,
-): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
+async function loadConfirmed<K extends "bill" | "eob">(caseId: string, id: string, kind: K): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
   const doc = await getStore().getDocument(id);
-  if (!doc?.confirmed)
-    throw new BadRequestError(
-      `The ${kind === "bill" ? "bill" : "EOB"} must be confirmed before the audit runs`,
-    );
-  if ((kind === "eob") !== (doc.docType === "eob"))
-    throw new BadRequestError(`Document ${id} is not a ${kind}`);
+  if (doc && doc.caseId !== caseId) throw new BadRequestError(`Document ${id} doesn't belong to this case`);
+  if (!doc?.confirmed) throw new BadRequestError(`The ${kind === "bill" ? "bill" : "EOB"} must be confirmed before the audit runs`);
+  if ((kind === "eob") !== (doc.docType === "eob")) throw new BadRequestError(`Document ${id} is not a ${kind}`);
   return doc.confirmed as K extends "bill" ? ConfirmedBill : ConfirmedEob;
 }
 
@@ -578,22 +570,15 @@ async function loadConfirmed<K extends "bill" | "eob">(
  * @param billId - Confirmed bill document ID.
  * @param eobId - Confirmed EOB document ID, or `null`.
  * @returns Findings, verdict, the providers searched, and where the records came from (`recordsOrigin`).
- * @throws {BadRequestError} When a document isn't confirmed.
+ * @throws {BadRequestError} When a document isn't confirmed or isn't on this case.
  */
 export async function auditCase(
   caseId: string,
   billId: string,
   eobId: string | null,
 ): Promise<AuditResponse> {
-  const owned = await getStore().getCase(caseId);
-  if (
-    !owned ||
-    !owned.documents.some((d) => d.id === billId) ||
-    (eobId && !owned.documents.some((d) => d.id === eobId))
-  )
-    throw new BadRequestError("Audit documents must belong to this case");
-  const bill = await loadConfirmed(billId, "bill");
-  const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+  const bill = await loadConfirmed(caseId, billId, "bill");
+  const eob = eobId ? await loadConfirmed(caseId, eobId, "eob") : null;
   // Comparing a bill with an EOB from a different visit would produce false findings.
   if (eob) {
     const mismatch = billEobMismatches(bill, eob);
@@ -638,20 +623,9 @@ export async function auditCase(
  * @returns The draft.
  * @throws {BadRequestError} When there are no findings to dispute.
  */
-export async function draftLetter(
-  caseId: string,
-  billId: string,
-  eobId: string | null,
-): Promise<Draft> {
-  const owned = await getStore().getCase(caseId);
-  if (
-    !owned ||
-    !owned.documents.some((d) => d.id === billId) ||
-    (eobId && !owned.documents.some((d) => d.id === eobId))
-  )
-    throw new BadRequestError("Audit documents must belong to this case");
-  const bill = await loadConfirmed(billId, "bill");
-  const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+export async function draftLetter(caseId: string, billId: string, eobId: string | null): Promise<Draft> {
+  const bill = await loadConfirmed(caseId, billId, "bill");
+  const eob = eobId ? await loadConfirmed(caseId, eobId, "eob") : null;
   const { records, providers } = await loadRecords(caseId, bill.patientName);
   const previous = (await getStore().getCase(caseId))?.findings ?? [];
   const merged = mergeFindings(
@@ -702,16 +676,20 @@ export async function draftLetter(
  * Drafts an itemized-bill request from a balance statement's header.
  *
  * @param documentId - Balance statement document ID.
+ * @param acknowledgeDocType - Patient confirmed it is a medical balance statement despite the type
+ *   checks' doubts (`typeIssues`).
  * @returns The request draft.
- * @throws {BadRequestError} When the document is not a balance statement.
+ * @throws {BadRequestError} When the document is not a balance statement, or its type is in doubt
+ *   and not acknowledged.
  */
-export async function draftItemizedRequest(documentId: string): Promise<Draft> {
+export async function draftItemizedRequest(documentId: string, acknowledgeDocType = false): Promise<Draft> {
   const doc = await getStore().getDocument(documentId);
-  if (!doc || doc.docType !== "balance_statement")
-    throw new BadRequestError(
-      "An itemized-bill request needs a balance statement",
-    );
-  const h = (doc.extraction as ExtractedBill).header;
+  if (!doc || doc.docType !== "balance_statement") throw new BadRequestError("An itemized-bill request needs a balance statement");
+  const statement = doc.extraction as ExtractedBill;
+  if (statement.typeIssues?.length && !acknowledgeDocType) {
+    throw new BadRequestError(`Confirm this is a medical balance statement first: ${statement.typeIssues.join(" ")}`);
+  }
+  const h = statement.header;
   const draft = draftItemizedBillRequest({
     billingEntity: h.billingEntity.value ?? "the provider",
     patientName: h.patientName.value,
@@ -722,11 +700,7 @@ export async function draftItemizedRequest(documentId: string): Promise<Draft> {
   });
   const draftId = await saveDraft(doc.caseId, draft);
   await getStore().setCaseStatus(doc.caseId, "request_drafted");
-  await getStore().addEvent(doc.caseId, "request_drafted", {
-    kind: draft.kind,
-    documentId,
-    draftId,
-  });
+  await getStore().addEvent(doc.caseId, "request_drafted", { kind: draft.kind, documentId, draftId, ...(statement.typeIssues?.length ? { docTypeAcknowledged: statement.typeIssues } : {}) });
   return draft;
 }
 
@@ -885,7 +859,7 @@ export async function loadCase(caseId: string): Promise<CaseView | null> {
     audit = {
       findings: ordered,
       verdict: lastAudit.billId
-        ? computeVerdict(await loadConfirmed(lastAudit.billId, "bill"), ordered)
+        ? computeVerdict(await loadConfirmed(c.id, lastAudit.billId, "bill"), ordered)
         : lastAudit.verdict,
       providers: lastAudit.providers ?? [],
       recordsOrigin: lastAudit.recordsOrigin,

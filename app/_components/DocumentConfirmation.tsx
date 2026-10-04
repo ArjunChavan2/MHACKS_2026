@@ -21,6 +21,46 @@ export interface DocState {
   confirmed: boolean;
   /** Messages that blocked the last confirmation attempt. */
   blocking: string[];
+  /** Whether the patient confirmed the document type despite the type checks' doubts. */
+  ackType: boolean;
+}
+
+/**
+ * Reasons the type checks doubt the model's document type (empty for older stored extractions).
+ *
+ * @param r - Extraction result.
+ * @returns Type doubts to show the patient.
+ */
+export function typeIssuesOf(r: ExtractionResult): string[] {
+  if (r.kind === "bill") return r.bill.typeIssues ?? [];
+  if (r.kind === "eob") return r.eob.typeIssues ?? [];
+  return [];
+}
+
+/**
+ * Shows why the code checks doubt the model's document type, with the patient's confirmation box.
+ * Renders nothing when the type looks right or the document is already confirmed.
+ *
+ * @param props.doc - Document state.
+ * @param props.kind - What the document should be, e.g. "a medical bill".
+ * @param props.onChange - Updates the document state.
+ * @returns The warning, or `null`.
+ */
+export function TypeDoubts({ doc, kind, onChange }: { doc: DocState; kind: string; onChange: (d: DocState) => void }) {
+  const issues = typeIssuesOf(doc.ingest.result);
+  if (!issues.length || doc.confirmed) return null;
+  return (
+    <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+      <p className="font-medium">This may not be {kind}:</p>
+      {issues.map((m) => (
+        <p key={m}>• {m}</p>
+      ))}
+      <label className="mt-2 flex items-start gap-2">
+        <input type="checkbox" checked={doc.ackType} onChange={(e) => onChange({ ...doc, ackType: e.target.checked })} />
+        <span>I checked the document: it is {kind}. Otherwise, upload the right document instead.</span>
+      </label>
+    </div>
+  );
 }
 
 /**
@@ -270,6 +310,8 @@ export default function ConfirmPanel({
         src={`/api/documents/${doc.ingest.documentId}/file#page=${previewPage}`}
         className="mt-3 h-72 w-full rounded-md ring-1 ring-[var(--paper-border)]"
       />
+
+      <TypeDoubts doc={doc} kind={r.kind === "eob" ? "an explanation of benefits (EOB) from my insurer" : "a medical bill"} onChange={onChange} />
 
       {docIssues.length > 0 && (
         <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">

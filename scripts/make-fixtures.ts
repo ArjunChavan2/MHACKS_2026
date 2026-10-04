@@ -287,6 +287,8 @@ async function main(): Promise<void> {
         insurer: read(EOB.insurer, `${EOB.insurer} - Explanation of Benefits`),
         claimNumber: read(EOB.claimNumber, `Claim #: ${EOB.claimNumber}`),
         provider: read(EOB.provider, `Provider: ${EOB.provider}`),
+        patientName: read(VISIT.patient, `Member: ${VISIT.patient}`),
+        accountNumber: ABSENT,
         totalPatientResponsibility: read(EOB.totalPatient, `Total you owe: ${EOB.totalPatient}`),
         lines: EOB.lines.map((l) => {
           const row = eobRow(l);

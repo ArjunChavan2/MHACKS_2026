@@ -4,7 +4,7 @@
  */
 import type { CaseTask, ConfirmedBill, ConfirmedEob } from "@/lib/types";
 import { snapshotOf } from "./caseflow";
-import { sameName } from "./consistency";
+import { sameAccount, sameName } from "./consistency";
 import { REVISED_STATEMENT, CaseRuleError } from "./responses";
 import { auditCase } from "./service";
 import { getStore, type StoredCase, type StoredDocument } from "./store";
@@ -33,7 +33,9 @@ export function assertMatchingRevision(
     !identifier(original.billingEntity) ||
     !sameName(original.billingEntity, revised.billingEntity) ||
     !original.accountNumber ||
-    identifier(original.accountNumber) !== identifier(revised.accountNumber) ||
+    !revised.accountNumber ||
+    // A masked account ("****5518") matches when its visible tail (4+ characters) ends the original.
+    !sameAccount(original.accountNumber, revised.accountNumber) ||
     !original.patientName ||
     !revised.patientName ||
     !sameName(original.patientName, revised.patientName) ||

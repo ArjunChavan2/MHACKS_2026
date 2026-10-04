@@ -140,6 +140,7 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
+  /** Patient confirmed the revised statement's type despite the type checks' doubts. */
 
   /** Reloads the case after an action. */
   async function refresh() {

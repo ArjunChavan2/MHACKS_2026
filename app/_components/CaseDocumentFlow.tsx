@@ -133,6 +133,7 @@ export default function CaseDocumentFlow({
       confirmedPaths: [],
       ackTotals: false,
       blocking: [],
+      ackType: false,
     });
     setError(null);
     setRetryFile(null);
@@ -207,6 +208,7 @@ export default function CaseDocumentFlow({
               corrections: doc.corrections,
               confirmedPaths: doc.confirmedPaths,
               acknowledgeTotalsMismatch: doc.ackTotals,
+              acknowledgeDocType: doc.ackType,
             },
           );
           if (!result.ok) {

@@ -21,6 +21,8 @@ import { usd } from "@/lib/format";
 import CaseScreen from "./CaseScreen";
 import ConfirmPanel, {
   confirmationProgress,
+  TypeDoubts,
+  typeIssuesOf,
   type DocState,
 } from "./DocumentConfirmation";
 import ProcessingStatus from "./ProcessingStatus";
@@ -148,6 +150,7 @@ export default function BillAuditApp() {
       ackTotals: false,
       confirmed: false,
       blocking: [],
+      ackType: false,
     };
     const r = ingest.result;
     if (r.kind === "denial")
@@ -188,6 +191,7 @@ export default function BillAuditApp() {
         ackTotals: false,
         confirmed: d.confirmed,
         blocking: [],
+        ackType: false,
       };
       if (r.kind === "eob") setEob(state);
       else setBill(state);
@@ -349,6 +353,7 @@ export default function BillAuditApp() {
         corrections: doc.corrections,
         confirmedPaths: doc.confirmedPaths,
         acknowledgeTotalsMismatch: doc.ackTotals,
+        acknowledgeDocType: doc.ackType,
       },
     );
     set({ ...doc, confirmed: r.ok, blocking: r.blocking ?? [] });
@@ -433,7 +438,7 @@ export default function BillAuditApp() {
       if (!bill) return;
       const { draft } = await postJson<{ draft: Draft }>(
         "/api/requests/itemized",
-        { documentId: bill.ingest.documentId },
+        { documentId: bill.ingest.documentId, acknowledgeDocType: bill.ackType },
       );
       setDraft(draft);
       setStep("letter");
@@ -635,8 +640,9 @@ export default function BillAuditApp() {
           <p className="text-sm text-[var(--paper-muted)]">
             You can also download your EOB from your insurer’s website or app.
           </p>
+          <TypeDoubts doc={bill} kind="a medical balance statement" onChange={setBill} />
           <button
-            disabled={busy}
+            disabled={busy || (typeIssuesOf(bill.ingest.result).length > 0 && !bill.ackType)}
             onClick={makeRequest}
             className="paper-primary w-full"
           >

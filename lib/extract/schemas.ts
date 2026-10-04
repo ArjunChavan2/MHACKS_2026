@@ -68,7 +68,17 @@ export const BILL_LINE_KEYS = [
 ] as const;
 
 /** EOB header field names. */
-export const EOB_HEADER_KEYS = ["insurer", "claimNumber", "provider", "totalPatientResponsibility"] as const;
+export const EOB_HEADER_KEYS = [
+  "insurer",
+  "claimNumber",
+  "provider",
+  "patientName",
+  "accountNumber",
+  "totalPatientResponsibility",
+] as const;
+
+/** A field the document does not contain; the default for keys added after a reply was saved. */
+const ABSENT_RAW: RawField = { raw: null, page: null, snippet: null, status: "absent" };
 
 /** EOB line field names. */
 export const EOB_LINE_KEYS = ["serviceDate", "code", "billed", "allowed", "planPaid", "patientResponsibility"] as const;
@@ -93,10 +103,12 @@ export const RawBillSchema = z.object({
 /** A raw bill reply. */
 export type RawBill = z.infer<typeof RawBillSchema>;
 
-/** Raw EOB reply. */
+/** Raw EOB reply. `patientName` and `accountNumber` (added in `raw-v2`) default to absent. */
 export const RawEobSchema = z.object({
   docType: z.literal("eob"),
   ...rawObject(EOB_HEADER_KEYS).shape,
+  patientName: RawFieldSchema.default(() => ({ ...ABSENT_RAW })),
+  accountNumber: RawFieldSchema.default(() => ({ ...ABSENT_RAW })),
   lines: z.array(rawObject(EOB_LINE_KEYS)),
 });
 
