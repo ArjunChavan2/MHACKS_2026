@@ -12,6 +12,8 @@ const Body = z.object({
   corrections: z.record(z.string(), z.string().nullable()),
   confirmedPaths: z.array(z.string()),
   acknowledgeTotalsMismatch: z.boolean(),
+  /** Patient confirms the document type despite the type checks' doubts. */
+  acknowledgeDocType: z.boolean().optional(),
 });
 
 /**

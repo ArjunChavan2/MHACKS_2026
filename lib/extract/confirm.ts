@@ -4,8 +4,9 @@
  *
  * The patient corrects fields or confirms them as printed. Corrected values are re-normalized and
  * re-checked. Confirmation is blocked while any field still needs attention and was neither
- * corrected nor explicitly confirmed, or while the printed totals don't reconcile and the patient
- * has not acknowledged that the bill itself doesn't add up. Never audit unconfirmed data.
+ * corrected nor explicitly confirmed, while the printed totals don't reconcile and the patient
+ * has not acknowledged that the bill itself doesn't add up, or while the type checks doubt the
+ * model's document type and the patient has not confirmed it. Never audit unconfirmed data.
  */
 import type {
   ConfirmedBill,
@@ -28,7 +29,12 @@ export interface ConfirmInput {
   confirmedPaths: string[];
   /** Patient confirms the printed totals themselves don't add up (bill issue, not a reading error). */
   acknowledgeTotalsMismatch: boolean;
+  /** Patient confirms the document type even though the type checks doubted it (`typeIssues`). */
+  acknowledgeDocType?: boolean;
 }
+
+/** Stand-in for EOB fields missing from extractions stored before schema `raw-v2`. */
+const ABSENT: Field<unknown> = { raw: null, value: null, page: null, snippet: null, status: "absent", verification: "verified", issues: [] };
 
 /** Result of a confirmation attempt. */
 export type ConfirmResult<T> = { ok: true; value: T } | { ok: false; blocking: string[] };
@@ -67,6 +73,18 @@ export function blockingFields(fields: Array<[string, Field<unknown>]>, input: C
 }
 
 /**
+ * Lists the type doubts that still block confirmation. They come from the original extraction
+ * (which had the PDF text layer); corrections don't clear them, only the patient's acknowledgement.
+ *
+ * @param typeIssues - Stored type doubts, if any.
+ * @param input - Patient actions.
+ * @returns Blocking messages.
+ */
+function typeBlocking(typeIssues: string[] | undefined, input: ConfirmInput): string[] {
+  return typeIssues?.length && !input.acknowledgeDocType ? typeIssues : [];
+}
+
+/**
  * Confirms a bill: applies corrections, re-checks, and returns a `ConfirmedBill` or what blocks it.
  *
  * Corrected values are re-checked without the text layer (the patient's value need not be printed).
@@ -85,7 +103,7 @@ export function confirmBill(extracted: ExtractedBill, input: ConfirmInput): Conf
   ) as RawBill["lines"];
   const rebuilt = buildBill({ docType: extracted.docType, header, lines }, null);
 
-  const blocking = blockingFields(billFields(rebuilt), input);
+  const blocking = [...typeBlocking(extracted.typeIssues, input), ...blockingFields(billFields(rebuilt), input)];
   if (rebuilt.documentIssues.length && !input.acknowledgeTotalsMismatch) blocking.push(...rebuilt.documentIssues);
   rebuilt.lines.forEach((l, i) => {
     if (l.charge.value === null) blocking.push(`Line ${i + 1}: a charge amount is required`);
@@ -141,13 +159,15 @@ export function confirmEob(extracted: ExtractedEob, input: ConfirmInput): Confir
     insurer: rawOf(extracted.insurer, "insurer", input.corrections),
     claimNumber: rawOf(extracted.claimNumber, "claimNumber", input.corrections),
     provider: rawOf(extracted.provider, "provider", input.corrections),
+    patientName: rawOf(extracted.patientName ?? ABSENT, "patientName", input.corrections),
+    accountNumber: rawOf(extracted.accountNumber ?? ABSENT, "accountNumber", input.corrections),
     totalPatientResponsibility: rawOf(extracted.totalPatientResponsibility, "totalPatientResponsibility", input.corrections),
     lines: extracted.lines.map((line, i) =>
       Object.fromEntries(Object.entries(line).map(([k, f]) => [k, rawOf(f as Field<unknown>, `lines.${i}.${k}`, input.corrections)])),
     ) as RawEob["lines"],
   };
   const rebuilt = buildEob(raw, null);
-  const blocking = blockingFields(eobFields(rebuilt), input);
+  const blocking = [...typeBlocking(extracted.typeIssues, input), ...blockingFields(eobFields(rebuilt), input)];
   if (rebuilt.documentIssues.length && !input.acknowledgeTotalsMismatch) blocking.push(...rebuilt.documentIssues);
   if (blocking.length) return { ok: false, blocking: [...new Set(blocking)] };
   return {
@@ -158,6 +178,8 @@ export function confirmEob(extracted: ExtractedEob, input: ConfirmInput): Confir
       insurer: rebuilt.insurer.value,
       claimNumber: rebuilt.claimNumber.value,
       provider: rebuilt.provider.value,
+      patientName: rebuilt.patientName?.value ?? null,
+      accountNumber: rebuilt.accountNumber?.value ?? null,
       totalPatientResponsibilityCents: rebuilt.totalPatientResponsibility.value,
       lines: rebuilt.lines.map((l) => ({
         serviceDate: l.serviceDate.value,

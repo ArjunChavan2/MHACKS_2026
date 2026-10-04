@@ -99,6 +99,8 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
   const [imessage, setImessage] = useState<ImessageStatus | null>(null);
+  /** Patient confirmed the revised statement's type despite the type checks' doubts. */
+  const [ackRevisedType, setAckRevisedType] = useState(false);
 
   /** Reloads the case after an action. */
   async function refresh() {
@@ -180,7 +182,12 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await post<{ ok: boolean; blocking?: string[] }>(`/api/documents/${documentId}/confirm`, { corrections: {}, confirmedPaths: attention, acknowledgeTotalsMismatch: false });
+      const r = await post<{ ok: boolean; blocking?: string[] }>(`/api/documents/${documentId}/confirm`, {
+        corrections: {},
+        confirmedPaths: attention,
+        acknowledgeTotalsMismatch: false,
+        acknowledgeDocType: ackRevisedType,
+      });
       if (!r.ok) setError(`This statement can't be confirmed as printed: ${(r.blocking ?? []).join("; ")}`);
       await refresh();
     } catch (e) {
@@ -278,6 +285,18 @@ export default function CaseScreen({ caseId }: { caseId: string }) {
             <p>
               Amount due: <strong>{revisedBill.header.amountDue.raw ?? "not shown"}</strong>
             </p>
+            {(revisedBill.typeIssues?.length ?? 0) > 0 && (
+              <div className="space-y-1 rounded-md bg-red-50 p-3 text-red-900 ring-1 ring-red-200">
+                <p className="font-medium">This may not be a medical statement:</p>
+                {revisedBill.typeIssues?.map((m) => (
+                  <p key={m}>• {m}</p>
+                ))}
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={ackRevisedType} onChange={(e) => setAckRevisedType(e.target.checked)} />
+                  <span>I checked: it is a revised statement from the billing office.</span>
+                </label>
+              </div>
+            )}
             <a className="paper-source-button inline-flex items-center" href={`/api/documents/${revisedDoc.ingest.documentId}/file`} target="_blank" rel="noreferrer">
               View the statement ↗
             </a>

@@ -18,6 +18,18 @@
     "snippet": "Provider: Quillhaven Medical Group",
     "status": "read"
   },
+  "patientName": {
+    "raw": "Priya Ramaswamy",
+    "page": 1,
+    "snippet": "Member: Priya Ramaswamy",
+    "status": "read"
+  },
+  "accountNumber": {
+    "raw": null,
+    "page": null,
+    "snippet": null,
+    "status": "absent"
+  },
   "totalPatientResponsibility": {
     "raw": "$253.00",
     "page": 1,

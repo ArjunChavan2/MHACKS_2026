@@ -6,6 +6,7 @@
  */
 import type { BillLine, ExtractedBill, ExtractedEob, EobLine } from "@/lib/types";
 import { checkBill, checkEob } from "./checks";
+import { billTypeIssues, eobTypeIssues } from "./doctype";
 import {
   inferCodeType,
   parseCodeType,
@@ -67,7 +68,9 @@ export function buildBill(raw: RawBill, layer: TextLayer): ExtractedBill {
     }),
     documentIssues: [],
   };
-  return checkBill(bill, layer);
+  checkBill(bill, layer);
+  bill.typeIssues = billTypeIssues(bill, layer);
+  return bill;
 }
 
 /**
@@ -83,6 +86,8 @@ export function buildEob(raw: RawEob, layer: TextLayer): ExtractedEob {
     insurer: toField(raw.insurer, parseText, "Insurer"),
     claimNumber: toField(raw.claimNumber, parseText, "Claim number"),
     provider: toField(raw.provider, parseText, "Provider"),
+    patientName: toField(raw.patientName, parseText, "Patient name"),
+    accountNumber: toField(raw.accountNumber, parseText, "Account number"),
     totalPatientResponsibility: toField(raw.totalPatientResponsibility, parseMoney, "Total you owe"),
     lines: raw.lines.map((l, i): EobLine => ({
       serviceDate: toField(l.serviceDate, parseDate, `EOB line ${i + 1} service date`),
@@ -94,5 +99,7 @@ export function buildEob(raw: RawEob, layer: TextLayer): ExtractedEob {
     })),
     documentIssues: [],
   };
-  return checkEob(eob, layer);
+  checkEob(eob, layer);
+  eob.typeIssues = eobTypeIssues(eob, layer);
+  return eob;
 }

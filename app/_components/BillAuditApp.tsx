@@ -39,6 +39,20 @@ interface DocState {
   confirmed: boolean;
   /** Messages that blocked the last confirmation attempt. */
   blocking: string[];
+  /** Whether the patient confirmed the document type despite the type checks' doubts. */
+  ackType: boolean;
+}
+
+/**
+ * Reasons the type checks doubt the model's document type (empty for older stored extractions).
+ *
+ * @param r - Extraction result.
+ * @returns Type doubts to show the patient.
+ */
+function typeIssuesOf(r: ExtractionResult): string[] {
+  if (r.kind === "bill") return r.bill.typeIssues ?? [];
+  if (r.kind === "eob") return r.eob.typeIssues ?? [];
+  return [];
 }
 
 /**
@@ -58,12 +72,25 @@ function listFields(r: ExtractionResult): Array<[string, Field<unknown>]> {
       ),
     );
   } else if (r.kind === "eob") {
-    const { insurer, claimNumber, provider, totalPatientResponsibility } =
-      r.eob;
+    const {
+      insurer,
+      claimNumber,
+      provider,
+      patientName,
+      accountNumber,
+      totalPatientResponsibility,
+    } = r.eob;
     out.push(
       ["insurer", insurer],
       ["claimNumber", claimNumber],
       ["provider", provider],
+      // Absent on EOBs extracted before these fields existed.
+      ...(patientName
+        ? [["patientName", patientName] as [string, Field<unknown>]]
+        : []),
+      ...(accountNumber
+        ? [["accountNumber", accountNumber] as [string, Field<unknown>]]
+        : []),
       ["totalPatientResponsibility", totalPatientResponsibility],
     );
     r.eob.lines.forEach((l, i) =>
@@ -162,6 +189,7 @@ export default function BillAuditApp() {
       ackTotals: false,
       confirmed: false,
       blocking: [],
+      ackType: false,
     };
     const r = ingest.result;
     if (r.kind === "unsupported") throw new Error(r.reason);
@@ -186,6 +214,7 @@ export default function BillAuditApp() {
         ackTotals: false,
         confirmed: d.confirmed,
         blocking: [],
+        ackType: false,
       };
       if (r.kind === "eob") setEob(state);
       else setBill(state);
@@ -304,6 +333,7 @@ export default function BillAuditApp() {
         corrections: doc.corrections,
         confirmedPaths: doc.confirmedPaths,
         acknowledgeTotalsMismatch: doc.ackTotals,
+        acknowledgeDocType: doc.ackType,
       },
     );
     set({ ...doc, confirmed: r.ok, blocking: r.blocking ?? [] });
@@ -348,7 +378,7 @@ export default function BillAuditApp() {
       if (!bill) return;
       const { draft } = await postJson<{ draft: Draft }>(
         "/api/requests/itemized",
-        { documentId: bill.ingest.documentId },
+        { documentId: bill.ingest.documentId, acknowledgeDocType: bill.ackType },
       );
       setDraft(draft);
       setStep("letter");
@@ -463,8 +493,9 @@ export default function BillAuditApp() {
           <p className="text-sm text-[var(--paper-muted)]">
             You can also download your EOB from your insurer’s website or app.
           </p>
+          <TypeDoubts doc={bill} kind="a medical balance statement" onChange={setBill} />
           <button
-            disabled={busy}
+            disabled={busy || (typeIssuesOf(bill.ingest.result).length > 0 && !bill.ackType)}
             onClick={makeRequest}
             className="paper-primary w-full"
           >
@@ -730,6 +761,11 @@ function ConfirmPanel({
         className="mt-3 h-72 w-full rounded-md ring-1 ring-[var(--paper-border)]"
       />
 
+      <TypeDoubts
+        doc={doc}
+        kind={r.kind === "eob" ? "an explanation of benefits (EOB) from my insurer" : "a medical bill"}
+        onChange={onChange}
+      />
       {docIssues.length > 0 && (
         <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
           {docIssues.map((m) => (
@@ -834,6 +870,47 @@ function ConfirmPanel({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Shows why the code checks doubt the model's document type, with the patient's confirmation box.
+ * Renders nothing when the type looks right.
+ *
+ * @param props.doc - Document state.
+ * @param props.kind - What the document should be, e.g. "a medical bill".
+ * @param props.onChange - Updates the document state.
+ * @returns The warning, or `null`.
+ */
+function TypeDoubts({
+  doc,
+  kind,
+  onChange,
+}: {
+  doc: DocState;
+  kind: string;
+  onChange: (d: DocState) => void;
+}) {
+  const issues = typeIssuesOf(doc.ingest.result);
+  if (!issues.length || doc.confirmed) return null;
+  return (
+    <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+      <p className="font-medium">This may not be {kind}:</p>
+      {issues.map((m) => (
+        <p key={m}>• {m}</p>
+      ))}
+      <label className="mt-2 flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={doc.ackType}
+          onChange={(e) => onChange({ ...doc, ackType: e.target.checked })}
+        />
+        <span>
+          I checked the document: it is {kind}. Otherwise, upload the right
+          document instead.
+        </span>
+      </label>
     </div>
   );
 }

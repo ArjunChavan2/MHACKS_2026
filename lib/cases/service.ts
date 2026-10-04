@@ -14,6 +14,7 @@ import { confirmDenial, denialFields } from "@/lib/extract/denial";
 import { evaluateDenial, type DenialEvaluation } from "@/lib/appeals/criteria";
 import { draftAppealLetter, draftDocumentationRequest } from "@/lib/appeals/letter";
 import { extractDocument, extractFromSavedReply, type ExtractionResult } from "@/lib/extract/pipeline";
+import { prepareUpload } from "@/lib/extract/upload";
 import { loadRecords, type RecordsOrigin } from "@/lib/finchnode";
 import { llmConfigured } from "@/lib/llm";
 import { caseStateOf, verifyRevisedStatement, type CaseState } from "./caseflow";
@@ -114,21 +115,24 @@ async function save(caseId: string | null, fileName: string, storageKey: string,
 }
 
 /**
- * Ingests an uploaded file: stores it privately, extracts it with Gemini, and saves the result.
+ * Ingests an uploaded file: checks it, stores it privately, extracts it with the AI provider, and
+ * saves the result.
+ *
+ * The type is detected from the bytes (the browser's label is ignored), PDFs over the page limit are
+ * refused, and HEIC photos are stored and extracted as JPEG (`prepareUpload`). Nothing is stored or
+ * sent to a model for a refused file.
  *
  * @param caseId - Existing case ID or `null`.
  * @param fileName - Original file name.
- * @param mimeType - MIME type (PDF, JPEG, PNG, HEIC, WEBP).
  * @param bytes - File bytes.
  * @returns The ingest response.
- * @throws {BadRequestError} For unsupported file types.
+ * @throws {import("@/lib/extract/upload").UploadRejectedError} For an unrecognized, unreadable, or oversized file.
  * @throws {import("@/lib/llm").LlmUnavailableError} When the active AI provider's key is not set.
  */
-export async function ingestUpload(caseId: string | null, fileName: string, mimeType: string, bytes: Uint8Array): Promise<IngestResponse> {
-  const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
-  if (!allowed.includes(mimeType)) throw new BadRequestError(`Unsupported file type ${mimeType}. Upload a PDF or a photo.`);
-  const key = await getStore().putFile(bytes, mimeType);
-  return save(caseId, fileName, key, await extractDocument({ mimeType, bytes }));
+export async function ingestUpload(caseId: string | null, fileName: string, bytes: Uint8Array): Promise<IngestResponse> {
+  const file = await prepareUpload(bytes);
+  const key = await getStore().putFile(file.bytes, file.mimeType);
+  return save(caseId, fileName, key, await extractDocument({ mimeType: file.mimeType, bytes: file.bytes }));
 }
 
 /**
@@ -149,10 +153,12 @@ export async function ingestSample(caseId: string | null, name: string): Promise
 }
 
 /**
- * Confirms a document's fields (SPEC.md §4.2 step 7).
+ * Confirms a document's fields (SPEC.md §4.2 step 7). A revised statement for a different account
+ * than the original bill is refused (GitHub issue #5), and any doubts the type checks raised must
+ * have been acknowledged.
  *
  * @param documentId - Document to confirm.
- * @param input - Corrections, explicit confirmations, totals acknowledgement.
+ * @param input - Corrections, explicit confirmations, totals and document-type acknowledgements.
  * @returns `{ ok: true }` when locked, or `{ ok: false, blocking }`.
  * @throws {BadRequestError} When the document is unknown, already confirmed, or not a bill/EOB.
  */
@@ -177,12 +183,15 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
     const mismatch = original ? revisedMismatches(original.confirmed as ConfirmedBill, r.value as ConfirmedBill) : [];
     if (mismatch.length) return { ok: false, blocking: [...mismatch, "This doesn't look like a revised statement for the same bill, so it can't be used to verify savings."] };
   }
+  // Confirmation only got here with any type doubts acknowledged; record which ones.
+  const typeIssues = (doc.extraction as ExtractedBill | ExtractedEob).typeIssues ?? [];
   await store.saveDocument({ ...doc, status: "confirmed", confirmed: r.value });
   await store.addEvent(doc.caseId, "fields_confirmed", {
     documentId,
     corrected: Object.keys(input.corrections),
     confirmedAsPrinted: input.confirmedPaths,
     totalsMismatchAcknowledged: input.acknowledgeTotalsMismatch,
+    ...(typeIssues.length ? { docTypeAcknowledged: typeIssues } : {}),
   });
   // A confirmed revised statement is checked against the original bill (MVP 2 verification).
   if (doc.docType === "revised_statement") await verifyRevisedStatement(doc.caseId, documentId);
@@ -190,15 +199,18 @@ export async function confirmDocument(documentId: string, input: Omit<ConfirmInp
 }
 
 /**
- * Loads a confirmed document of the expected kind.
+ * Loads a confirmed document of the expected kind from a case.
  *
+ * @param caseId - Case the document must belong to (so documents from other cases, never matched
+ *   against this one at confirmation, can't be audited together).
  * @param id - Document ID.
  * @param kind - "bill" or "eob".
  * @returns The confirmed value.
- * @throws {BadRequestError} When missing or not yet confirmed.
+ * @throws {BadRequestError} When missing, on another case, or not yet confirmed.
  */
-async function loadConfirmed<K extends "bill" | "eob">(id: string, kind: K): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
+async function loadConfirmed<K extends "bill" | "eob">(caseId: string, id: string, kind: K): Promise<K extends "bill" ? ConfirmedBill : ConfirmedEob> {
   const doc = await getStore().getDocument(id);
+  if (doc && doc.caseId !== caseId) throw new BadRequestError(`Document ${id} is not on this case`);
   if (!doc?.confirmed) throw new BadRequestError(`The ${kind === "bill" ? "bill" : "EOB"} must be confirmed before the audit runs`);
   if ((kind === "eob") !== (doc.docType === "eob")) throw new BadRequestError(`Document ${id} is not a ${kind}`);
   return doc.confirmed as K extends "bill" ? ConfirmedBill : ConfirmedEob;
@@ -211,15 +223,15 @@ async function loadConfirmed<K extends "bill" | "eob">(id: string, kind: K): Pro
  * @param billId - Confirmed bill document ID.
  * @param eobId - Confirmed EOB document ID, or `null`.
  * @returns Findings, verdict, the providers searched, and where the records came from (`recordsOrigin`).
- * @throws {BadRequestError} When a document isn't confirmed.
+ * @throws {BadRequestError} When a document isn't confirmed or isn't on this case.
  */
 export async function auditCase(
   caseId: string,
   billId: string,
   eobId: string | null,
 ): Promise<AuditResponse> {
-  const bill = await loadConfirmed(billId, "bill");
-  const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+  const bill = await loadConfirmed(caseId, billId, "bill");
+  const eob = eobId ? await loadConfirmed(caseId, eobId, "eob") : null;
   // Comparing a bill with an EOB from a different visit would produce false findings.
   if (eob) {
     const mismatch = billEobMismatches(bill, eob);
@@ -249,8 +261,8 @@ export async function auditCase(
  * @throws {BadRequestError} When there are no findings to dispute.
  */
 export async function draftLetter(caseId: string, billId: string, eobId: string | null): Promise<Draft> {
-  const bill = await loadConfirmed(billId, "bill");
-  const eob = eobId ? await loadConfirmed(eobId, "eob") : null;
+  const bill = await loadConfirmed(caseId, billId, "bill");
+  const eob = eobId ? await loadConfirmed(caseId, eobId, "eob") : null;
   const { records, providers } = await loadRecords(caseId);
   const previous = (await getStore().getCase(caseId))?.findings ?? [];
   const merged = mergeFindings(previous, runAudit(bill, eob, records, providers).findings);
@@ -269,13 +281,20 @@ export async function draftLetter(caseId: string, billId: string, eobId: string 
  * Drafts an itemized-bill request from a balance statement's header.
  *
  * @param documentId - Balance statement document ID.
+ * @param acknowledgeDocType - Patient confirmed it is a medical balance statement despite the type
+ *   checks' doubts (`typeIssues`).
  * @returns The request draft.
- * @throws {BadRequestError} When the document is not a balance statement.
+ * @throws {BadRequestError} When the document is not a balance statement, or its type is in doubt
+ *   and not acknowledged.
  */
-export async function draftItemizedRequest(documentId: string): Promise<Draft> {
+export async function draftItemizedRequest(documentId: string, acknowledgeDocType = false): Promise<Draft> {
   const doc = await getStore().getDocument(documentId);
   if (!doc || doc.docType !== "balance_statement") throw new BadRequestError("An itemized-bill request needs a balance statement");
-  const h = (doc.extraction as ExtractedBill).header;
+  const statement = doc.extraction as ExtractedBill;
+  if (statement.typeIssues?.length && !acknowledgeDocType) {
+    throw new BadRequestError(`Confirm this is a medical balance statement first: ${statement.typeIssues.join(" ")}`);
+  }
+  const h = statement.header;
   const draft = draftItemizedBillRequest({
     billingEntity: h.billingEntity.value ?? "the provider",
     patientName: h.patientName.value,
@@ -286,7 +305,7 @@ export async function draftItemizedRequest(documentId: string): Promise<Draft> {
   });
   const draftId = await saveDraft(doc.caseId, draft);
   await getStore().setCaseStatus(doc.caseId, "request_drafted");
-  await getStore().addEvent(doc.caseId, "request_drafted", { kind: draft.kind, documentId, draftId });
+  await getStore().addEvent(doc.caseId, "request_drafted", { kind: draft.kind, documentId, draftId, ...(statement.typeIssues?.length ? { docTypeAcknowledged: statement.typeIssues } : {}) });
   return draft;
 }
 

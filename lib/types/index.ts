@@ -124,6 +124,11 @@ export interface ExtractedBill {
   lines: BillLine[];
   /** Whole-document problems found by the checks (e.g. totals don't reconcile). */
   documentIssues: string[];
+  /**
+   * Reasons to doubt the model's document type, from code checks (`lib/extract/doctype.ts`). Block
+   * confirmation until the patient confirms the type. Missing on extractions stored before them.
+   */
+  typeIssues?: string[];
 }
 
 /** One line of an explanation of benefits (EOB). An EOB is not a bill (SPEC.md §4.2). */
@@ -151,12 +156,24 @@ export interface ExtractedEob {
   claimNumber: Field<string>;
   /** Provider the claim was filed by. */
   provider: Field<string>;
+  /**
+   * Patient (or member) name as printed, used to check the EOB belongs with the bill. Missing on
+   * extractions stored before schema `raw-v2`.
+   */
+  patientName?: Field<string>;
+  /** Patient account number at the provider, if printed. Missing before schema `raw-v2`. */
+  accountNumber?: Field<string>;
   /** Total patient responsibility as printed. */
   totalPatientResponsibility: Field<Cents>;
   /** Claim lines. */
   lines: EobLine[];
   /** Whole-document problems found by the checks. */
   documentIssues: string[];
+  /**
+   * Reasons to doubt the model's document type, from code checks (`lib/extract/doctype.ts`). Block
+   * confirmation until the patient confirms the type. Missing on extractions stored before them.
+   */
+  typeIssues?: string[];
 }
 
 /** Where a confirmed value came from, kept for the evidence view (SPEC.md §4.4). */
@@ -223,6 +240,8 @@ export interface ConfirmedEob {
   insurer: string | null;
   claimNumber: string | null;
   provider: string | null;
+  patientName: string | null;
+  accountNumber: string | null;
   totalPatientResponsibilityCents: Cents | null;
   lines: ConfirmedEobLine[];
 }

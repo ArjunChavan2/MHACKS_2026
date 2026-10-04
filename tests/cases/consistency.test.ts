@@ -3,7 +3,7 @@
  * (bill vs EOB in the audit; original bill vs revised statement in verification).
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { billEobMismatches, revisedMismatches, sameAccount, sameName } from "@/lib/cases/consistency";
+import { billEobMismatches, revisedMismatches, sameAccount, sameName, sameProvider } from "@/lib/cases/consistency";
 import { auditCase, confirmDocument, ingestSample } from "@/lib/cases/service";
 import { memoryStore, type CaseStore } from "@/lib/cases/store";
 import type { ConfirmedBill, ConfirmedEob } from "@/lib/types";
@@ -20,6 +20,18 @@ describe("name and account matching", () => {
     expect(sameAccount("QMG-305518", "qmg 305518")).toBe(true);
     expect(sameAccount("QMG-305518", "QMG-305519")).toBe(false);
   });
+  /** Proves the same entity printed differently is never refused (a hard block must not hit real matches). */
+  it("tolerates how the same entity is printed", () => {
+    expect(sameName("Priya Ramaswamy", "RAMASWAMY, PRIYA")).toBe(true);
+    expect(sameName("Priya Ramaswamy", "Ms. Priya S. Ramaswamy")).toBe(true);
+    expect(sameName("José Núñez", "JOSE NUNEZ")).toBe(true);
+    expect(sameName("Priya Ramaswamy", "Anita Ramaswamy")).toBe(false);
+    expect(sameProvider("Quillhaven Medical Group", "QUILLHAVEN MED GRP")).toBe(true);
+    expect(sameProvider("Quillhaven Medical Group", "Northstar Health System")).toBe(false);
+    expect(sameAccount("QMG-305518", "XXXX5518")).toBe(true);
+    expect(sameAccount("QMG-305518", "305518")).toBe(true);
+    expect(sameAccount("QMG-305518", "18")).toBe(false);
+  });
 });
 
 describe("billEobMismatches", () => {
@@ -32,6 +44,8 @@ describe("billEobMismatches", () => {
     expect(billEobMismatches(bill, other)[0]).toContain("Northstar Health System");
     const later: ConfirmedEob = { ...eob, lines: eob.lines.map((l) => ({ ...l, serviceDate: "2026-07-01" })) };
     expect(billEobMismatches(bill, later)[0]).toContain("2026-07-01");
+    const otherPatient: ConfirmedEob = { ...eob, patientName: "Jordan Rivera" };
+    expect(billEobMismatches(bill, otherPatient)).toEqual(["The EOB is for Jordan Rivera, but the bill is for Priya Ramaswamy."]);
   });
 });
 

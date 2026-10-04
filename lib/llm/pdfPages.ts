@@ -60,7 +60,8 @@ export async function renderPdfPages(bytes: Uint8Array, scale = RENDER_SCALE): P
  *
  * @param file - Uploaded file.
  * @returns Page images in order (one for a photo).
- * @throws {Error} When the image type cannot be decoded (e.g. HEIC).
+ * @throws {Error} When the image type cannot be decoded. HEIC never gets here: uploads convert it
+ *   to JPEG first (`lib/extract/upload.ts`).
  */
 export async function toPageImages(file: FilePart): Promise<PageImage[]> {
   if (file.mimeType === "application/pdf") return renderPdfPages(file.bytes);
