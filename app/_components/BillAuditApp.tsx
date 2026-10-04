@@ -8,6 +8,7 @@
  * document so a demo never passes a fixture off as live (SPEC.md §2 rule 9).
  */
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import BillyGuide, { ReviewProgress, type ReviewStep } from "./BillyGuide";
 import type { ExtractionResult } from "@/lib/extract/pipeline";
 import type { RecordsOrigin } from "@/lib/finchnode/live";
@@ -367,16 +368,11 @@ export default function BillAuditApp() {
 
   return (
     <main className="paper-app" aria-busy={busy}>
-      <header className="paper-header">
-        <button
-          disabled={busy}
-          onClick={reset}
-          className="paper-wordmark"
-          aria-label="BillLess home"
-        >
+      <header className="paper-header billless-site-header">
+        <Link href="/" className="paper-wordmark" aria-label="BillLess home">
           Bill<span>Less</span>
           <span className="billless-brand-dot">.</span>
-        </button>
+        </Link>
         <p className="paper-header-label">
           A little less worry. A clearer next step.
         </p>
