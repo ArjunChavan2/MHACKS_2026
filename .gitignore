@@ -42,3 +42,4 @@ next-env.d.ts
 
 !.env.example
 /fixtures/generated-check/
+.neon

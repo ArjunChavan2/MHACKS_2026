@@ -23,8 +23,14 @@ verified"). No PLAN.md; the user asked directly. Audit against SPEC.md §4.6 and
 
 ## Verified
 
-`npm test` 46/46 (42 old + 4 new), `typecheck`, `lint`, `build` clean. Not verified: a live Neon
-database (no `DATABASE_URL` yet) — `npm run db:migrate && npm run db:check` is the live check.
+`npm test` 46/46 (42 old + 4 new), `typecheck`, `lint`, `build` clean.
+
+Live (2026-10-03): Neon project `snowy-star-63367096`, branch `production`, linked with the Neon
+CLI (`neon link` wrote `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_BRANCH` to `.env.local`;
+`.neon` is gitignored). `npm run db:migrate` applied `0000_init`; `npm run db:check` passed
+(7 tables, write/read-back/file round trip, cleanup). `neon.ts` declares Postgres only. Neon's
+agent skills are committed under `.claude/skills/` (`skills-lock.json`); the Neon MCP server was
+added to Claude Code with `--oauth` (no API key stored).
 
 ## Known limits
 
