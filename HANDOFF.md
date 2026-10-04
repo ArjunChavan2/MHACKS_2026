@@ -37,7 +37,11 @@ Progress per rung is the Status column in SPEC.md §6.
 
 - **MVP 1 (cited bill audit) is built** with the MVP 0 pieces it needs: see
   `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 91 tests pass; build, lint, and types are clean.
-- **Frontend:** Sruthi integrated the Paper design into the bill audit UI (`ca9aab5`).
+- **Frontend:** BillLess review branding was pushed as `a7f7fbf`. Subsequent landing page,
+  hover animation, sample footer pages, and shared spacing are committed as `7e8f463` on top
+  of `d01c4b4`; these new frontend and documentation commits have not yet been pushed.
+  Read [`DESIGN_HANDOFF.md`](DESIGN_HANDOFF.md) for current UI routes, design values, assets,
+  prototype limitations, validation, and how to run the preview on port 3001.
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on
   `gemini-3.5-flash` (including the prompt-injection bill), now the pinned default; the
   `gemini-flash-latest` alias kept failing with 503/429. `gemini-2.5-flash` returns 404 for new keys.
