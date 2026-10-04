@@ -39,7 +39,8 @@ Progress per rung is the Status column in SPEC.md §6.
   `agent-notes/mvp1-bill-audit/IMPLEMENTATION.md`. 91 tests pass; build, lint, and types are clean.
 - **Frontend:** BillLess review branding was pushed as `a7f7fbf`. Subsequent landing page,
   hover animation, sample footer pages, and shared spacing are committed as `7e8f463` on top
-  of `d01c4b4`; these new frontend and documentation commits have not yet been pushed.
+  of `d01c4b4`, with documentation in `9a83c77`. Both are on GitHub. Hero copy and the sourced
+  synthetic bill example are committed as `6f21b89` after syncing upstream `09435d4`.
   Read [`DESIGN_HANDOFF.md`](DESIGN_HANDOFF.md) for current UI routes, design values, assets,
   prototype limitations, validation, and how to run the preview on port 3001.
 - **Live Gemini works.** `npm run eval:extraction` passes 334/334 fields across all 5 fixtures on

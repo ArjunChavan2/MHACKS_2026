@@ -13,8 +13,9 @@ action. The voice uses “Let’s” and “we” without inventing health facts
 
 The BillLess review redesign was pushed on `main` as `a7f7fbf`, rebased onto the team's
 case-tracking changes. The home page, hover, footer, sample information pages, and shared
-spacing are committed locally as `7e8f463`, on top of upstream `d01c4b4`. These new commits
-have **not been pushed**. The pull preserved upstream deployment/PDF-rendering fixes,
+spacing are committed as `7e8f463`, with design documentation in `9a83c77`; both were already
+on GitHub when this session synced. The hero audit changes are committed as `6f21b89`, rebased
+onto `09435d4`, and included in the current push. The pull preserved upstream deployment/PDF-rendering fixes,
 the domain/deployment notes, and the MVP 3 iMessage plan. `.tmp/` contains unrelated local
 read caches; leave it out of commits. Stashes named `BillLess local changes before latest
 pull` and `BillLess home footer spacing and design handoff before latest pull` remain as
@@ -90,8 +91,8 @@ The current headline is “Know what to question on your medical bill.” CTA wo
 consistently “Review my bill.” How it works uses Upload and confirm / Review the findings /
 Prepare your letter. Generic reassurance labels and the extra final CTA card were removed.
 “We’ve goat this” is the sole playful aside. The mascot sits beside the sample on desktop
-and below it on phones so it does not cover the evidence. These audit edits are local and
-uncommitted after the preceding home/design commits.
+and below it on phones so it does not cover the evidence. These audit edits are committed
+with the frontend updates. Check current Git status and history for subsequent changes.
 
 Billy's generation direction: soft 2D cream goat, navy contour, small tan horns, large
 expressive ears, blue-gray hooves, sky-blue neckerchief, raised waving hoof, friendly
@@ -176,7 +177,7 @@ Temporary browser scripts and screenshots
 are under `/private/tmp/billkind-browser-tools` and `/private/tmp/billless-*`; they are session
 artifacts, not portable repo dependencies. Live LLM extraction was not rerun for these UI edits.
 
-Next: push the new frontend/documentation commits when requested, replace sample policies
+Next: replace sample policies
 and contacts before public use, finish or migrate the editable prototype when tools permit,
 and review the teammate's case/operator screens for further visual consistency. Keep changes
 in UI files scoped; API, types, database, and approval logic remain owned by the current MVP.

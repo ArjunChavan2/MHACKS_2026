@@ -36,7 +36,7 @@ from `a7f7fbf` to `d01c4b4`, and restored the stash without conflicts. Frontend 
 committed as `7e8f463`; design handoff documentation is a separate descriptive commit. Keep
 both stash backups and exclude `.tmp/` caches. All 91 tests, lint, and Webpack build passed
 after the pull. Standalone type checking was rerun after the build to avoid a race with
-Next.js regenerating `.next/types`. These commits have not been pushed.
+Next.js regenerating `.next/types`. These home/design commits are now on GitHub.
 
 Copy/design audit follow-up: changed the headline to “Know what to question on your medical
 bill,” standardized CTA labels, replaced abstract section headings with concrete workflow
@@ -45,3 +45,7 @@ Billy's one “We’ve goat this” aside. The hero now illustrates the actual s
 lines ($68.00 each) with code/date, a possible-duplicate label, and a source caption. It
 does not claim an error is confirmed or that those dollars have been saved. Browser layout
 and navigation checks cover the new headline, sample rows, labels, and phone widths.
+
+Publication sync: committed the audit follow-up and rebased onto upstream `09435d4`
+(environment-variable placeholders only), without conflicts. The resulting hero commit
+is `6f21b89`; it and these corrected handoff notes are included in the requested push.
