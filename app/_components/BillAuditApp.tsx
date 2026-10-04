@@ -787,6 +787,10 @@ function describeSource(s: Source): string {
       return `${s.fact.provider}, ${s.fact.recordedAt}: “${s.fact.text}” (record ${s.fact.recordId})`;
     case "records_searched":
       return `Searched ${s.recordsChecked} records from ${s.providers.join(" and ")}: ${s.searched}. No match.`;
+    case "response":
+      return `Response from ${s.from}, ${s.receivedAt}${s.note ? `: “${s.note}”` : ""}`;
+    case "document":
+      return `Document: ${s.label}`;
   }
 }
 

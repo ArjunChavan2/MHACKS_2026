@@ -258,6 +258,10 @@ export type Source =
   | { kind: "eob_total"; documentId: string; provenance: Provenance }
   | { kind: "bill_total"; documentId: string; provenance: Provenance }
   | { kind: "record"; fact: VerbatimFact }
+  /** A response recorded from the billing office or insurer (free text shown verbatim, never parsed). */
+  | { kind: "response"; eventId: string; from: string; receivedAt: IsoDate; note: string | null }
+  /** A document attached to the case (e.g. a lab result or revised statement). */
+  | { kind: "document"; documentId: string; docType: string; label: string }
   | {
       kind: "records_searched";
       /** Providers whose records were searched. */
@@ -299,6 +303,12 @@ export interface Finding {
    * ("my EOB", "Please confirm..."), with every fact filled by code from a template (SPEC.md §4.5).
    */
   letterText: string;
+  /** Template text explaining the latest status change (MVP 2), written by code. */
+  statusNote?: string;
+  /** Evidence behind the latest status change: the response event and/or document. */
+  statusSources?: Source[];
+  /** True once a patient-confirmed revised statement shows the correction (SPEC.md §4.6). */
+  verified?: boolean;
   /** Amount this finding questions, in cents (0 when not monetary). */
   amountQuestionedCents: Cents;
   /** Bill line numbers this finding covers, for de-duplicating the verdict total. */
@@ -342,4 +352,72 @@ export interface Draft {
   paragraphs: DraftParagraph[];
   /** Whether Gemini wrote the prose (`llm`) or the deterministic template was used (`template`). */
   author: "llm" | "template";
+}
+
+/** How the counterparty answered one finding (recorded from the operator console, MVP 2). */
+export type ResponseKind = "confirms_error" | "provides_documentation" | "needs_more_info" | "will_send_later";
+
+/**
+ * A response from the billing office or insurer, recorded as structured data (SPEC.md §3.5).
+ * `note` and the free-text fields are shown verbatim and never parsed by code or a model.
+ */
+export interface CounterpartyResponse {
+  /** Who answered, e.g. "Quillhaven Medical Group billing office". */
+  from: string;
+  /** One answer per finding addressed. */
+  perFinding: Array<{
+    findingId: string;
+    kind: ResponseKind;
+    /** What document is still needed (for `needs_more_info` / `will_send_later`). */
+    neededDocument?: string;
+    /** Who must provide it (defaults to `from`). */
+    responsibleParty?: string;
+    /** Date they promised it by, if any. */
+    promisedBy?: IsoDate;
+  }>;
+  /** Attached document, if any (required for `provides_documentation`). */
+  documentId?: string;
+  /** Plain label of the attached document, e.g. "Lab result: free T4, collected 03/05/2026". */
+  documentLabel?: string;
+  /** Free text from the counterparty, shown verbatim. */
+  note?: string;
+}
+
+/** A pending piece of work on a case (SPEC.md §3.6, §4.6). */
+export interface CaseTask {
+  id: string;
+  /** `await_document`: someone else will send it; `request_document`: we must ask for it. */
+  kind: "await_document" | "request_document" | "follow_up";
+  /** Finding this task belongs to, if any. */
+  findingId?: string;
+  /** Plain description of the document or step, e.g. "revised statement". */
+  documentNeeded: string;
+  /** Who is responsible for the next step. */
+  responsibleParty: string;
+  /** Follow-up date, or `null` when unconfirmed. */
+  followUpDate: IsoDate | null;
+  /** `patient_handling` = the patient took this over ("I'll do this myself"). */
+  status: "open" | "done" | "patient_handling";
+  /** Document that fulfilled the task, once done. */
+  fulfilledBy?: string;
+}
+
+/** Result of comparing a revised statement with the original bill (SPEC.md §4.6 verification). */
+export interface RevisedComparison {
+  /** Original lines with no counterpart on the revised statement. */
+  removedLines: number[];
+  /** Original lines still present but with a lower charge: [lineNumber, oldCents, newCents]. */
+  reducedLines: Array<[number, Cents, Cents]>;
+  /** Revised-statement lines with no counterpart on the original (new charges). */
+  newLines: number[];
+  /** Original amount due, if printed. */
+  originalDueCents: Cents | null;
+  /** Revised amount due, if printed. */
+  revisedDueCents: Cents | null;
+  /** Original due − revised due when positive and both are known; otherwise 0. */
+  confirmedSavingsCents: Cents;
+  /** Finding IDs whose questioned lines are all removed (or reduced to zero). */
+  resolvedFindingIds: string[];
+  /** Finding IDs (confirmed by the office) whose lines are still billed. */
+  notReflectedFindingIds: string[];
 }
