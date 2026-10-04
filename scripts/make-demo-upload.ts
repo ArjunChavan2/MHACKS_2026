@@ -2,7 +2,7 @@
  * @file Realistic-looking synthetic bill and EOB PDFs for the live-upload demo (read by Grok, not the
  * saved-answer sample path). Same story as `scripts/fixture-data.ts` (Priya Ramaswamy, Quillhaven
  * visit 03/05/2026: duplicate TSH, bill over EOB by $68, free T4 without a same-day record).
- * Fictional organizations and addresses; every page says SYNTHETIC. Run: `npx tsx scripts/make-demo-upload.ts`.
+ * A second Priya pair adds a leg amputation the EOB doesn't list. Fictional organizations and addresses; every page says SYNTHETIC. Run: `npx tsx scripts/make-demo-upload.ts`.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,6 +29,18 @@ const PRIYA: DemoPair = {
   lines: BILL_LINES,
   totals: BILL_TOTALS,
   eob: { ...EOB, processed: "03/18/2026" },
+};
+
+/**
+ * Priya with an amputation she never had: the same visit plus CPT 27880 (amputation, leg, through tibia
+ * and fibula, $18,400). The EOB is unchanged, so the insurer never processed it; the audit flags the
+ * bill as asking for $18,468 more than the EOB (the duplicate TSH plus this line).
+ */
+const PRIYA_AMPUTATION: DemoPair = {
+  ...PRIYA,
+  file: "quillhaven-amputation",
+  lines: [...BILL_LINES, { line: "6", date: "03/05/2026", code: "27880", codeType: "CPT", description: "Amputation, leg, through tibia and fibula", qty: "1", charge: "$18,400.00" }],
+  totals: { totalCharges: "$18,853.00", totalAdjustments: "-$132.00", totalPayments: "$0.00", amountDue: "$18,721.00" },
 };
 
 /** Marcus Bell: the bill matches the EOB, but the insurer paid nothing for the MRI → call the insurer. */
@@ -150,11 +162,11 @@ async function eob(d: DemoPair): Promise<Uint8Array> {
 /** Writes both files. */
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
-  for (const d of [PRIYA, MARCUS]) {
+  for (const d of [PRIYA, PRIYA_AMPUTATION, MARCUS]) {
     writeFileSync(join(OUT, `${d.file}-bill.pdf`), await bill(d));
-    writeFileSync(join(OUT, d.file === "quillhaven" ? "wolverine-eob.pdf" : `${d.file}-eob.pdf`), await eob(d));
+    writeFileSync(join(OUT, d.file === "quillhaven" ? "wolverine-eob.pdf" : d.file === "quillhaven-amputation" ? "wolverine-amputation-eob.pdf" : `${d.file}-eob.pdf`), await eob(d));
   }
-  console.log(`Wrote ${OUT}: quillhaven-bill.pdf, wolverine-eob.pdf, northstar-marcus-bill.pdf, northstar-marcus-eob.pdf`);
+  console.log(`Wrote ${OUT}: quillhaven-bill.pdf, wolverine-eob.pdf, quillhaven-amputation-bill.pdf, wolverine-amputation-eob.pdf, northstar-marcus-bill.pdf, northstar-marcus-eob.pdf`);
 }
 
 main().catch((err: unknown) => {
