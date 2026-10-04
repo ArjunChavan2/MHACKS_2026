@@ -776,10 +776,11 @@ h4 {
 }
 .billless-continue-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   gap: 24px;
 }
+.billless-upload-back { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; white-space: nowrap; }
 .billless-continue-row .paper-primary {
   min-width: 280px;
 }
@@ -943,10 +944,13 @@ h4 {
     border-radius: 20px;
   }
   .billless-continue-row {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: stretch;
     gap: 16px;
   }
+  .billless-continue-row .billless-action-progress { grid-column: 1 / -1; grid-row: 1; }
+  .billless-continue-row .paper-primary { padding-inline: 12px; }
   .billless-continue-row .paper-primary {
     width: 100%;
     min-width: 0;
@@ -1652,3 +1656,12 @@ h4 {
 .call-transcript li { display: flex; gap: .75rem; }
 .call-transcript time { flex-shrink: 0; font-size: .8rem; color: var(--paper-muted); }
 @media (max-width: 640px) { .call-form-grid { grid-template-columns: 1fr; } .call-tabs > button { width: 100%; } }
+/* Keep corrections beside the findings count, wrapping when space is limited. */
+.billless-findings-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.billless-findings-heading h3 { margin: 0; }
+
+/* Make the review correction action visibly clickable beside the item count. */
+.billless-findings-heading .paper-source-button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

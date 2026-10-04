@@ -678,15 +678,11 @@ export default function BillAuditApp() {
         />
       )}
       {step === "case" && caseId && <CaseScreen caseId={caseId} />}
-      <nav
+      {step !== "start" && <nav
         className="paper-flow billless-back-navigation"
         aria-label="Previous screen"
       >
-        {step === "start" ? (
-          <Link href="/" className="paper-secondary">
-            ← Back to home
-          </Link>
-        ) : (
+
           <button
             type="button"
             className="paper-secondary"
@@ -695,8 +691,7 @@ export default function BillAuditApp() {
           >
             ← {backLabel}
           </button>
-        )}
-      </nav>
+      </nav>}
     </main>
   );
 }
@@ -755,6 +750,9 @@ function StartScreen(props: {
         />
       </div>
       <div className="billless-continue-row">
+        <Link href="/" className="paper-secondary billless-upload-back">
+          ← Back to home
+        </Link>
         <div className="billless-action-progress">
           {props.processingFile ? (
             <ProcessingStatus filename={props.processingFile} inline />
@@ -966,15 +964,6 @@ function AuditScreen({
           <span className="paper-badge">✓ Review complete</span>
         </div>
       )}
-      <div className="flex justify-end">
-        <button
-          className="paper-source-button"
-          disabled={busy}
-          onClick={onCorrect}
-        >
-          Correct bill or EOB details
-        </button>
-      </div>
       <dl className="paper-summary">
         <div className="paper-stat">
           <dt>Total billed charges</dt>
@@ -1017,12 +1006,22 @@ function AuditScreen({
       </dl>
       <div className="paper-workspace">
         <div className="paper-findings">
+          <div className="billless-findings-heading">
+            {findings.length > 0 && (
+              <h3>
+                {findings.length} item{findings.length === 1 ? "" : "s"} to review
+              </h3>
+            )}
+            <button
+              className="paper-source-button"
+              disabled={busy}
+              onClick={onCorrect}
+            >
+              Correct bill or EOB details
+            </button>
+          </div>
           {findings.length > 0 ? (
             <>
-              <h3>
-                {findings.length} item{findings.length === 1 ? "" : "s"} to
-                review
-              </h3>
               <p className="paper-copy">
                 Potential issues are things to ask about, not proven errors.
                 Records searched:{" "}
