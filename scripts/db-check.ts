@@ -70,12 +70,21 @@ async function main(): Promise<void> {
       extraction: { ok: true },
       extractionMeta: null,
       confirmed: null,
+      draft: null,
     });
     await store.addEvent(caseId, "db_check", { ok: true });
+    await store.setCaseStatus(caseId, "audited");
     const doc = await store.getDocument(`${caseId}_doc`);
     const file = await store.getFile(key);
+    const full = await store.getCase(caseId);
     if (!doc || doc.storageKey !== key || file?.bytes.length !== 4)
       throw new Error("Round trip read back different data.");
+    if (
+      full?.status !== "audited" ||
+      full.documents.length !== 1 ||
+      full.events.length !== 1
+    )
+      throw new Error("Case read-back returned different data.");
     await db.delete(schema.files).where(eq(schema.files.key, key));
     console.log("Write, read back, and file storage work.");
   } finally {

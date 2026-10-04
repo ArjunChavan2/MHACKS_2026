@@ -1,7 +1,7 @@
 /**
- * @file Postgres store tests (SPEC.md §4.6, §5.7): applies the committed migrations to an in-process
- * Postgres (PGlite) and runs the real `pgStore` and case service against it, so the schema, SQL,
- * and JSON round trips are checked without a Neon account. The Neon driver itself is checked
+ * @file Case store tests (SPEC.md §4.6, §5.7): applies the committed migrations to an in-process
+ * Postgres (PGlite) and runs the real `pgStore` and case service against it, and runs the same
+ * service flow on the in-memory store so both behave alike. The Neon driver itself is checked
  * live by `npm run db:check`.
  */
 import { PGlite } from "@electric-sql/pglite";
@@ -9,21 +9,42 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { caseEvents, cases, findings } from "@/db/schema";
-import { auditCase, confirmDocument, ingestSample } from "@/lib/cases/service";
-import { pgStore, type CaseStore, type PgDb } from "@/lib/cases/store";
+import { caseEvents, cases, documents, findings } from "@/db/schema";
+import {
+  auditCase,
+  confirmDocument,
+  draftItemizedRequest,
+  draftLetter,
+  ingestSample,
+  loadCase,
+} from "@/lib/cases/service";
+import {
+  memoryStore,
+  pgStore,
+  type CaseStore,
+  type PgDb,
+} from "@/lib/cases/store";
 import { fixturePdf } from "../helpers";
 
 const g = globalThis as typeof globalThis & { __mhStore?: CaseStore };
 let client: PGlite;
 let db: PgDb;
+let pg: CaseStore;
+
+/** Confirmation input with no corrections. */
+const AS_PRINTED = {
+  corrections: {},
+  confirmedPaths: [],
+  acknowledgeTotalsMismatch: false,
+};
 
 beforeAll(async () => {
+  delete process.env.GEMINI_API_KEY;
   client = new PGlite();
   const pglite = drizzle(client);
   await migrate(pglite, { migrationsFolder: "db/migrations" });
   db = pglite;
-  g.__mhStore = pgStore(db);
+  pg = pgStore(db);
 });
 
 afterAll(async () => {
@@ -34,20 +55,21 @@ afterAll(async () => {
 describe("pgStore", () => {
   it("stores a file privately and returns identical bytes", async () => {
     const pdf = fixturePdf("sample-bill");
-    const key = await g.__mhStore!.putFile(pdf, "application/pdf");
-    const file = await g.__mhStore!.getFile(key);
+    const key = await pg.putFile(pdf, "application/pdf");
+    const file = await pg.getFile(key);
     expect(file?.mimeType).toBe("application/pdf");
     expect(Buffer.from(file!.bytes).equals(Buffer.from(pdf))).toBe(true);
   });
 
-  it("returns null for unknown documents and files", async () => {
-    expect(await g.__mhStore!.getDocument("doc_missing")).toBeNull();
-    expect(await g.__mhStore!.getFile("file_missing")).toBeNull();
+  it("returns null for unknown cases, documents, and files", async () => {
+    expect(await pg.getCase("case_missing")).toBeNull();
+    expect(await pg.getDocument("doc_missing")).toBeNull();
+    expect(await pg.getFile("file_missing")).toBeNull();
   });
 
   it("rejects a document for a case that does not exist (foreign key)", async () => {
     await expect(
-      g.__mhStore!.saveDocument({
+      pg.saveDocument({
         id: "doc_orphan",
         caseId: "case_missing",
         docType: "eob",
@@ -58,13 +80,21 @@ describe("pgStore", () => {
         extraction: null,
         extractionMeta: null,
         confirmed: null,
+        draft: null,
       }),
     ).rejects.toThrow();
   });
 });
 
-describe("case service on Postgres", () => {
-  it("ingests, confirms, and audits the sample bill and EOB, persisting every step", async () => {
+describe.each([
+  ["Postgres", () => pg],
+  ["memory", () => memoryStore()],
+])("case service on the %s store", (_name, makeStore) => {
+  beforeAll(() => {
+    g.__mhStore = makeStore();
+  });
+
+  it("ingests, confirms, audits, and drafts, then reloads the case exactly", async () => {
     const bill = await ingestSample(null, "sample-bill");
     const eob = await ingestSample(bill.caseId, "sample-eob");
     expect(eob.caseId).toBe(bill.caseId);
@@ -75,51 +105,105 @@ describe("case service on Postgres", () => {
     );
     expect(await g.__mhStore!.getFile(stored!.storageKey!)).not.toBeNull();
 
-    const input = {
-      corrections: {},
-      confirmedPaths: [],
-      acknowledgeTotalsMismatch: false,
-    };
-    expect(await confirmDocument(bill.documentId, input)).toEqual({ ok: true });
-    expect(await confirmDocument(eob.documentId, input)).toEqual({ ok: true });
-    expect((await g.__mhStore!.getDocument(bill.documentId))?.status).toBe(
-      "confirmed",
-    );
-    await expect(confirmDocument(bill.documentId, input)).rejects.toThrow(
+    expect(await confirmDocument(bill.documentId, AS_PRINTED)).toEqual({
+      ok: true,
+    });
+    expect(await confirmDocument(eob.documentId, AS_PRINTED)).toEqual({
+      ok: true,
+    });
+    await expect(confirmDocument(bill.documentId, AS_PRINTED)).rejects.toThrow(
       /already confirmed/,
     );
 
     const first = await auditCase(bill.caseId, bill.documentId, eob.documentId);
     expect(first.findings.length).toBeGreaterThan(0);
-    await auditCase(bill.caseId, bill.documentId, eob.documentId);
+    const audit = await auditCase(bill.caseId, bill.documentId, eob.documentId);
+    expect((await g.__mhStore!.getCase(bill.caseId))?.status).toBe("audited");
+
+    const draft = await draftLetter(
+      bill.caseId,
+      bill.documentId,
+      eob.documentId,
+    );
+    const view = await loadCase(bill.caseId);
+    expect(view).toEqual({
+      caseId: bill.caseId,
+      status: "letter_drafted",
+      documents: [
+        { ingest: bill, confirmed: true },
+        { ingest: eob, confirmed: true },
+      ],
+      audit,
+      draft,
+    });
+
+    const c = await g.__mhStore!.getCase(bill.caseId);
+    const outgoing = c!.documents.filter((d) => d.direction === "outgoing");
+    expect(outgoing).toHaveLength(1);
+    expect(outgoing[0]).toMatchObject({
+      docType: "dispute_letter",
+      status: "drafted",
+      draft,
+    });
+    expect(c!.findings).toHaveLength(audit.findings.length);
+    expect(c!.events.map((e) => e.type)).toEqual([
+      "document_received",
+      "document_received",
+      "fields_confirmed",
+      "fields_confirmed",
+      "audit_run",
+      "audit_run",
+      "letter_drafted",
+    ]);
+  });
+
+  it("saves an itemized-bill request as an outgoing document", async () => {
+    const stmt = await ingestSample(null, "balance-statement");
+    const draft = await draftItemizedRequest(stmt.documentId);
+    const view = await loadCase(stmt.caseId);
+    expect(view?.status).toBe("request_drafted");
+    expect(view?.draft).toEqual(draft);
+    expect(view?.audit).toBeNull();
+  });
+
+  it("returns null for an unknown case and refuses documents for it", async () => {
+    expect(await loadCase("case_missing")).toBeNull();
+    await expect(ingestSample("case_missing", "sample-bill")).rejects.toThrow(
+      /Unknown case/,
+    );
+  });
+});
+
+describe("Postgres rows", () => {
+  it("writes the case, documents, findings, and events to their tables", async () => {
+    g.__mhStore = pg;
+    const bill = await ingestSample(null, "sample-bill");
+    await confirmDocument(bill.documentId, AS_PRINTED);
+    const audit = await auditCase(bill.caseId, bill.documentId, null);
+    const [row] = await db
+      .select()
+      .from(cases)
+      .where(eq(cases.id, bill.caseId));
+    expect(row.status).toBe("audited");
+    expect(
+      await db
+        .select()
+        .from(documents)
+        .where(eq(documents.caseId, bill.caseId)),
+    ).toHaveLength(1);
     const rows = await db
       .select()
       .from(findings)
       .where(eq(findings.caseId, bill.caseId));
-    expect(
-      rows
-        .map((r) => r.body)
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    ).toEqual(
-      [...first.findings].sort((a, b) =>
-        JSON.stringify(a).localeCompare(JSON.stringify(b)),
-      ),
+    expect(rows.map((r) => r.body)).toEqual(
+      expect.arrayContaining(audit.findings),
     );
-
-    const events = await db
-      .select()
-      .from(caseEvents)
-      .where(eq(caseEvents.caseId, bill.caseId));
-    expect(events.map((e) => e.type).sort()).toEqual([
-      "audit_run",
-      "audit_run",
-      "document_received",
-      "document_received",
-      "fields_confirmed",
-      "fields_confirmed",
-    ]);
+    expect(rows).toHaveLength(audit.findings.length);
     expect(
-      await db.select().from(cases).where(eq(cases.id, bill.caseId)),
-    ).toHaveLength(1);
+      await db
+        .select()
+        .from(caseEvents)
+        .where(eq(caseEvents.caseId, bill.caseId)),
+    ).toHaveLength(3);
   });
 });

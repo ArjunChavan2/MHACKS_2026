@@ -21,9 +21,29 @@ verified"). No PLAN.md; the user asked directly. Audit against SPEC.md §4.6 and
   service (sample bill + EOB → confirm → audit twice) against it. devDependency `@electric-sql/pglite`.
 - `.env.example`, SPEC.md §4.6 (file storage decision, marked *Open* to revisit).
 
+## Round 2: all MVP 1 data in Neon
+
+- Drafted letters and itemized-bill requests are saved as outgoing `documents` rows (status
+  `drafted`) with the full `Draft` in the new `draft` jsonb column (`db/migrations/0001_document_drafts.sql`).
+- Case status moves `draft` → `audited` → `letter_drafted` / `request_drafted`.
+- `CaseStore.getCase` / `setCaseStatus`; `loadCase` in `lib/cases/service.ts`; `GET /api/cases/[id]`.
+  The audit is not re-run on load: findings come from the `findings` table, ordered and with the
+  verdict from the latest `audit_run` event (which now also records `providers`).
+- The page keeps `?case=<id>` in the URL and resumes the case on reload (`BillAuditApp.tsx`).
+  Restored documents keep their confirmed flag but not the patient's per-field corrections UI state.
+- Ingesting into an unknown case ID is now a 400 ("Unknown case") instead of a database error; the
+  memory store now enforces the same case foreign key as Postgres.
+- Tests run the full flow on both the memory and PGlite stores and compare `loadCase` exactly.
+
+Live run against Neon (2026-10-03): `npm run build && npm start`, then over HTTP: sample bill + EOB
+→ confirm both → audit (3 findings) → letter; restarted the server; `GET /api/cases/<id>` returned
+status `letter_drafted`, both documents confirmed, 3 findings, the letter; the bill PDF still
+served. Not checked in a real browser (no browser here): the `?case=` restore in the UI. That test
+case (synthetic sample data) remains in the `production` branch.
+
 ## Verified
 
-`npm test` 46/46 (42 old + 4 new), `typecheck`, `lint`, `build` clean.
+`npm test` 52/52 (42 old + 10 new), `typecheck`, `lint`, `build` clean.
 
 Live (2026-10-03): Neon project `snowy-star-63367096`, branch `production`, linked with the Neon
 CLI (`neon link` wrote `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_BRANCH` to `.env.local`;

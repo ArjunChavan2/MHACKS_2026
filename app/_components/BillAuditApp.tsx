@@ -6,11 +6,11 @@
  * `/api/audit` and letters from `/api/letters`. Labels anything that came from a saved sample
  * document so a demo never passes a fixture off as live (SPEC.md §2 rule 9).
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ExtractionResult } from "@/lib/extract/pipeline";
-import type { IngestResponse } from "@/lib/cases/service";
+import type { AuditResponse, CaseView, IngestResponse } from "@/lib/cases/service";
 import { fieldLabel, usd } from "@/lib/format";
-import type { AuditResult, Draft, ExtractedBill, Field, Finding, Source } from "@/lib/types";
+import type { Draft, ExtractedBill, Field, Finding, Source } from "@/lib/types";
 
 /** Which screen is showing. */
 type Step = "start" | "confirm" | "audit" | "letter" | "request";
@@ -30,9 +30,6 @@ interface DocState {
   /** Messages that blocked the last confirmation attempt. */
   blocking: string[];
 }
-
-/** Audit response from the API. */
-type AuditResponse = AuditResult & { providers: string[] };
 
 /**
  * Lists every field in an extraction with its path, in document order.
@@ -69,6 +66,21 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 /**
+ * Loads a saved case.
+ *
+ * @param id - Case ID.
+ * @returns The case view.
+ * @throws {Error} With a patient-readable message when the case is missing or the request fails.
+ */
+async function fetchCase(id: string): Promise<CaseView> {
+  const res = await fetch(`/api/cases/${encodeURIComponent(id)}`, { cache: "no-store" });
+  if (res.status === 404) throw new Error("That case wasn't found. Start a new one below.");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message ?? "Couldn't load the case");
+  return data as CaseView;
+}
+
+/**
  * Root component for the MVP 1 flow.
  *
  * @returns The current screen.
@@ -83,6 +95,16 @@ export default function BillAuditApp() {
   const [error, setError] = useState<string | null>(null);
 
   const caseId = bill?.ingest.caseId ?? eob?.ingest.caseId ?? null;
+
+  // Keep the case ID in the URL so a reload or shared link resumes the case.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if ((url.searchParams.get("case") ?? null) === caseId) return;
+    if (caseId) url.searchParams.set("case", caseId);
+    else url.searchParams.delete("case");
+    window.history.replaceState(null, "", url);
+  }, [caseId]);
+
   const usedSample = [bill, eob].some((d) => d?.ingest.result.meta.source === "saved-fixture");
 
   /**
@@ -114,6 +136,41 @@ export default function BillAuditApp() {
     if (r.kind === "eob") setEob(state);
     else setBill(state);
   }
+
+  /**
+   * Resumes at the furthest step a saved case reached.
+   *
+   * @param view - The case as loaded from the server.
+   */
+  function applyCase(view: CaseView) {
+    for (const d of view.documents) {
+      const state: DocState = { ingest: d.ingest, corrections: {}, confirmedPaths: [], ackTotals: false, confirmed: d.confirmed, blocking: [] };
+      if (d.ingest.result.kind === "eob") setEob(state);
+      else setBill(state);
+    }
+    setAudit(view.audit);
+    setDraft(view.draft);
+    setStep(view.draft ? "letter" : view.audit ? "audit" : "start");
+  }
+
+  // Resume a saved case named in the URL (?case=…) once, on first load.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("case");
+    if (!id) return;
+    let cancelled = false;
+    fetchCase(id)
+      .then((view) => {
+        if (!cancelled) applyCase(view);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        window.history.replaceState(null, "", window.location.pathname);
+        setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** Uploads a file through Gemini extraction. */
   async function upload(file: File) {

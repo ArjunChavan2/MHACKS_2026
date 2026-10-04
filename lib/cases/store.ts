@@ -7,7 +7,7 @@
  * memory otherwise. Never expose stored files publicly.
  */
 import { neon } from "@neondatabase/serverless";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { caseEvents, cases, documents, files, findings } from "@/db/schema";
@@ -25,12 +25,36 @@ export interface StoredDocument {
   extraction: unknown;
   extractionMeta: unknown;
   confirmed: unknown;
+  /** Draft for outgoing letters; `null` for incoming documents. */
+  draft: unknown;
+}
+
+/** One timeline event. */
+export interface StoredEvent {
+  type: string;
+  data: unknown;
+  /** ISO timestamp. */
+  createdAt: string;
+}
+
+/** A case with everything stored for it, oldest first. */
+export interface StoredCase {
+  id: string;
+  goal: string | null;
+  status: string;
+  documents: StoredDocument[];
+  findings: Finding[];
+  events: StoredEvent[];
 }
 
 /** The storage operations MVP 1 needs. */
 export interface CaseStore {
   /** Creates a case and returns its ID. */
   createCase(goal: string | null): Promise<string>;
+  /** Sets a case's status. */
+  setCaseStatus(caseId: string, status: string): Promise<void>;
+  /** Reads a case with its documents, findings, and events, or `null`. */
+  getCase(caseId: string): Promise<StoredCase | null>;
   /** Inserts or replaces a document row. */
   saveDocument(doc: StoredDocument): Promise<void>;
   /** Reads a document, or `null`. */
@@ -70,16 +94,36 @@ const g = globalThis as typeof globalThis & { __mhStore?: CaseStore };
  * @returns A `CaseStore` whose data lives until the server restarts.
  */
 export function memoryStore(): CaseStore {
+  const caseRows = new Map<string, { goal: string | null; status: string }>();
   const docs = new Map<string, StoredDocument>();
   const found = new Map<string, Finding[]>();
-  const events: Array<{ caseId: string; type: string; data: unknown; at: string }> = [];
+  const events: Array<{ caseId: string } & StoredEvent> = [];
   const stored = new Map<string, StoredFile>();
   return {
-    async createCase() {
-      return newId("case");
+    async createCase(goal) {
+      const id = newId("case");
+      caseRows.set(id, { goal, status: "draft" });
+      return id;
+    },
+    async setCaseStatus(caseId, status) {
+      const row = caseRows.get(caseId);
+      if (row) row.status = status;
+    },
+    async getCase(caseId) {
+      const row = caseRows.get(caseId);
+      if (!row) return null;
+      return structuredClone({
+        id: caseId,
+        ...row,
+        documents: [...docs.values()].filter((d) => d.caseId === caseId),
+        findings: found.get(caseId) ?? [],
+        events: events.filter((e) => e.caseId === caseId).map(({ type, data, createdAt }) => ({ type, data, createdAt })),
+      });
     },
     async saveDocument(doc) {
-      docs.set(doc.id, structuredClone(doc));
+      if (!caseRows.has(doc.caseId)) throw new Error(`Unknown case ${doc.caseId}`);
+      const existing = docs.get(doc.id);
+      docs.set(doc.id, structuredClone(existing ? { ...existing, status: doc.status, extraction: doc.extraction, extractionMeta: doc.extractionMeta, confirmed: doc.confirmed, draft: doc.draft } : doc));
     },
     async getDocument(id) {
       return docs.get(id) ?? null;
@@ -88,7 +132,7 @@ export function memoryStore(): CaseStore {
       found.set(caseId, structuredClone(list));
     },
     async addEvent(caseId, type, data) {
-      events.push({ caseId, type, data, at: new Date().toISOString() });
+      events.push({ caseId, type, data: structuredClone(data), createdAt: new Date().toISOString() });
     },
     async putFile(bytes, mimeType) {
       const key = newId("file");
@@ -104,6 +148,28 @@ export function memoryStore(): CaseStore {
 /** Any Drizzle Postgres database: Neon HTTP in the app, PGlite in tests. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type PgDb = PgDatabase<PgQueryResultHKT, any>;
+
+/**
+ * Maps a `documents` row to a `StoredDocument`.
+ *
+ * @param row - Selected row.
+ * @returns The stored document (without `createdAt`).
+ */
+function toStoredDocument(row: typeof documents.$inferSelect): StoredDocument {
+  return {
+    id: row.id,
+    caseId: row.caseId,
+    docType: row.docType,
+    direction: row.direction as StoredDocument["direction"],
+    status: row.status,
+    fileName: row.fileName,
+    storageKey: row.storageKey,
+    extraction: row.extraction,
+    extractionMeta: row.extractionMeta,
+    confirmed: row.confirmed,
+    draft: row.draft,
+  };
+}
 
 /**
  * Postgres-backed store over any Drizzle Postgres database.
@@ -122,28 +188,35 @@ export function pgStore(db: PgDb): CaseStore {
       await db.insert(cases).values({ id, goal, status: "draft" });
       return id;
     },
+    async setCaseStatus(caseId, status) {
+      await db.update(cases).set({ status }).where(eq(cases.id, caseId));
+    },
+    async getCase(caseId) {
+      const [row] = await db.select().from(cases).where(eq(cases.id, caseId));
+      if (!row) return null;
+      const [docRows, findingRows, eventRows] = await Promise.all([
+        db.select().from(documents).where(eq(documents.caseId, caseId)).orderBy(asc(documents.createdAt)),
+        db.select().from(findings).where(eq(findings.caseId, caseId)),
+        db.select().from(caseEvents).where(eq(caseEvents.caseId, caseId)).orderBy(asc(caseEvents.createdAt)),
+      ]);
+      return {
+        id: row.id,
+        goal: row.goal,
+        status: row.status,
+        documents: docRows.map(toStoredDocument),
+        findings: findingRows.map((f) => f.body as Finding),
+        events: eventRows.map((e) => ({ type: e.type, data: e.data, createdAt: e.createdAt.toISOString() })),
+      };
+    },
     async saveDocument(doc) {
       await db
         .insert(documents)
         .values(doc)
-        .onConflictDoUpdate({ target: documents.id, set: { status: doc.status, extraction: doc.extraction, extractionMeta: doc.extractionMeta, confirmed: doc.confirmed } });
+        .onConflictDoUpdate({ target: documents.id, set: { status: doc.status, extraction: doc.extraction, extractionMeta: doc.extractionMeta, confirmed: doc.confirmed, draft: doc.draft } });
     },
     async getDocument(id) {
-      const rows = await db.select().from(documents).where(eq(documents.id, id));
-      const row = rows[0];
-      if (!row) return null;
-      return {
-        id: row.id,
-        caseId: row.caseId,
-        docType: row.docType,
-        direction: row.direction as StoredDocument["direction"],
-        status: row.status,
-        fileName: row.fileName,
-        storageKey: row.storageKey,
-        extraction: row.extraction,
-        extractionMeta: row.extractionMeta,
-        confirmed: row.confirmed,
-      };
+      const [row] = await db.select().from(documents).where(eq(documents.id, id));
+      return row ? toStoredDocument(row) : null;
     },
     async saveFindings(caseId, list) {
       await db.delete(findings).where(eq(findings.caseId, caseId));

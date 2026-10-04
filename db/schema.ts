@@ -15,7 +15,7 @@ export const cases = pgTable("cases", {
   id: text("id").primaryKey(),
   /** Patient's goal in their own words (e.g. "Resolve this bill"). */
   goal: text("goal"),
-  /** Case status, e.g. "draft", "audited". */
+  /** Case status: "draft", then "audited", then "letter_drafted" or "request_drafted". */
   status: text("status").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -40,6 +40,8 @@ export const documents = pgTable("documents", {
   extractionMeta: jsonb("extraction_meta"),
   /** ConfirmedBill or ConfirmedEob once the patient confirms (locked). */
   confirmed: jsonb("confirmed"),
+  /** Draft (lib/types) for outgoing letters: the exact text and sources shown to the patient. */
+  draft: jsonb("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
